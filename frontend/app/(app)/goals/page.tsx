@@ -35,6 +35,7 @@ import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { triggerConfetti } from "@/components/ui/Confetti";
 import { formatCurrency, formatDate } from "@/lib/format";
 
 export interface CoverOption {
@@ -130,6 +131,7 @@ export default function GoalsPage() {
         funding_account_id: draft.fundingAccountId,
         auto_track: draft.autoTrack,
       });
+      triggerConfetti({ count: 65 });
       reload();
     } catch (err) {
       reload();

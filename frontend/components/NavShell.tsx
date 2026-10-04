@@ -4,11 +4,15 @@ import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import { Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SignInButton } from "@/components/SignInButton";
 import { NotificationBell } from "@/components/NotificationBell";
 import { MobileBottomNav } from "@/components/MobileBottomNav";
 import { FinPilotLogo } from "@/components/FinPilotLogo";
+import { CurrencySelector } from "@/components/ui/CurrencySelector";
+import { CommandPalette } from "@/components/ui/CommandPalette";
+import { ConfettiCanvas } from "@/components/ui/Confetti";
 import { useUserId } from "@/lib/hooks";
 import { DEMO_PERSONAS, isDemoUserId, setUserId } from "@/lib/user";
 
@@ -135,13 +139,35 @@ export function NavShell({ children }: { children: ReactNode }) {
               );
             })}
           </nav>
-          {/* Right actions: Persona Switcher + Notification Bell + Sign In + Mobile Toggle */}
-          <div className="flex items-center gap-2.5 sm:gap-3">
-            <div className="hidden sm:block">
+          {/* Right actions: Command Trigger + Currency Selector + Persona Switcher + Notification Bell + Sign In + Mobile Toggle */}
+          <div className="flex items-center gap-2 sm:gap-2.5">
+            {/* Quick Command Trigger (⌘K) */}
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== "undefined") {
+                  window.dispatchEvent(new CustomEvent("finpilot:open-command-palette"));
+                }
+              }}
+              className="flex items-center gap-2 px-2.5 py-1.5 rounded-full border border-mist bg-paper/80 text-xs text-graphite hover:text-ink hover:border-black/20 transition-all shadow-[0_1px_3px_rgba(0,0,0,0.03)] cursor-pointer"
+              title="Open Command Palette (⌘K / Ctrl+K)"
+              aria-label="Open Command Palette"
+            >
+              <Search className="h-3.5 w-3.5 text-pewter" />
+              <span className="hidden lg:inline text-[11px] font-medium text-pewter">Quick search...</span>
+              <kbd className="hidden sm:inline-flex items-center gap-0.5 rounded border border-mist bg-fog px-1.5 py-0.2 text-[10px] font-semibold text-pewter">
+                ⌘K
+              </kbd>
+            </button>
+
+            {/* Currency Selector */}
+            <CurrencySelector />
+
+            <div className="hidden md:block">
               <PersonaSwitcher />
             </div>
             <NotificationBell userId={userId} />
-            <div className="hidden lg:block">
+            <div className="hidden xl:block">
               <SignInButton />
             </div>
 
@@ -149,7 +175,7 @@ export function NavShell({ children }: { children: ReactNode }) {
             <button
               type="button"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="flex md:hidden h-9 w-9 items-center justify-center rounded-chip border border-mist bg-paper text-ink hover:bg-fog transition-colors"
+              className="flex md:hidden h-9 w-9 items-center justify-center rounded-chip border border-mist bg-paper text-ink hover:bg-fog transition-colors cursor-pointer"
               aria-label="Toggle navigation menu"
             >
               <svg
@@ -205,8 +231,9 @@ export function NavShell({ children }: { children: ReactNode }) {
                     );
                   })}
                 </div>
-                <div className="mt-3 pt-3 border-t border-mist">
+                <div className="mt-3 pt-3 border-t border-mist flex items-center justify-between">
                   <SignInButton />
+                  <CurrencySelector />
                 </div>
               </div>
             </motion.div>
@@ -217,6 +244,12 @@ export function NavShell({ children }: { children: ReactNode }) {
       <main className="mx-auto w-full max-w-[1240px] flex-1 px-4 pt-4 pb-28 sm:px-8 sm:py-10 md:pb-10 min-w-0">
         {children}
       </main>
+
+      {/* Global Command Palette (⌘K) */}
+      <CommandPalette />
+
+      {/* Milestone Celebrations Confetti Canvas */}
+      <ConfettiCanvas />
 
       {/* Ergonomic Mobile Bottom Navigation */}
       <MobileBottomNav />

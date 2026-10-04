@@ -58,6 +58,7 @@ import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { triggerConfetti } from "@/components/ui/Confetti";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -743,6 +744,8 @@ function ReviewQueueSection({
       });
       if (currentIndex < queue.length - 1) {
         setCurrentIndex((prev) => prev + 1);
+      } else {
+        triggerConfetti({ count: 75 });
       }
       onCompleted();
     } finally {
