@@ -167,7 +167,7 @@ export function NavShell({ children }: { children: ReactNode }) {
               <PersonaSwitcher />
             </div>
             <NotificationBell userId={userId} />
-            <div className="hidden xl:block">
+            <div className="flex items-center">
               <SignInButton />
             </div>
 

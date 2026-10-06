@@ -63,6 +63,16 @@ const AUTH_HEADER_TIMEOUT_MS = 2000;
  * Race it against a short timeout and fall back to unauthenticated. */
 async function authHeader(): Promise<Record<string, string>> {
   try {
+    const { auth: firebaseAuth } = await import("./firebase/config");
+    if (firebaseAuth.currentUser) {
+      const fbToken = await firebaseAuth.currentUser.getIdToken();
+      if (fbToken) return { Authorization: `Bearer ${fbToken}` };
+    }
+  } catch {
+    // Firebase auth not available or not signed in
+  }
+
+  try {
     const supabase = createClient();
     const timeout = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error("auth session lookup timed out")), AUTH_HEADER_TIMEOUT_MS)

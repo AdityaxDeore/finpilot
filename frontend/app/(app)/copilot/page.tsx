@@ -27,6 +27,7 @@ import { ConfidenceChip } from "@/components/ui/ConfidenceChip";
 import { Chip } from "@/components/ui/Chip";
 import { formatCurrency, formatImpactValue } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { askFinancialAI } from "@/lib/firebase/ai";
 
 interface CategorizedPrompt {
   category: "Cash Flow" | "Debt Avalanche" | "Subscriptions" | "SIP Check";
@@ -100,6 +101,7 @@ export default function CopilotPage() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [useFirebaseAI, setUseFirebaseAI] = useState(false);
 
   // Switching persona via the NavShell switcher resets conversation
   const [lastUserId, setLastUserId] = useState(userId);
@@ -116,11 +118,58 @@ export default function CopilotPage() {
     setInput("");
     setTurns((t) => [...t, { role: "user", message }]);
     setLoading(true);
+
+    if (useFirebaseAI) {
+      try {
+        const aiResponse = await askFinancialAI(message, `Active FinPilot User: ${userId}`);
+        const answer: AnswerContract = {
+          query: message,
+          facts: [
+            {
+              text: "Firebase AI Logic (Gemini 2.5 Flash)",
+              value: null,
+              source_txn_ids: [],
+            },
+          ],
+          predictions: [],
+          recommendations: [],
+          data_gaps: [],
+          narrative: aiResponse,
+        };
+        setTurns((t) => [...t, { role: "assistant", message, answer }]);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Firebase AI request failed");
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     try {
       const answer = await api.chat(message, userId);
       setTurns((t) => [...t, { role: "assistant", message, answer }]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      // Automatic fallback to client-side Firebase AI Logic
+      try {
+        const fallbackText = await askFinancialAI(message, `Active FinPilot User: ${userId}`);
+        const answer: AnswerContract = {
+          query: message,
+          facts: [
+            {
+              text: "Firebase AI Fallback (Gemini 2.5 Flash)",
+              value: null,
+              source_txn_ids: [],
+            },
+          ],
+          predictions: [],
+          recommendations: [],
+          data_gaps: [],
+          narrative: fallbackText,
+        };
+        setTurns((t) => [...t, { role: "assistant", message, answer }]);
+      } catch {
+        setError(err instanceof Error ? err.message : "Something went wrong");
+      }
     } finally {
       setLoading(false);
     }
@@ -138,20 +187,37 @@ export default function CopilotPage() {
             <span className="flex h-2 w-2 rounded-full bg-ember animate-pulse" />
           </div>
           <p className="mt-1 text-xs sm:text-sm text-graphite">
-            Grounded in your real transactions. Delivers clear, verifiable 3-lane answers.
+            Grounded in your real transactions. Delivers clear, verifiable 3-lane answers with Firebase AI Logic.
           </p>
         </div>
 
-        {/* Offline Mode Toggle */}
-        <label className="flex shrink-0 items-center gap-2 rounded-full border border-black/[0.08] bg-fog/80 px-3 py-1.5 text-xs text-graphite shadow-sm cursor-pointer hover:bg-fog transition-colors">
-          <input
-            type="checkbox"
-            defaultChecked={getOfflineOnly()}
-            onChange={(e) => setOfflineOnly(e.target.checked)}
-            className="h-3.5 w-3.5 rounded border-black/20 accent-ember cursor-pointer"
-          />
-          <span className="font-medium">Offline Rule-Engine Only</span>
-        </label>
+        {/* Toggles */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setUseFirebaseAI(!useFirebaseAI)}
+            className={cn(
+              "flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-colors cursor-pointer",
+              useFirebaseAI
+                ? "border-amber-400/40 bg-amber-500/10 text-amber-600 font-medium"
+                : "border-black/[0.08] bg-fog/80 text-graphite hover:bg-fog"
+            )}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+            <span>Firebase AI Logic</span>
+          </button>
+
+          {/* Offline Mode Toggle */}
+          <label className="flex shrink-0 items-center gap-2 rounded-full border border-black/[0.08] bg-fog/80 px-3 py-1.5 text-xs text-graphite shadow-sm cursor-pointer hover:bg-fog transition-colors">
+            <input
+              type="checkbox"
+              defaultChecked={getOfflineOnly()}
+              onChange={(e) => setOfflineOnly(e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-black/20 accent-ember cursor-pointer"
+            />
+            <span className="font-medium">Offline Rule-Engine Only</span>
+          </label>
+        </div>
       </div>
 
       {/* Suggested Categorized Starter Prompts (Top) */}

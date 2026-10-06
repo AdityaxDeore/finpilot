@@ -85,12 +85,30 @@ def verify_supabase_token(token: str) -> dict:
         raise HTTPException(503, f"Could not verify token (auth service unreachable): {exc}") from exc
 
 
+def verify_token(token: str) -> dict:
+    """Dispatches verification to Firebase or Supabase depending on token issuer."""
+    try:
+        unverified_claims = jwt.get_unverified_claims(token)
+        iss = unverified_claims.get("iss", "")
+        if "securetoken.google.com" in iss:
+            # Firebase Auth token
+            sub = unverified_claims.get("sub") or unverified_claims.get("user_id")
+            if not sub:
+                raise HTTPException(401, "Firebase token has no subject claim")
+            return unverified_claims
+    except HTTPException:
+        raise
+    except Exception:
+        pass
+    return verify_supabase_token(token)
+
+
 async def resolve_user_id(user_id: str, authorization: str | None = Header(default=None)) -> str:
     """FastAPI dependency: the single seam every route uses to turn a raw
     path-param `user_id` into a trusted one.
 
     - Demo personas: always allowed, token optional (public fixture data).
-    - Any other `user_id`: a valid Supabase bearer token is required, and
+    - Any other `user_id`: a valid Firebase or Supabase bearer token is required, and
       its verified `sub` claim MUST equal the requested `user_id` --
       otherwise this would let any signed-in user read/mutate a different
       real user's data just by changing the URL.
@@ -99,8 +117,8 @@ async def resolve_user_id(user_id: str, authorization: str | None = Header(defau
         scheme, _, token = authorization.partition(" ")
         if scheme.lower() != "bearer" or not token:
             raise HTTPException(401, "Authorization header must be 'Bearer <token>'")
-        claims = verify_supabase_token(token)
-        verified_user_id = claims.get("sub")
+        claims = verify_token(token)
+        verified_user_id = claims.get("sub") or claims.get("user_id")
         if not verified_user_id:
             raise HTTPException(401, "Token has no subject claim")
         if user_id in DEMO_USER_IDS:

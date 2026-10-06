@@ -14,6 +14,8 @@ import { GoalsCards } from "@/components/interactive/GoalsCards";
 import { DeviceMockupSection } from "@/components/interactive/DeviceMockupSection";
 import { InteractiveBentoGrid } from "@/components/interactive/InteractiveBentoGrid";
 import { FeatureShowcase } from "@/components/showcase/FeatureShowcase";
+import { SignInButton } from "@/components/SignInButton";
+import { FinPilotLogo } from "@/components/FinPilotLogo";
 
 const PREVIEW_ANSWER: AnswerContract = {
   query: "Can I afford to increase my SIP by ₹3,000/month?",
@@ -51,6 +53,22 @@ export default function Home() {
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Background ambient glow */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-[1200px] h-[500px] bg-gradient-to-b from-ember-soft/40 via-transparent to-transparent pointer-events-none -z-10 blur-3xl" />
+
+      {/* Top Header */}
+      <header className="mx-auto flex w-full max-w-[1240px] items-center justify-between px-4 py-4 sm:px-8 border-b border-black/[0.04]">
+        <Link href="/" className="flex items-center gap-2">
+          <FinPilotLogo variant="horizontal" size={28} showWordmark={true} />
+        </Link>
+        <div className="flex items-center gap-4">
+          <Link href="/dashboard" className="text-xs sm:text-sm font-medium text-graphite hover:text-ink transition-colors">
+            Dashboard
+          </Link>
+          <Link href="/copilot" className="text-xs sm:text-sm font-medium text-graphite hover:text-ink transition-colors">
+            AI Copilot
+          </Link>
+          <SignInButton />
+        </div>
+      </header>
 
       {/* Hero Section */}
       <section className="mx-auto flex w-full max-w-[1240px] flex-col items-center text-center px-4 pt-12 pb-10 sm:px-8 sm:pt-20 sm:pb-16">

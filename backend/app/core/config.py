@@ -28,9 +28,9 @@ class Settings:
     # On Vercel the deployment filesystem is read-only except /tmp, so the
     # sqlite fallback lives there (per-instance and ephemeral -- set
     # DATABASE_URL to a real Postgres for data that must persist).
-    database_url: str = os.getenv(
-        "DATABASE_URL",
-        "sqlite:////tmp/finpilot.db" if os.getenv("VERCEL") else "sqlite:///./finpilot_dev.db",
+    database_url: str = (
+        os.getenv("DATABASE_URL")
+        or ("sqlite:////tmp/finpilot.db" if os.getenv("VERCEL") else "sqlite:///./finpilot_dev.db")
     )
 
     # Gemini
@@ -45,6 +45,13 @@ class Settings:
 
     # Auth behaviour
     demo_mode: bool = os.getenv("FINPILOT_DEMO_MODE", "true").lower() == "true"
+
+    # Firebase
+    firebase_project_id: str = os.getenv("FIREBASE_PROJECT_ID") or os.getenv("NEXT_PUBLIC_FIREBASE_PROJECT_ID", "hackmatrix-1c5a2")
+
+    @property
+    def has_firebase(self) -> bool:
+        return bool(self.firebase_project_id)
 
     @property
     def has_gemini(self) -> bool:
