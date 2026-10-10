@@ -68,3 +68,33 @@ def crawl(b: Url) -> dict:
 @router.post("/map")
 def site_map(b: Url) -> dict:
     return _call("map", {"url": b.url, "limit": 40})
+
+
+class Scheme(BaseModel):
+    scheme: str = Field(min_length=2, max_length=200)
+    question: str = Field(default="", max_length=300)
+
+
+_OFFICIAL = ["gov.in", "nic.in", "rbi.org.in", "sebi.gov.in", "indiapost.gov.in", "nsiindia.gov.in", "npscra.nsdl.co.in", "epfindia.gov.in", "jansuraksha.gov.in", "pmjdy.gov.in"]
+_ANALYST = ("You are a careful analyst of Indian government savings, pension, insurance and tax schemes. Use ONLY the numbered sources given; "
+            "if they do not say something, write 'not stated in the sources'. Never invent rates, dates or limits. Reply JSON only: "
+            '{"summary": "2-3 sentences", "eligibility": [..], "benefits": [..], "how_to_apply": [..], "deadlines": [..], "watch_out": [..]} '
+            "with short plain-language strings (max 5 each) and add the source number like [2] at the end of each fact.")
+
+
+@router.post("/scheme-analyst")
+def scheme_analyst(b: Scheme) -> dict:
+    """Deep (advanced) Tavily search limited to official sites, then an NVIDIA model writes a sourced brief."""
+    q = f"{b.scheme} India government scheme {b.question}".strip()
+    res = _call("search", {"query": q, "search_depth": "advanced", "include_answer": "advanced", "include_domains": _OFFICIAL, "max_results": 6},
+                agent="scheme-analyst")
+    sources = [{"n": i + 1, "title": r.get("title") or r["url"], "url": r["url"]} for i, r in enumerate(res.get("results", []))]
+    if not sources:  # official sites had nothing: say so rather than analysing the open web
+        return {"scheme": b.scheme, "brief": None, "answer": res.get("answer"), "sources": [], "note": "No official source found for this scheme."}
+    from app.copilot import nvidia
+    material = "\n\n".join(f"[{i + 1}] {r.get('title', '')}\n{(r.get('content') or '')[:1200]}" for i, r in enumerate(res["results"]))
+    try:
+        brief = nvidia.complete_json(_ANALYST, f"Scheme: {b.scheme}\nQuestion: {b.question or 'Overview'}\n\nSources:\n{material}")
+    except Exception:  # noqa: BLE001 - model busy: fall back to Tavily's own answer
+        brief = None
+    return {"scheme": b.scheme, "brief": brief, "answer": res.get("answer"), "sources": sources}

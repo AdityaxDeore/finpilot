@@ -753,6 +753,13 @@ export interface FinancialSecurityBrief {
   source: "finpilot" | "rules";
 }
 
+export interface SchemeAnalysis {
+  scheme: string;
+  brief: { summary: string; eligibility: string[]; benefits: string[]; how_to_apply: string[]; deadlines: string[]; watch_out: string[] } | null;
+  answer: string | null;
+  sources: { n: number; title: string; url: string }[];
+  note?: string;
+}
 export interface SecurityFinding {
   agent: string;
   severity: "high" | "medium" | "low";

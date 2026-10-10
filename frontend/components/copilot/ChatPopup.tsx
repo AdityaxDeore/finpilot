@@ -1,7 +1,7 @@
 "use client";
 
 import { onOpenAssistant } from "@/lib/copilotBus";
-import { getSimpleNow } from "@/lib/i18n";
+import { getLang, getSimpleNow } from "@/lib/i18n";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -14,6 +14,7 @@ import type { NextStep, SourceLink } from "@/lib/types";
 import { useUserId } from "@/lib/hooks";
 import { getOfflineOnly } from "@/lib/user";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { runActions, snapshotScreen } from "@/lib/voiceAgent";
 import { isRecentTransactionQuestion, pageToOpen, scrollCommand, scrollToSelector, speak, stopSpeaking, useVoiceInput } from "@/lib/voice";
 
 const STARTERS = ["How am I doing financially?", "What deadlines are coming up?", "Where did I spend the most?", "Which govt schemes suit me?"];
@@ -114,15 +115,40 @@ export function ChatPopup() {
     setMsgs((m) => [...m, { role: "user", text: message }]);
     setInput("");
     setLoading(true);
-    let reply: Msg;
+    let reply: Msg | undefined;
+    let voiced = false;
     try {
-      reply = await answer(message, history);
+      if (spoken) {
+        // spoken questions go to the voice agent first: it sees the screen, answers like a person and can open, scroll and click
+        const plan = await api.voiceAct(message, pathname, getLang(), snapshotScreen(), history.map((h) => `${h.role}: ${h.content}`.slice(0, 200)).slice(-4)).catch(() => null);
+        if (plan?.say) {
+          speak(plan.say);
+          setCaption(plan.say);
+        }
+        if (plan?.actions.length) {
+          const moved = plan.actions.some((x) => x.type === "navigate");
+          void runActions(plan.actions, (p) => router.push(p)).then(async () => {
+            if (!moved) return; // new screen: look at it and finish answering the original question
+            const next = await api.voiceAct(`${message} (I have just opened the new screen for you; now answer from what is on it, no more actions)`, location.pathname, getLang(), snapshotScreen(), []).catch(() => null);
+            if (next?.say) {
+              speak(next.say);
+              setCaption(next.say);
+              setMsgs((m) => [...m, { role: "assistant", text: next.say }]);
+            }
+          });
+        }
+        if (plan && !plan.ask_copilot && plan.say) {
+          reply = { role: "assistant", text: plan.say };
+          voiced = true;
+        }
+      }
+      reply ??= await answer(message, history);
     } catch {
       reply = { role: "assistant", text: "Sorry, I couldn't answer right now. Please try again in a minute." };
     }
     setMsgs((m) => [...m, reply]);
     setLoading(false);
-    if (spoken || getSimpleNow()) {
+    if (!voiced && (spoken || getSimpleNow())) {
       speak(reply.text); // asked by voice (or simple view) -> answered by voice
       setCaption(reply.text.replace(/\*\*/g, ""));
     }

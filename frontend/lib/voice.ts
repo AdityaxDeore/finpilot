@@ -73,14 +73,28 @@ export function useVoiceInput(onText: (text: string) => void, onProblem?: (messa
   return { supported, listening, start, stop };
 }
 
-/** Reads text aloud. Markdown bold and the rupee sign are turned into words so it sounds natural. */
+/** The nicest installed voice for the language: online "Google"/"Natural" voices sound far more human than the default. */
+function bestVoice(lang: string): SpeechSynthesisVoice | undefined {
+  const all = window.speechSynthesis.getVoices().filter((v) => v.lang.replace("_", "-").toLowerCase().startsWith(lang.slice(0, 2).toLowerCase()));
+  const score = (v: SpeechSynthesisVoice) => (/natural|online/i.test(v.name) ? 3 : 0) + (/google/i.test(v.name) ? 2 : 0) + (v.lang.toLowerCase() === lang.toLowerCase() ? 1 : 0);
+  return all.sort((a, b) => score(b) - score(a))[0];
+}
+
+/** Reads text aloud, sentence by sentence (Chrome cuts off long utterances). Markdown bold and the rupee sign are turned into words. */
 export function speak(text: string) {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
   const clean = text.replace(/\*\*/g, "").replace(/₹\s?([\d,]+(?:\.\d+)?)/g, "$1 rupees");
   window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(clean);
-  u.lang = SPEECH_LANG[getLang()];
-  window.speechSynthesis.speak(u);
+  const lang = SPEECH_LANG[getLang()];
+  const voice = bestVoice(lang);
+  for (const part of clean.match(/[^.!?।]+[.!?।]*/g) ?? [clean]) {
+    if (!part.trim()) continue;
+    const u = new SpeechSynthesisUtterance(part.trim());
+    u.lang = lang;
+    u.rate = 1.02;
+    if (voice) u.voice = voice;
+    window.speechSynthesis.speak(u);
+  }
 }
 
 export function stopSpeaking() {
@@ -142,7 +156,7 @@ function glideTo(y: number) {
   }, 16);
 }
 
-function flash(el: Element) {
+export function flash(el: Element) {
   const r = el.getBoundingClientRect();
   glideTo(window.scrollY + r.top - window.innerHeight / 2 + r.height / 2);
   el.animate([{ backgroundColor: "#d9f99d" }, { backgroundColor: "transparent" }], { duration: 2500 });
