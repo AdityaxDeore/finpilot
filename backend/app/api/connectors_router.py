@@ -132,18 +132,22 @@ def list_connectors(user_id: str = Depends(resolve_user_id)) -> list[Connector]:
 
 @router.post("/{user_id}/{connector}/connect")
 def connect(connector: str, body: ConnectRequest, user_id: str = Depends(resolve_user_id)) -> dict:
-    _guard_not_demo(user_id)
     if connector not in CATALOG:
         raise HTTPException(404, "Unknown connector")
     if not CATALOG[connector][2]:
         raise HTTPException(409, f"{CATALOG[connector][0]} isn't available yet")
     if connector == "google_sheets":
+        _guard_not_demo(user_id)
         csv_url = _sheet_csv_url(body.url)
         _, digest, n = _sync_sheet(user_id, csv_url)
         store.put(ConnectionRow(id=f"{user_id}:{connector}", user_id=user_id, connector=connector, detail=f"{n} rows, live",
                                 source_url=csv_url, content_hash=digest, connected_at=datetime.now(timezone.utc)))
         return {"connected": True, "transactions": n}
-    if connector == "google_pay":
+    if connector == "google_pay" and user_id in DEMO_USER_IDS:
+        # demo personas already hold their fixture data: record the link, never reseed or wipe it
+        stats = {"transactions": len(store.query(TransactionRow, user_id=user_id))}
+        detail = user_id.removeprefix("demo-").capitalize()
+    elif connector == "google_pay":
         stats = _seed_from_persona(user_id, body.profile)
         detail = body.profile.capitalize()
     else:
@@ -185,10 +189,10 @@ def export(connector: str, user_id: str = Depends(resolve_user_id)) -> JSONRespo
 
 @router.delete("/{user_id}/{connector}", status_code=204, response_model=None)
 def disconnect(connector: str, user_id: str = Depends(resolve_user_id)) -> None:
-    """Unlinking removes everything that source brought in (the app returns to empty)."""
-    _guard_not_demo(user_id)
+    """Unlinking removes everything that source brought in (the app returns to empty); demo personas only lose the link."""
     if connector not in CATALOG:
         raise HTTPException(404, "Unknown connector")
-    _clear_user(user_id)
-    store.delete_where(InsightsSnapshotRow, user_id=user_id)
+    if user_id not in DEMO_USER_IDS:
+        _clear_user(user_id)
+        store.delete_where(InsightsSnapshotRow, user_id=user_id)
     store.delete(ConnectionRow, f"{user_id}:{connector}")
