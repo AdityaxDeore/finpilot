@@ -8,7 +8,9 @@ and the frontend don't change.
 """
 from __future__ import annotations
 
+import csv
 import hashlib
+import io
 import json
 import re
 from dataclasses import replace
@@ -17,7 +19,7 @@ from pathlib import Path
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 from app.core import store
@@ -45,6 +47,22 @@ DATASET_FILES = {"bank": "bank.json", "invoices": "invoices.json", "investments"
 
 def _dataset(connector: str) -> dict:
     return json.loads((DATA_DIR / DATASET_FILES[connector]).read_text(encoding="utf-8"))
+
+
+def _to_csv(tables: dict[str, list[dict]]) -> str:
+    """One CSV for Excel/Sheets: each table gets its own title line and header, separated by a blank line."""
+    out = io.StringIO()
+    w = csv.writer(out)
+    for i, (name, rows) in enumerate(tables.items()):
+        if i:
+            w.writerow([])
+        if len(tables) > 1:
+            w.writerow([name.replace("_", " ").title()])
+        cols = list(dict.fromkeys(k for r in rows for k in r))
+        w.writerow(cols)
+        for r in rows:
+            w.writerow([json.dumps(v) if isinstance(v, (list, dict)) else v for v in (r.get(c, "") for c in cols)])
+    return out.getvalue()
 
 
 # Which synthetic profile feeds the dummy Google Pay link.
@@ -174,8 +192,8 @@ def sync_sheet(user_id: str = Depends(resolve_user_id)) -> dict:
 
 
 @router.get("/{user_id}/{connector}/export")
-def export(connector: str, user_id: str = Depends(resolve_user_id)) -> JSONResponse:
-    """Download what a connector brought in, as a JSON file."""
+def export(connector: str, user_id: str = Depends(resolve_user_id)) -> Response:
+    """Download what a connector brought in, as a CSV file."""
     if connector not in CATALOG:
         raise HTTPException(404, "Unknown connector")
     if store.get(ConnectionRow, f"{user_id}:{connector}") is None:
@@ -184,7 +202,9 @@ def export(connector: str, user_id: str = Depends(resolve_user_id)) -> JSONRespo
         data = {"transactions": [t.model_dump(mode="json") for t in store.query(TransactionRow, user_id=user_id)]}
     else:
         data = _dataset(connector)
-    return JSONResponse(data, headers={"Content-Disposition": f'attachment; filename="{connector}.json"'})
+    # BOM so Excel reads the rupee sign and other non-ASCII text correctly
+    return Response("﻿" + _to_csv(data), media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="{connector}.csv"'})
 
 
 @router.delete("/{user_id}/{connector}", status_code=204, response_model=None)

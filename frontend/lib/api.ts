@@ -203,12 +203,12 @@ export const api = {
     if (changed) notifyIfWrite("POST");
     return changed;
   },
-  /** Downloads a connected source's dataset as a JSON file. */
+  /** Downloads a connected source's dataset as a CSV file. */
   exportConnector: async (userId: string, connector: string) => {
     const res = await fetch(`${API_URL}/api/connectors/${userId}/${connector}/export`, { headers: await authHeader() });
     if (!res.ok) throw new Error(`Export failed: ${res.status} ${await res.text()}`);
     const url = URL.createObjectURL(await res.blob());
-    const a = Object.assign(document.createElement("a"), { href: url, download: `${connector}.json` });
+    const a = Object.assign(document.createElement("a"), { href: url, download: `${connector}.csv` });
     a.click();
     URL.revokeObjectURL(url);
   },
