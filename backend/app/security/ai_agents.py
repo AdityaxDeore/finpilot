@@ -62,7 +62,7 @@ def review(agent: str, findings: list[dict], rows) -> tuple[list[dict], dict]:
         elif findings:
             brief = [{"i": i, "title": f["title"], "detail": f["detail"][:160], "amount": f["amount"]} for i, f in enumerate(findings[:12])]
             content = _post(model, [{"role": "system", "content": _SYSTEM}, {"role": "user", "content": json.dumps(brief, ensure_ascii=False)}], 700,
-                            {"response_format": {"type": "json_object"}})
+                            {"response_format": {"type": "json_object"}, "chat_template_kwargs": {"enable_thinking": False}})  # thinking mode is too slow for a review
             for item in json.loads(content[content.index("{"):content.rindex("}") + 1])["r"]:
                 if 0 <= item["i"] < len(findings) and item["v"] in ("confirm", "doubt"):
                     findings[item["i"]]["ai"] = {"model": model, "verdict": item["v"], "note": str(item.get("n", ""))[:120]}
