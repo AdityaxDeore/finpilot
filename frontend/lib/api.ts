@@ -84,9 +84,16 @@ async function authHeader(): Promise<Record<string, string>> {
   return {};
 }
 
+// GET responses are reused for a short while, so switching tabs shows data instantly and
+// identical in-flight requests share one fetch. Every write clears it, so edits never look stale.
+const GET_TTL_MS = 30_000;
+const getCache = new Map<string, { at: number; value: Promise<unknown> }>();
+export const clearApiCache = () => getCache.clear();
+
 /** After a successful write, tell every mounted useAsync() to refetch. */
 function notifyIfWrite(method?: string) {
   if (method && method !== "GET" && typeof window !== "undefined") {
+    clearApiCache();
     window.dispatchEvent(new Event(DATA_CHANGED_EVENT));
   }
 }
@@ -96,7 +103,17 @@ function publishInsights(d: RecomputeDiff): RecomputeDiff {
   return d;
 }
 
-async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  if (init?.method && init.method !== "GET") return request<T>(path, init);
+  const hit = getCache.get(path);
+  if (hit && Date.now() - hit.at < GET_TTL_MS) return hit.value as Promise<T>;
+  const value = request<T>(path, init);
+  getCache.set(path, { at: Date.now(), value });
+  value.catch(() => getCache.delete(path)); // never keep a failed request
+  return value;
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const auth = await authHeader();
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
@@ -198,6 +215,7 @@ export const api = {
   /** Re-reads the linked Google Sheet. Only announces a data change when the sheet actually changed. */
   syncSheet: async (userId: string): Promise<boolean> => {
     const res = await fetch(`${API_URL}/api/connectors/${userId}/google_sheets/sync`, { method: "POST", headers: await authHeader() });
+    clearApiCache();
     if (!res.ok) throw new Error(`Sheet sync failed: ${res.status}`);
     const { changed } = (await res.json()) as { changed: boolean };
     if (changed) notifyIfWrite("POST");
@@ -219,6 +237,7 @@ export const api = {
   /** Streams agent progress events (NDJSON); the last event is the saved report. */
   investigate: async (userId: string, onEvent: (e: SecurityEvent) => void) => {
     const res = await fetch(`${API_URL}/api/security/${userId}/investigate`, { method: "POST", headers: await authHeader() });
+    clearApiCache();
     if (!res.ok || !res.body) throw new Error(`Investigation failed: ${res.status}`);
     const reader = res.body.getReader();
     const dec = new TextDecoder();
@@ -275,6 +294,7 @@ export const api = {
     const body = new FormData();
     body.append("file", file);
     const res = await fetch(`${API_URL}/api/documents/${userId}`, { method: "POST", headers: await authHeader(), body });
+    clearApiCache();
     if (!res.ok) throw new Error(`Upload failed: ${res.status} ${await res.text()}`);
     return res.json();
   },
@@ -320,3 +340,11 @@ export const api = {
     }),
 };
 
+/** Warm the response cache for the main tabs once the app is idle, so the first click on each is instant. */
+export function prefetchCore(userId: string) {
+  const run = () =>
+    [api.dashboard, api.goals, api.budgets, api.budgetStatus, api.accounts, api.notifications, api.plan, api.financialSecurity]
+      .forEach((f) => (f as (id: string) => Promise<unknown>)(userId).catch(() => {}));
+  if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(run, { timeout: 3000 });
+  else setTimeout(run, 1500);
+}

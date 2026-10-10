@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from functools import lru_cache
 
 from google.cloud import firestore as gcf
@@ -16,6 +17,24 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 from app.core.config import get_settings
 
 _BATCH = 500
+
+# Read cache. Any write bumps `_writes`, which makes every cached read stale at once (coarse but safe);
+# the TTL also covers writes made by another process. Rows that are only derived or logged never invalidate.
+_TTL = 0.0 if os.getenv("FINPILOT_NO_CACHE") else 45.0
+_QUIET = {"insights_snapshots", "copilot_insights", "audit_logs", "investigations"}
+_writes = 0
+_reads: dict[tuple, tuple[int, float, list]] = {}
+
+
+def writes() -> int:
+    """Counter that changes whenever user data is written; use it to validate your own caches."""
+    return _writes
+
+
+def _bump(tablename: str) -> None:
+    global _writes
+    if tablename not in _QUIET:
+        _writes += 1
 
 
 @lru_cache
@@ -50,7 +69,17 @@ def get(model, id: str):
 
 
 def query(model, **eq) -> list:
-    return [model.model_validate(s.to_dict()) for s in _q(model, eq).stream()]
+    key = (model.__tablename__, tuple(sorted(eq.items())))
+    ttl = 0.0 if model.__tablename__ in _QUIET else _TTL  # logs/derived rows are read live
+    hit = _reads.get(key)
+    if hit and hit[0] == _writes and time.monotonic() - hit[1] < ttl:
+        return [r.model_copy() for r in hit[2]]  # copies: callers edit rows before put()
+    seen = _writes  # a write during the read leaves this entry already stale
+    rows = [model.model_validate(s.to_dict()) for s in _q(model, eq).stream()]
+    if ttl:
+        _reads[key] = (seen, time.monotonic(), rows)
+        return [r.model_copy() for r in rows]
+    return rows
 
 
 def first(model, **eq):
@@ -61,15 +90,20 @@ def first(model, **eq):
 
 def put(*rows) -> None:
     """Upsert rows; split into batches of 500 (atomic per batch, not across them)."""
+    for t in {type(r).__tablename__ for r in rows}:
+        _bump(t)
     for i in range(0, len(rows), _BATCH):
         batch = _db().batch()
         for r in rows[i : i + _BATCH]:
             batch.set(_coll(type(r)).document(r.id), r.model_dump(mode="json"))
         batch.commit()
+    for t in {type(r).__tablename__ for r in rows}:
+        _bump(t)
 
 
 def delete(model, id: str) -> None:
     _coll(model).document(id).delete()
+    _bump(model.__tablename__)
 
 
 def delete_where(model, **eq) -> None:
@@ -79,3 +113,4 @@ def delete_where(model, **eq) -> None:
         for ref in refs[i : i + _BATCH]:
             batch.delete(ref)
         batch.commit()
+    _bump(model.__tablename__)

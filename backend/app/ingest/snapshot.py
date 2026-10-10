@@ -45,6 +45,7 @@ Design decisions (documented here since they aren't dictated anywhere else):
 from __future__ import annotations
 
 import statistics
+import time
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -225,7 +226,7 @@ def empty_dashboard_snapshot(user_id: str) -> DashboardSnapshot:
     )
 
 
-def build_dashboard_snapshot(user_id: str) -> DashboardSnapshot:
+def _build_dashboard_snapshot(user_id: str) -> DashboardSnapshot:
     """Build (and cache) a real DashboardSnapshot for `user_id` from the DB.
 
     A demo persona id with no accounts falls back to the Phase-0 fixture
@@ -361,3 +362,19 @@ def build_dashboard_snapshot(user_id: str) -> DashboardSnapshot:
 
     _cache_snapshot(snapshot)
     return snapshot
+
+
+_snapshots: dict[str, tuple[int, float, DashboardSnapshot]] = {}
+
+
+def build_dashboard_snapshot(user_id: str) -> DashboardSnapshot:
+    """Memoised per user: the dashboard, notifications and copilot all ask for it. Any write clears it (store.writes)."""
+    hit = _snapshots.get(user_id)
+    if hit and hit[0] == store.writes() and time.monotonic() - hit[1] < store._TTL:
+        return hit[2].model_copy(deep=True)
+    seen = store.writes()
+    snap = _build_dashboard_snapshot(user_id)
+    if store._TTL:
+        _snapshots[user_id] = (seen, time.monotonic(), snap)
+        return snap.model_copy(deep=True)
+    return snap
