@@ -51,6 +51,9 @@ import type {
   Transaction,
   TxnCategory,
 } from "@/lib/types";
+import { TxnSummary } from "@/components/transactions/TxnSummary";
+import { MerchantLogo } from "@/components/dashboard/MerchantLogo";
+import { CATEGORY_META } from "@/lib/spend";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
@@ -113,7 +116,7 @@ const QUICK_FILTERS: QuickFilter[] = [
 type SortField = "date" | "merchant" | "category" | "amount";
 type SortDirection = "asc" | "desc";
 
-const PAGE_SIZE = 25;
+const PAGE_SIZES = [10, 25, 50];
 
 export default function TransactionsPage() {
   const userId = useUserId();
@@ -126,6 +129,9 @@ export default function TransactionsPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [openPanel, setOpenPanel] = useState<"" | "views" | "filters" | "date" | "keywords">("");
   const [activeQuickFilter, setActiveQuickFilter] = useState<QuickFilterId>("all");
 
   const [sortField, setSortField] = useState<SortField>("date");
@@ -144,20 +150,23 @@ export default function TransactionsPage() {
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
         page,
-        page_size: PAGE_SIZE,
+        page_size: pageSize,
       }),
-    [userId, debouncedSearch, category, reviewStatusFilter, tagFilter, dateFrom, dateTo, page]
+    [userId, debouncedSearch, category, reviewStatusFilter, tagFilter, dateFrom, dateTo, page, pageSize]
   );
 
   const { data, error, loading, reload } = useAsync(
     fetchTransactions,
-    [userId, debouncedSearch, category, reviewStatusFilter, tagFilter, dateFrom, dateTo, page],
+    [userId, debouncedSearch, category, reviewStatusFilter, tagFilter, dateFrom, dateTo, page, pageSize],
     { identity: userId }
   );
 
   // Review queue fetcher
   const fetchQueue = useCallback(() => api.reviewQueue(userId, 20), [userId]);
   const { data: queueData, reload: reloadQueue } = useAsync(fetchQueue, [userId], { identity: userId });
+
+  const { data: accounts } = useAsync(useCallback(() => api.accounts(userId), [userId]), [userId], { identity: userId });
+  const accountName = useMemo(() => new Map((accounts ?? []).map((a) => [a.id, a.name])), [accounts]);
 
   // Rules fetcher
   const fetchRules = useCallback(() => api.rules(userId), [userId]);
@@ -230,7 +239,8 @@ export default function TransactionsPage() {
   }, [pageItems, activeQuickFilter, sortField, sortDirection]);
 
   function handleExportCSV() {
-    const itemsToExport = displayItems.length > 0 ? displayItems : data?.items ?? [];
+    const base = displayItems.length > 0 ? displayItems : data?.items ?? [];
+    const itemsToExport = selected.size > 0 ? base.filter((t) => selected.has(t.id)) : base;
     if (itemsToExport.length === 0) return;
 
     const headers = ["ID", "Date", "Merchant", "Category", "Amount (INR)", "Review Status", "Tags", "Notes", "Account ID"];
@@ -265,47 +275,19 @@ export default function TransactionsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-8 pb-16 min-w-0 max-w-full">
-      {/* Editorial Fraunces Header Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-black/[0.04]">
+    <div className="flex flex-col gap-4 pb-16 min-w-0 max-w-full">
+      <div className="flex items-end justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-ember bg-orange-50 px-2.5 py-0.5 rounded-full border border-ember/20">
-              Double-Entry Ledger
-            </span>
-            <span className="text-xs text-pewter font-medium">• Audited Financial Feeds</span>
-          </div>
-          <h1 className="font-display text-2xl sm:text-3xl font-medium text-ink mt-1.5 tracking-tight">
-            Transactions & Review
-          </h1>
-          <p className="mt-1 text-xs sm:text-sm text-graphite max-w-2xl leading-relaxed">
-            Audit, classify, and create automated merchant rules with swipe-friendly transaction verification.
-          </p>
+          <h1 className="font-display text-2xl font-semibold text-ink">Transactions</h1>
+          <p className="text-xs text-graphite">See where your money came from and where it went.</p>
         </div>
-
-        <div className="flex flex-wrap items-center gap-2.5">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setShowRulesModal(true)}
-            className="text-xs font-semibold gap-1.5"
-          >
-            <SlidersHorizontal className="h-3.5 w-3.5 text-pewter" />
-            <span>Rules ({rulesData?.total ?? 0})</span>
-          </Button>
-
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={handleExportCSV}
-            disabled={!data || data.items.length === 0}
-            className="text-xs font-semibold gap-1.5"
-          >
-            <Download className="h-3.5 w-3.5 text-pewter" />
-            <span>Export CSV</span>
-          </Button>
-        </div>
+        <Button variant="secondary" size="sm" onClick={() => setShowRulesModal(true)} className="text-xs font-semibold gap-1.5">
+          <SlidersHorizontal className="h-3.5 w-3.5 text-pewter" />
+          <span>Auto-sort rules ({rulesData?.total ?? 0})</span>
+        </Button>
       </div>
+
+      <TxnSummary />
 
       {/* Review Queue Deck (Matching Showcase Track Pattern) */}
       {queueData && queueData.pending_count > 0 && showReviewDeck && (
@@ -317,156 +299,6 @@ export default function TransactionsPage() {
           onDismiss={() => setShowReviewDeck(false)}
         />
       )}
-
-      {/* Quick Filter Pills Row */}
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-pewter uppercase tracking-wider">
-            Quick Filters
-          </span>
-          {queueData && queueData.pending_count > 0 && !showReviewDeck && (
-            <button
-              type="button"
-              onClick={() => setShowReviewDeck(true)}
-              className="text-xs font-medium text-ember hover:underline inline-flex items-center gap-1 cursor-pointer"
-            >
-              <Sparkles className="h-3 w-3" />
-              <span>Resume Review ({queueData.pending_count} pending)</span>
-            </button>
-          )}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {QUICK_FILTERS.map((qf) => {
-            const isActive = activeQuickFilter === qf.id;
-            return (
-              <button
-                key={qf.id}
-                type="button"
-                onClick={() => handleQuickFilterClick(qf)}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full px-3.5 py-1 text-xs font-medium transition-all duration-150 cursor-pointer select-none",
-                  isActive
-                    ? "bg-sage text-ink shadow-sm ring-1 ring-ink font-semibold"
-                    : "bg-fog text-graphite border border-mist hover:bg-white hover:text-ink hover:border-black/[0.15]"
-                )}
-              >
-                {isActive && <Check className="h-3 w-3 text-ember" />}
-                <span>{qf.label}</span>
-                {qf.id === "pending_review" && queueData && queueData.pending_count > 0 && (
-                  <span className="ml-1 px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-900 text-[10px] font-bold">
-                    {queueData.pending_count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Primary Search & Date Filter Bar */}
-      <Card className="p-4 sm:p-5">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative min-w-[220px] flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-pewter pointer-events-none" />
-            <input
-              type="search"
-              placeholder="Search merchant, description, tags, notes..."
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                resetToFirstPage();
-              }}
-              className="w-full rounded-chip border border-mist bg-white pl-9 pr-3 py-2 text-sm text-ink placeholder:text-pewter focus:border-ember focus:outline-none focus:ring-1 focus:ring-ember transition-colors"
-            />
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={category}
-              onChange={(e) => {
-                const val = e.target.value as TxnCategory | "";
-                setCategory(val);
-                setActiveQuickFilter("all");
-                resetToFirstPage();
-              }}
-              className="rounded-chip border border-mist bg-white px-3 py-2 text-sm text-ink focus:border-ember focus:outline-none focus:ring-1 focus:ring-ember cursor-pointer"
-            >
-              <option value="">All Categories</option>
-              {CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {categoryLabel(c)}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={reviewStatusFilter}
-              onChange={(e) => {
-                setReviewStatusFilter(e.target.value);
-                setActiveQuickFilter("all");
-                resetToFirstPage();
-              }}
-              className="rounded-chip border border-mist bg-white px-3 py-2 text-sm text-ink focus:border-ember focus:outline-none focus:ring-1 focus:ring-ember cursor-pointer"
-            >
-              <option value="">All Statuses</option>
-              <option value="pending">Pending Review</option>
-              <option value="reviewed">Reviewed</option>
-              <option value="skipped">Skipped</option>
-            </select>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1.5 rounded-chip border border-mist bg-white px-2.5 py-1.5 text-xs text-graphite">
-              <span className="text-pewter font-medium">From:</span>
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => {
-                  setDateFrom(e.target.value);
-                  resetToFirstPage();
-                }}
-                className="bg-transparent text-xs text-ink focus:outline-none"
-                aria-label="From date"
-              />
-            </div>
-            <div className="flex items-center gap-1.5 rounded-chip border border-mist bg-white px-2.5 py-1.5 text-xs text-graphite">
-              <span className="text-pewter font-medium">To:</span>
-              <input
-                type="date"
-                value={dateTo}
-                onChange={(e) => {
-                  setDateTo(e.target.value);
-                  resetToFirstPage();
-                }}
-                className="bg-transparent text-xs text-ink focus:outline-none"
-                aria-label="To date"
-              />
-            </div>
-
-            {(search || category || reviewStatusFilter || tagFilter || dateFrom || dateTo || activeQuickFilter !== "all") && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setSearch("");
-                  setCategory("");
-                  setReviewStatusFilter("");
-                  setTagFilter("");
-                  setDateFrom("");
-                  setDateTo("");
-                  setActiveQuickFilter("all");
-                  resetToFirstPage();
-                }}
-                className="text-xs text-pewter hover:text-ink px-2"
-                title="Clear all filters"
-              >
-                <X className="h-3.5 w-3.5 mr-1" />
-                Clear
-              </Button>
-            )}
-          </div>
-        </div>
-      </Card>
 
       {/* Error View */}
       {error && (
@@ -480,44 +312,135 @@ export default function TransactionsPage() {
 
       {/* Main Ledger Table Card */}
       <Card className="p-0 sm:p-0 overflow-hidden max-w-full">
+        <div className="relative flex flex-wrap items-center gap-2 border-b border-black/[0.06] px-5 py-4">
+          <h2 className="mr-auto font-display text-base font-semibold text-ink">All transactions</h2>
+          {([
+            ["views", "Quick views"],
+            ["filters", "Filters"],
+            ["date", "Date"],
+            ["keywords", "Search"],
+          ] as const).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setOpenPanel(openPanel === id ? "" : id)}
+              className={cn("inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium", openPanel === id ? "border-ink bg-fog text-ink" : "border-mist bg-white text-graphite hover:text-ink")}
+            >
+              {label}
+              <ChevronDown className="h-3 w-3" />
+            </button>
+          ))}
+          <Button variant="secondary" size="sm" onClick={handleExportCSV} disabled={!data || data.items.length === 0} className="text-xs font-semibold gap-1.5">
+            <Download className="h-3.5 w-3.5 text-pewter" />
+            {selected.size > 0 ? `Export ${selected.size} selected` : "Export all"}
+          </Button>
+          {openPanel && (
+            <div className="mt-2 flex w-full flex-wrap items-center gap-2 rounded-2xl bg-fog/60 p-3">
+              {openPanel === "views" &&
+                QUICK_FILTERS.map((qf) => (
+                  <button
+                    key={qf.id}
+                    type="button"
+                    onClick={() => handleQuickFilterClick(qf)}
+                    className={cn("rounded-full px-3 py-1 text-xs font-medium", activeQuickFilter === qf.id ? "bg-lime text-ink" : "bg-white text-graphite hover:text-ink")}
+                  >
+                    {qf.label}
+                  </button>
+                ))}
+              {openPanel === "filters" && (
+                <>
+                  <select
+                    value={category}
+                    onChange={(e) => {
+                      setCategory(e.target.value as TxnCategory | "");
+                      setActiveQuickFilter("all");
+                      resetToFirstPage();
+                    }}
+                    className="rounded-xl border border-mist bg-white px-3 py-1.5 text-xs text-ink"
+                  >
+                    <option value="">All categories</option>
+                    {CATEGORIES.map((c) => (
+                      <option key={c} value={c}>
+                        {categoryLabel(c)}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={reviewStatusFilter}
+                    onChange={(e) => {
+                      setReviewStatusFilter(e.target.value);
+                      setActiveQuickFilter("all");
+                      resetToFirstPage();
+                    }}
+                    className="rounded-xl border border-mist bg-white px-3 py-1.5 text-xs text-ink"
+                  >
+                    <option value="">Any status</option>
+                    <option value="pending">To review</option>
+                    <option value="reviewed">Reviewed</option>
+                    <option value="skipped">Skipped</option>
+                  </select>
+                </>
+              )}
+              {openPanel === "date" && (
+                <>
+                  <label className="flex items-center gap-1.5 text-xs text-graphite">
+                    From
+                    <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); resetToFirstPage(); }} className="rounded-xl border border-mist bg-white px-2 py-1 text-xs text-ink" />
+                  </label>
+                  <label className="flex items-center gap-1.5 text-xs text-graphite">
+                    To
+                    <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); resetToFirstPage(); }} className="rounded-xl border border-mist bg-white px-2 py-1 text-xs text-ink" />
+                  </label>
+                </>
+              )}
+              {openPanel === "keywords" && (
+                <div className="relative min-w-[240px] flex-1">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-pewter" />
+                  <input
+                    type="search"
+                    autoFocus
+                    placeholder="Search shop, note or tag"
+                    value={search}
+                    onChange={(e) => { setSearch(e.target.value); resetToFirstPage(); }}
+                    className="w-full rounded-xl border border-mist bg-white py-1.5 pl-9 pr-3 text-sm text-ink"
+                  />
+                </div>
+              )}
+              {(search || category || reviewStatusFilter || tagFilter || dateFrom || dateTo || activeQuickFilter !== "all") && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setSearch(""); setCategory(""); setReviewStatusFilter(""); setTagFilter(""); setDateFrom(""); setDateTo("");
+                    setActiveQuickFilter("all"); resetToFirstPage();
+                  }}
+                  className="px-2 text-xs text-pewter hover:text-ink"
+                >
+                  <X className="mr-1 h-3.5 w-3.5" /> Clear
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
         <div className="overflow-x-auto w-full max-w-full">
           <table className="w-full min-w-[760px] text-left text-sm border-collapse">
             <thead>
-              <tr className="border-b border-black/[0.06] bg-fog/75 text-xs font-semibold uppercase tracking-wider text-pewter select-none">
-                <SortableHeader
-                  field="date"
-                  label="Date"
-                  currentField={sortField}
-                  direction={sortDirection}
-                  onSort={handleSort}
-                  className="pl-6 py-3.5 w-28"
-                />
-                <SortableHeader
-                  field="merchant"
-                  label="Merchant / Details"
-                  currentField={sortField}
-                  direction={sortDirection}
-                  onSort={handleSort}
-                  className="px-6 py-3.5 min-w-[220px]"
-                />
-                <SortableHeader
-                  field="category"
-                  label="Category Classification"
-                  currentField={sortField}
-                  direction={sortDirection}
-                  onSort={handleSort}
-                  className="px-6 py-3.5 w-48"
-                />
-                <th className="px-6 py-3.5 w-36">Status & Tags</th>
-                <SortableHeader
-                  field="amount"
-                  label="Amount"
-                  currentField={sortField}
-                  direction={sortDirection}
-                  onSort={handleSort}
-                  className="pr-6 py-3.5 text-right w-32"
-                  align="right"
-                />
+              <tr className="border-b border-black/[0.06] text-xs font-medium text-pewter select-none">
+                <th className="w-10 pl-5 py-3.5">
+                  <input
+                    type="checkbox"
+                    aria-label="Select all on this page"
+                    checked={displayItems.length > 0 && displayItems.every((t) => selected.has(t.id))}
+                    onChange={(e) => setSelected(e.target.checked ? new Set(displayItems.map((t) => t.id)) : new Set())}
+                  />
+                </th>
+                <SortableHeader field="date" label="Date" currentField={sortField} direction={sortDirection} onSort={handleSort} className="px-3 py-3.5 w-28" />
+                <SortableHeader field="merchant" label="Paid to / from" currentField={sortField} direction={sortDirection} onSort={handleSort} className="px-3 py-3.5 min-w-[200px]" />
+                <th className="px-3 py-3.5 w-28">Status</th>
+                <SortableHeader field="amount" label="Amount" currentField={sortField} direction={sortDirection} onSort={handleSort} className="px-3 py-3.5 text-right w-32" align="right" />
+                <th className="px-3 py-3.5 w-40">Account</th>
+                <SortableHeader field="category" label="Category" currentField={sortField} direction={sortDirection} onSort={handleSort} className="px-3 py-3.5 w-48" />
+                <th className="px-3 py-3.5 w-24 text-center">Note</th>
               </tr>
             </thead>
 
@@ -546,7 +469,7 @@ export default function TransactionsPage() {
             ) : displayItems.length === 0 ? (
               <tbody>
                 <tr>
-                  <td colSpan={5} className="p-8">
+                  <td colSpan={8} className="p-8">
                     <EmptyState
                       icon={<Receipt className="h-10 w-10 text-pewter" />}
                       title="No transactions match these filters"
@@ -580,6 +503,9 @@ export default function TransactionsPage() {
                     key={txn.id}
                     txn={txn}
                     userId={userId}
+                    accountName={accountName.get(txn.account_id) ?? "Account"}
+                    selected={selected.has(txn.id)}
+                    onToggle={() => setSelected((prev) => { const n = new Set(prev); if (n.has(txn.id)) n.delete(txn.id); else n.add(txn.id); return n; })}
                     onUpdated={handleTransactionActionCompleted}
                   />
                 ))}
@@ -594,12 +520,12 @@ export default function TransactionsPage() {
             <div className="flex items-center gap-2 text-xs text-pewter">
               <span>Showing</span>
               <span className="font-semibold text-ink tnum">
-                {Math.min(data.total, (page - 1) * PAGE_SIZE + 1)}–
-                {Math.min(data.total, (page - 1) * PAGE_SIZE + displayItems.length)}
+                {Math.min(data.total, (page - 1) * pageSize + 1)}–
+                {Math.min(data.total, (page - 1) * pageSize + displayItems.length)}
               </span>
               <span>of</span>
               <span className="font-semibold text-ink tnum">{data.total}</span>
-              <span>transactions</span>
+              <span>results</span>
               {activeQuickFilter !== "all" && (
                 <span className="text-[11px] text-ember font-medium ml-1">
                   (filtered by {QUICK_FILTERS.find((q) => q.id === activeQuickFilter)?.label})
@@ -608,6 +534,16 @@ export default function TransactionsPage() {
             </div>
 
             <div className="flex items-center gap-2">
+              <label className="flex items-center gap-1.5 text-xs text-graphite">
+                Rows per page
+                <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); resetToFirstPage(); }} className="rounded-xl border border-mist bg-white px-2 py-1 text-xs text-ink">
+                  {PAGE_SIZES.map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <Button
                 variant="secondary"
                 size="sm"
@@ -619,12 +555,12 @@ export default function TransactionsPage() {
                 Previous
               </Button>
               <span className="text-xs text-graphite font-medium px-2 tnum">
-                Page {page} of {Math.max(1, Math.ceil(data.total / PAGE_SIZE))}
+                Page {page} of {Math.max(1, Math.ceil(data.total / pageSize))}
               </span>
               <Button
                 variant="secondary"
                 size="sm"
-                disabled={page * PAGE_SIZE >= data.total || loading}
+                disabled={page * pageSize >= data.total || loading}
                 onClick={() => setPage((p) => p + 1)}
                 className="h-8 px-2.5 text-xs"
               >
@@ -963,10 +899,16 @@ function ReviewQueueSection({
 function TransactionRowItem({
   txn,
   userId,
+  accountName,
+  selected,
+  onToggle,
   onUpdated,
 }: {
   txn: Transaction;
   userId: string;
+  accountName: string;
+  selected: boolean;
+  onToggle: () => void;
   onUpdated: () => void;
 }) {
   const [popoverOpen, setPopoverOpen] = useState(false);
@@ -1043,43 +985,38 @@ function TransactionRowItem({
 
   return (
     <>
-      <tr className="hover:bg-fog/50 transition-colors duration-150 group">
-        {/* Date */}
-        <td className="whitespace-nowrap pl-6 py-3.5 text-xs text-graphite tnum font-medium">
-          {formatDate(txn.date)}
+      <tr className={cn("hover:bg-fog/50 transition-colors duration-150 group", selected && "bg-tint-lime/50")}>
+        <td className="pl-5 py-3.5">
+          <input type="checkbox" aria-label={`Select ${txn.merchant}`} checked={selected} onChange={onToggle} />
         </td>
-
-        {/* Merchant / Description */}
-        <td className="px-6 py-3.5">
+        <td className="whitespace-nowrap px-3 py-3.5 text-xs text-graphite tnum font-medium">{formatDate(txn.date)}</td>
+        <td className="px-3 py-3.5">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-fog border border-black/[0.05] text-graphite shrink-0">
-              <CategoryIcon className="h-4 w-4" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-ink text-sm truncate">
-                  {txn.merchant}
-                </span>
-                {txn.notes && (
-                  <button
-                    type="button"
-                    onClick={() => setDetailOpen(!detailOpen)}
-                    className="text-pewter hover:text-ember"
-                    title={txn.notes}
-                  >
-                    <FileText className="h-3 w-3" />
-                  </button>
-                )}
-              </div>
-              <span className="text-[11px] text-pewter block mt-0.5 truncate">
-                Ref: {txn.account_id}
-              </span>
-            </div>
+            <MerchantLogo merchant={txn.merchant} color={CATEGORY_META[txn.category]?.color ?? "#9aa08a"} className="size-8 shrink-0" />
+            <span className="font-semibold text-ink text-sm truncate">{txn.merchant}</span>
+            {txn.notes && <FileText className="h-3 w-3 text-pewter" aria-label={txn.notes} />}
           </div>
         </td>
-
+        <td className="px-3 py-3.5">
+          {reviewStatus === "reviewed" ? (
+            <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800">Reviewed</span>
+          ) : reviewStatus === "skipped" ? (
+            <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">Skipped</span>
+          ) : (
+            <span className="inline-flex rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800">To review</span>
+          )}
+        </td>
+        <td className="whitespace-nowrap px-3 py-3.5 text-right">
+          <span className={cn("tnum font-semibold text-sm", isInflow ? "text-emerald-700" : "text-ink")}>
+            {isInflow ? "+" : "-"}
+            {formatCurrency(Math.abs(txn.amount))}
+          </span>
+        </td>
+        <td className="px-3 py-3.5 text-xs text-graphite">
+          <span className="inline-flex max-w-[150px] truncate rounded-full border border-mist bg-white px-2.5 py-0.5">{accountName}</span>
+        </td>
         {/* Interactive Category Badge & Popover Picker */}
-        <td className="px-6 py-3.5 relative">
+        <td className="px-3 py-3.5 relative">
           <div className="relative inline-block" ref={popoverRef}>
             <button
               type="button"
@@ -1132,65 +1069,22 @@ function TransactionRowItem({
           </div>
         </td>
 
-        {/* Review Status & Tags */}
-        <td className="px-6 py-3.5">
-          <div className="flex flex-wrap items-center gap-1.5">
-            {reviewStatus === "reviewed" ? (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                <Check className="h-2.5 w-2.5" />
-                Reviewed
-              </span>
-            ) : reviewStatus === "skipped" ? (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
-                Skipped
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
-                Pending
-              </span>
-            )}
-
-            {txn.tags && txn.tags.length > 0 ? (
-              txn.tags.map((t) => (
-                <span
-                  key={t}
-                  className="inline-flex items-center px-1.5 py-0.2 rounded bg-fog text-graphite border border-mist text-[10px] font-medium"
-                >
-                  {t}
-                </span>
-              ))
-            ) : (
-              <button
-                type="button"
-                onClick={() => setDetailOpen(true)}
-                className="text-[10px] text-pewter hover:text-ember font-medium opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-              >
-                + Tag / Note
-              </button>
-            )}
-          </div>
-        </td>
-
-        {/* Amount with Tabular Numerals */}
-        <td className="whitespace-nowrap pr-6 py-3.5 text-right">
-          <div className="flex items-center justify-end gap-2">
-            <span
-              className={cn(
-                "tnum font-semibold text-sm",
-                isInflow ? "text-emerald-700" : "text-ink"
-              )}
-            >
-              {isInflow ? "+" : "-"}
-              {formatCurrency(Math.abs(txn.amount))}
-            </span>
-          </div>
+        <td className="px-3 py-3.5 text-center">
+          <button
+            type="button"
+            onClick={() => setDetailOpen(!detailOpen)}
+            className="inline-flex size-7 items-center justify-center rounded-full bg-fog text-graphite hover:bg-lime/50"
+            title={txn.tags?.length ? txn.tags.join(", ") : "Add a tag or note"}
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
         </td>
       </tr>
 
       {/* Expandable Edit Tags & Notes Drawer */}
       {detailOpen && (
         <tr className="bg-fog/40 border-b border-black/[0.04]">
-          <td colSpan={5} className="px-6 py-4">
+          <td colSpan={8} className="px-6 py-4">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-black/[0.06] shadow-xs">
               <div className="flex-1 flex flex-col gap-2">
                 <div className="flex flex-wrap items-center gap-2">
@@ -1322,7 +1216,7 @@ function RulesManagerModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-sage/70 p-4 backdrop-blur-xs">
       <div className="w-full max-w-2xl rounded-2xl border border-mist bg-white shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-black/[0.06] px-6 py-4 bg-fog/50">
