@@ -43,3 +43,25 @@ def test_agents_corroborate_each_other_and_ai_doubt_lowers_score():
     agents.cross_check([a, b, solo])
     assert a["severity"] == "high" and a["corroborated_by"] == ["duplicate_detector"] and "corroborated_by" not in solo and solo["severity"] == "medium"
     assert agents.risk_score([{**solo, "ai": {"verdict": "doubt"}}]) < agents.risk_score([solo])
+
+
+def test_backup_model_used_when_primary_fails(monkeypatch):
+    monkeypatch.setattr(ai_agents, "_key", lambda: "k")
+    calls = []
+    def post(model, *a, **k):
+        calls.append(model)
+        if model == ai_agents.MODELS["duplicate_detector"]:
+            raise RuntimeError("529")
+        return '{"r":[{"i":0,"v":"confirm","n":"x"}]}'
+    monkeypatch.setattr(ai_agents, "_post", post)
+    out, extra = ai_agents.review("duplicate_detector", [_f()], [])
+    assert calls[-1] == ai_agents.BACKUPS["duplicate_detector"] and out[0]["ai"]["verdict"] == "confirm" and extra["backup"] is True
+
+
+def test_web_checker_attaches_answer_to_serious_merchants(monkeypatch):
+    from app.api import web_router
+    monkeypatch.setattr(ai_agents, "get_settings", lambda: type("S", (), {"tavily_api_key": "k"})())
+    monkeypatch.setattr(web_router, "_call", lambda path, body: {"answer": "Looks like a scam", "results": [{"url": "https://x"}]})
+    hi, lo = {**_f(), "merchant": "Quick"}, {**_f(), "severity": "low", "merchant": "Calm"}
+    ai_agents.web_evidence([hi, lo])
+    assert hi["web"]["url"] == "https://x" and "web" not in lo

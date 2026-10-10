@@ -762,9 +762,10 @@ export interface SecurityFinding {
   amount: number;
   txn_ids: string[];
   corroborated_by?: string[];
+  web?: { answer: string; url: string };
   ai?: { model: string; verdict: "confirm" | "doubt"; note: string };
 }
-export interface AgentSummary { agent: string; name: string; findings: number; ms: number; score?: number; source?: string | null; error?: string | null; model?: string; ai?: "ok" | "error" | "off" }
+export interface AgentSummary { agent: string; name: string; findings: number; ms: number; score?: number; source?: string | null; error?: string | null; model?: string; ai?: "ok" | "error" | "off"; backup?: boolean }
 export interface SecurityReport {
   created_at: string;
   risk_score: number;

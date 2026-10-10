@@ -1,9 +1,9 @@
-"""Evidence Council: eight agents that examine a user's real ledger.
+"""Evidence Council: nine agents that examine a user's real ledger and hand findings to each other.
 
-Seven are deterministic checks over TransactionRow data (every finding links the
-transactions behind it). The eighth, Verdict Writer, asks the NVIDIA model (Nugen as backup)
-to explain the findings; if both fail the real findings are kept and the write-up
-is marked unavailable. Nothing here invents numbers.
+Six are deterministic checks over TransactionRow data (every finding links the transactions behind it); each gets an AI
+second opinion from its own NVIDIA model (ai_agents.py) that also sees the earlier agents' findings. The Web Checker
+looks up the riskiest merchants on the live web, the Risk Scorer combines everything (agents that flag the same merchant
+corroborate each other), and the Verdict Writer explains it with the NVIDIA model (Nugen as backup). Nothing here invents numbers.
 """
 from __future__ import annotations
 
@@ -38,6 +38,7 @@ AGENTS = [
     ("merchant_verifier", "Merchant Verifier", "Spots look-alike and unknown merchant names"),
     ("subscription_sleuth", "Subscription Sleuth", "Tracks recurring charges, price hikes and overlaps"),
     ("pattern_analyst", "Pattern Analyst", "Looks for bursts and suspicious payment shapes"),
+    ("web_checker", "Web Checker", "Looks up the riskiest merchants on the live web (Tavily)"),
     ("risk_scorer", "Risk Scorer", "Combines every finding into one risk score"),
     ("verdict_writer", "Verdict Writer", "Explains what is wrong and what to do (AI)"),
 ]
@@ -212,7 +213,7 @@ _VERDICT_SYSTEM = (
 def write_verdict(findings: list[dict], score: int) -> tuple[dict | None, str | None, str | None]:
     """(verdict, source, error). NVIDIA first, Nugen as backup, otherwise (None, None, reason)."""
     s = get_settings()
-    brief = json.dumps({"risk_score": score, "findings": [{k: f[k] for k in ("agent", "severity", "title", "detail", "amount", "corroborated_by", "ai") if k in f} for f in findings[:25]]}, default=str)
+    brief = json.dumps({"risk_score": score, "findings": [{k: f[k] for k in ("agent", "severity", "title", "detail", "amount", "corroborated_by", "ai", "web") if k in f} for f in findings[:25]]}, default=str)
     errors = []
     if s.has_nvidia:
         try:
@@ -236,7 +237,11 @@ def investigate(user_id: str, pace: float = 0.35):
     for key, name, _ in AGENTS:
         yield {"type": "agent", "agent": key, "status": "running"}
         t0 = time.time()
-        if key == "risk_scorer":
+        if key == "web_checker":
+            cross_check(all_findings)  # so the web lookup targets merchants two agents agree on
+            _, extra = ai_agents.web_evidence(all_findings)
+            res = []
+        elif key == "risk_scorer":
             cross_check(all_findings)
             score = risk_score(all_findings)
             res, extra = [], {"score": score}
