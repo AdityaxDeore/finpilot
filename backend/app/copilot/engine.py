@@ -30,22 +30,53 @@ SDK behaviour this was written against):
 """
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
 from pydantic import ValidationError
 
-from app.copilot import offline_router, tools
+from app.copilot import nugen, offline_router, tools
 from app.core.config import get_settings
-from app.schemas import AnswerContract, ChatMessage
+from pydantic import BaseModel, Field
+
+from app.schemas import (
+    ActionType,
+    AnswerContract,
+    ChatMessage,
+    DataGap,
+    Fact,
+    ImpactEstimate,
+    Prediction,
+)
 
 logger = logging.getLogger(__name__)
 
 MAX_TOOL_ROUND_TRIPS = 6
 
+
+# Gemini's Developer API rejects schemas containing free-form dicts (`additionalProperties`),
+# and Recommendation.action_params is one. This mirror of AnswerContract omits it; the result
+# is re-validated into the real AnswerContract below.
+class _GeminiRecommendation(BaseModel):
+    action: ActionType
+    text: str
+    rationale: str
+    impact: ImpactEstimate
+    confidence: float = Field(ge=0, le=1)
+
+
+class _GeminiAnswer(BaseModel):
+    query: Optional[str] = None
+    facts: list[Fact] = Field(default_factory=list)
+    predictions: list[Prediction] = Field(default_factory=list)
+    recommendations: list[_GeminiRecommendation] = Field(default_factory=list)
+    data_gaps: list[DataGap] = Field(default_factory=list)
+    narrative: str = ""
+
 _SYSTEM_PROMPT_TOOLS = """You are FinPilot's financial copilot for an Indian retail user.
 
 You have tools to look up the user's real financial data (summary, recurring
-obligations, debts, forecast) and to simulate the impact of actions
+obligations, debts, forecast, spending breakdown, invoices, investments) and to simulate the impact of actions
 (simulate_action / check_affordability). ALWAYS call the relevant tool(s)
 before stating any number. Never invent or guess a number.
 
@@ -130,6 +161,20 @@ def _bound_tool_functions(user_id: str) -> list:
         if none is known."""
         return tools.check_affordability(user_id, amount=amount, description=description)
 
+    def get_spending_breakdown(days: int) -> dict:
+        """Spend by category, top merchants and monthly totals for the current
+        user over the last `days` days (pass 90 if unspecified). Use this for
+        any "where does my money go" question."""
+        return tools.get_spending_breakdown(user_id, days=days)
+
+    def get_invoices() -> dict:
+        """Bills and invoices from the user's Gmail/Drive: paid, due, total due."""
+        return tools.get_invoices(user_id)
+
+    def get_investments() -> dict:
+        """The user's mutual fund and stock holdings: invested, value, gain, monthly SIPs."""
+        return tools.get_investments(user_id)
+
     return [
         get_summary,
         query_transactions,
@@ -138,6 +183,9 @@ def _bound_tool_functions(user_id: str) -> list:
         get_forecast,
         simulate_action,
         check_affordability,
+        get_spending_breakdown,
+        get_invoices,
+        get_investments,
     ]
 
 
@@ -176,7 +224,7 @@ def _gemini_answer(user_id: str, message: str, history: Optional[list[ChatMessag
     from google.genai import types
 
     settings = get_settings()
-    client = genai.Client(api_key=settings.gemini_api_key)
+    client = genai.Client(api_key=settings.gemini_api_key, http_options=types.HttpOptions(timeout=60_000))
     bound_tools = _bound_tool_functions(user_id)
 
     convo_prefix = _history_to_text(history)
@@ -206,7 +254,7 @@ def _gemini_answer(user_id: str, message: str, history: Optional[list[ChatMessag
     phase2_config = types.GenerateContentConfig(
         system_instruction=_SYSTEM_PROMPT_STRUCTURE,
         response_mime_type="application/json",
-        response_schema=AnswerContract,
+        response_schema=_GeminiAnswer,
     )
 
     last_error: Optional[Exception] = None
@@ -219,14 +267,14 @@ def _gemini_answer(user_id: str, message: str, history: Optional[list[ChatMessag
                 config=phase2_config,
             )
             parsed = response2.parsed
-            if isinstance(parsed, AnswerContract):
-                if not parsed.query:
-                    parsed.query = message
-                return parsed
-            # Fallback: SDK didn't auto-parse (e.g. dict) -- validate ourselves.
-            if isinstance(parsed, dict):
-                return AnswerContract.model_validate(parsed)
-            return AnswerContract.model_validate_json(response2.text)
+            if isinstance(parsed, _GeminiAnswer):
+                parsed = parsed.model_dump(mode="json")
+            elif not isinstance(parsed, dict):
+                parsed = json.loads(response2.text)
+            result = AnswerContract.model_validate(parsed)
+            if not result.query:
+                result.query = message
+            return result
         except ValidationError as exc:
             last_error = exc
             continue
@@ -245,9 +293,9 @@ def answer(
 ) -> AnswerContract:
     """Answer a user's financial question.
 
-    Tries the Gemini function-calling engine when a key is configured; on any
-    error (network, quota, schema validation, missing SDK, etc.) or when no
-    key is configured, falls through to the offline rule-based router. This
+    Uses Gemini when a key is configured (an AI failure is reported as an error
+    message, never replaced by a canned answer). The rule-based router is used
+    only in offline mode or when no AI key is configured. This
     function is designed to never raise.
 
     `force_offline`: user-controlled privacy preference (see the Security
@@ -256,10 +304,25 @@ def answer(
     key is configured.
     """
     settings = get_settings()
+    # Nugen runs alongside Gemini; never when the user asked for data to stay on this machine.
+    pool = ThreadPoolExecutor(max_workers=1)
+    second = pool.submit(nugen.second_opinion, user_id, message, history) if settings.has_nugen and not force_offline else None
+    result = None
     if settings.has_gemini and not force_offline:
         try:
-            return _gemini_answer(user_id, message, history)
-        except Exception as exc:  # noqa: BLE001 - deliberate broad fallback boundary
-            logger.warning("Gemini copilot engine failed, falling back to offline router: %s", exc)
-
-    return offline_router.route(user_id, message)
+            result = _gemini_answer(user_id, message, history)
+        except Exception as exc:  # noqa: BLE001 - deliberate broad boundary
+            # No canned answer when AI is configured: say plainly that it failed.
+            logger.warning("Gemini copilot engine failed: %s", exc)
+            why = "its quota is used up" if "429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc) else "it did not respond in time"
+            result = AnswerContract(
+                query=message,
+                narrative=f"The AI assistant couldn't answer right now because {why}. Please try again in a minute.",
+                data_gaps=[DataGap(text="Gemini was unavailable.", what_would_help="Retry shortly, or turn on offline mode in Security for basic rule-based answers.")],
+            )
+    if result is None:  # offline mode, or no AI key configured at all
+        result = offline_router.route(user_id, message)
+    if second is not None:
+        result.nugen_narrative, result.nugen_confidence = second.result()
+    pool.shutdown(wait=False)
+    return result

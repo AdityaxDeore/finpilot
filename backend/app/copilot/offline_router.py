@@ -323,8 +323,22 @@ def _intent_recommendations(user_id: str, message: str) -> AnswerContract:
     )
 
 
+def _intent_greeting(user_id: str, message: str) -> AnswerContract:
+    return AnswerContract(
+        query=message,
+        narrative="Hi! I'm your FinPilot copilot. Ask me where your money goes, whether you can afford something, "
+        "how to pay off debt faster, or what to invest in next.",
+    )
+
+
 def _intent_fallback(user_id: str, message: str) -> AnswerContract:
     summary = tools.get_summary(user_id)
+    if "error" not in summary and not summary.get("monthly_income") and not summary.get("monthly_expenses"):
+        return AnswerContract(
+            query=message,
+            data_gaps=[DataGap(text="No financial data is connected yet.", what_would_help="Connect Google Pay or a bank account on the Connect page.")],
+            narrative="I don't see any transactions yet, so there is nothing to analyse. Connect a source and ask me again.",
+        )
     facts = _facts_from_summary(summary) if "error" not in summary else []
     recommendations = _recommendation_from_snapshot_insights(user_id)
     return AnswerContract(
@@ -343,6 +357,11 @@ def _intent_fallback(user_id: str, message: str) -> AnswerContract:
 
 # Ordered (intent_name, keyword_pattern, handler). First match wins.
 _INTENTS: list[tuple[str, re.Pattern, callable]] = [
+    (
+        "greeting",
+        re.compile(r"^\s*(hi+|hello+|hey+|namaste|yo|good\s+(morning|afternoon|evening)|thanks?|thank you)\W*$", re.IGNORECASE),
+        _intent_greeting,
+    ),
     (
         "affordability",
         re.compile(r"\b(afford|should i buy|can i get|can i purchase)\b", re.IGNORECASE),

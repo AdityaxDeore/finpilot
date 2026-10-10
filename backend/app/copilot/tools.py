@@ -100,6 +100,25 @@ def query_transactions(
     recent occurrence within the window) so the *shape* of this tool's output
     is final and callers/tests can already depend on it.
     """
+    today = date.today()
+    window_start = today - timedelta(days=max(days, 0))
+
+    real = _ledger(user_id, window_start)
+    if real:
+        rows = [
+            t for t in real
+            if (not category or t.category == category)
+            and (not merchant or merchant.lower() in t.merchant.lower())
+        ]
+        txns = [
+            {"id": t.id, "date": t.date.isoformat(), "merchant": t.merchant, "category": t.category,
+             "amount": t.amount, "is_recurring": t.is_recurring, "recurring_group_id": t.recurring_group_id}
+            for t in sorted(rows, key=lambda t: t.date, reverse=True)
+        ]
+        # total = money spent (outflows only), so it matches get_spending_breakdown
+        txns = txns[:50]  # keep the LLM prompt small; total below still covers every match
+        return {"transactions": txns, "total": sum(-t.amount for t in rows if _is_spend(t)), "count": len(txns)}
+
     snap = _snapshot(user_id)
     if snap is None:
         return {
@@ -109,9 +128,6 @@ def query_transactions(
             "total": 0.0,
             "count": 0,
         }
-
-    today = date.today()
-    window_start = today - timedelta(days=max(days, 0))
 
     transactions: list[dict] = []
     for ob in snap.recurring_obligations:
@@ -151,6 +167,90 @@ def query_transactions(
     transactions.sort(key=lambda t: t["date"], reverse=True)
     total = sum(t["amount"] for t in transactions)
     return {"transactions": transactions, "total": total, "count": len(transactions)}
+
+
+NON_SPEND = {"transfer", "credit_card_payment", "income"}  # mirrors frontend lib/spend.ts
+
+
+def _ledger(user_id: str, since: date | None = None) -> list:
+    """Real transactions for the user (from `since` when given); [] on any error."""
+    try:
+        from app.models import TransactionRow
+
+        return [t for t in store.query(TransactionRow, user_id=user_id) if since is None or t.date >= since]
+    except Exception:
+        return []
+
+
+def _is_spend(t) -> bool:
+    return t.amount < 0 and t.category not in NON_SPEND
+
+
+def get_spending_breakdown(user_id: str, days: int = 90) -> dict:
+    """Spend by category, top merchants and per-month totals over the last N days, from the real ledger."""
+    rows = [t for t in _ledger(user_id, date.today() - timedelta(days=max(days, 1))) if _is_spend(t)]
+    if not rows:
+        return {"error": "No spending transactions found.", "data_gap": "Connect a payment source to analyse spending."}
+
+    def group(key) -> dict[str, float]:
+        out: dict[str, float] = {}
+        for t in rows:
+            out[key(t)] = out.get(key(t), 0.0) + -t.amount
+        return dict(sorted(out.items(), key=lambda kv: kv[1], reverse=True))
+
+    total = sum(-t.amount for t in rows)
+    return {
+        "days": days,
+        "total_spend": round(total, 2),
+        "transaction_count": len(rows),
+        "by_category": [{"category": k, "amount": round(v, 2), "share": round(v / total, 3)} for k, v in group(lambda t: t.category).items()],
+        "top_merchants": [{"merchant": k, "amount": round(v, 2)} for k, v in list(group(lambda t: t.merchant).items())[:8]],
+        "by_month": [{"month": k, "amount": round(v, 2)} for k, v in sorted(group(lambda t: t.date.strftime("%Y-%m")).items())],
+    }
+
+
+def _connector_data(user_id: str, connector: str, label: str) -> dict:
+    """Demo dataset of a linked connector, or an error + data_gap when it isn't linked."""
+    from app.api.connectors_router import _dataset
+    from app.models import ConnectionRow
+
+    try:
+        linked = store.get(ConnectionRow, f"{user_id}:{connector}") is not None
+    except Exception:
+        linked = False
+    if not linked:
+        return {"error": f"{label} isn't connected.", "data_gap": f"Connect {label} to analyse it."}
+    return _dataset(connector)
+
+
+def get_invoices(user_id: str) -> dict:
+    """Bills and invoices parsed from Gmail/Drive: what is paid, what is due, and the total due."""
+    data = _connector_data(user_id, "invoices", "Gmail & Drive invoices")
+    if "error" in data:
+        return data
+    inv = data["invoices"]
+    due = [i for i in inv if i["status"] == "due"]
+    return {"invoices": inv, "count": len(inv), "due": due, "total_due": sum(i["amount"] for i in due)}
+
+
+def get_investments(user_id: str) -> dict:
+    """Mutual fund and stock holdings with invested amount, current value, gain and monthly SIP total."""
+    data = _connector_data(user_id, "investments", "Mutual funds & stocks")
+    if "error" in data:
+        return data
+    funds = [{**f, "value": round(f["units"] * f["nav"], 2)} for f in data["mutual_funds"]]
+    stocks = [{**x, "invested": x["qty"] * x["avg_price"], "value": round(x["qty"] * x["ltp"], 2)} for x in data["stocks"]]
+    invested = sum(f["invested"] for f in funds) + sum(x["invested"] for x in stocks)
+    value = sum(f["value"] for f in funds) + sum(x["value"] for x in stocks)
+    return {
+        "mutual_funds": funds,
+        "stocks": stocks,
+        "total_invested": round(invested, 2),
+        "total_value": round(value, 2),
+        "gain": round(value - invested, 2),
+        "gain_pct": round((value - invested) / invested, 4) if invested else None,
+        "monthly_sip": sum(f["sip_monthly"] for f in funds),
+    }
 
 
 def get_recurring(user_id: str) -> dict:
@@ -390,4 +490,7 @@ TOOL_FUNCTIONS = [
     get_forecast,
     simulate_action,
     check_affordability,
+    get_spending_breakdown,
+    get_invoices,
+    get_investments,
 ]

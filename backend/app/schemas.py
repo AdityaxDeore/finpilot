@@ -255,6 +255,8 @@ class AnswerContract(BaseModel):
     recommendations: list[Recommendation] = Field(default_factory=list)
     data_gaps: list[DataGap] = Field(default_factory=list)
     narrative: str = ""  # short natural-language summary tying it together
+    nugen_narrative: Optional[str] = None  # second opinion from Nugen, when configured and reachable
+    nugen_confidence: Optional[float] = None  # 0-100, only on Nugen-aligned models
 
 
 # ---------------------------------------------------------------------------

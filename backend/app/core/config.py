@@ -23,6 +23,10 @@ class Settings:
     gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
     gemini_embed_model: str = os.getenv("GEMINI_EMBED_MODEL", "gemini-embedding-001")
 
+    # Nugen (second opinion in the copilot; optional)
+    nugen_api_key: str = os.getenv("NUGEN_API_KEY", "")
+    nugen_model: str = os.getenv("NUGEN_MODEL", "meta-llama/Llama-3.2-3B-Instruct")
+
     # Resend (optional cash-flow-gap alert emails)
     resend_api_key: str = os.getenv("RESEND_API_KEY", "")
     email_from: str = os.getenv("EMAIL_FROM", "FinPilot <onboarding@resend.dev>")
@@ -43,6 +47,10 @@ class Settings:
     @property
     def has_gemini(self) -> bool:
         return bool(self.gemini_api_key)
+
+    @property
+    def has_nugen(self) -> bool:
+        return bool(self.nugen_api_key)
 
     @property
     def has_resend(self) -> bool:

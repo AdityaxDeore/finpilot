@@ -19,6 +19,7 @@ def force_offline(monkeypatch):
 
     class _FakeSettings:
         has_gemini = False
+        has_nugen = False
         gemini_api_key = ""
         gemini_model = "gemini-flash-latest"
 
@@ -172,6 +173,7 @@ def test_answer_force_offline_skips_gemini_even_when_configured(monkeypatch):
 
     class _FakeSettingsWithGemini:
         has_gemini = True
+        has_nugen = False
         gemini_api_key = "fake-key-should-never-be-used"
         gemini_model = "gemini-flash-latest"
 
