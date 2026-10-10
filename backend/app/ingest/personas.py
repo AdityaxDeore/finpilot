@@ -15,8 +15,9 @@ Two entry points:
 """
 from __future__ import annotations
 
-import random
 import json
+import math
+import random
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 
@@ -130,7 +131,7 @@ def _priya_config() -> PersonaConfig:
         city="Bengaluru",
         salary=95_000,
         salary_day=1,
-        seed=101,
+        seed=163,
         accounts=[
             AccountSpec("checking", "Priya Checking - HDFC", "checking", balance=42_000),
             AccountSpec("savings", "Priya Savings - HDFC", "savings", balance=180_000),
@@ -164,7 +165,7 @@ def _priya_config() -> PersonaConfig:
             SpendCategorySpec(TxnCategory.healthcare, ["Apollo Pharmacy", "PharmEasy"], (1, 2), (200, 1500)),
         ],
         anomalies=[
-            AnomalySpec(months_ago=2, merchant="Croma Electronics", category=TxnCategory.shopping, amount=-58_000, account_key="credit_card", description="One-time laptop purchase"),
+            AnomalySpec(months_ago=5, merchant="Croma Electronics", category=TxnCategory.shopping, amount=-58_000, account_key="credit_card", description="One-time laptop purchase"),
             AnomalySpec(months_ago=6, merchant="Goibibo Flight Booking", category=TxnCategory.transport, amount=-22_500, account_key="credit_card", description="One-off vacation flight"),
         ],
     )
@@ -177,7 +178,7 @@ def _arjun_config() -> PersonaConfig:
         city="Mumbai",
         salary=160_000,
         salary_day=1,
-        seed=202,
+        seed=210,
         accounts=[
             AccountSpec("checking", "Arjun Checking - ICICI", "checking", balance=210_000),
             AccountSpec("savings", "Arjun Savings - ICICI", "savings", balance=950_000),
@@ -192,7 +193,7 @@ def _arjun_config() -> PersonaConfig:
             RecurringItem("Podar International School Fees", TxnCategory.other, -14_000, 7, "checking", "Recurring school fees - child 2"),
             RecurringItem("Netflix", TxnCategory.subscriptions, -649, 12, "credit_card"),
             RecurringItem("Amazon Prime", TxnCategory.subscriptions, -1499, 15, "credit_card"),
-            RecurringItem("Disney+ Hotstar", TxnCategory.subscriptions, -299, 17, "credit_card"),
+            RecurringItem("Hotstar Premium", TxnCategory.subscriptions, -299, 17, "credit_card"),
             RecurringItem("Tata Power Electricity Bill", TxnCategory.utilities, -4200, 9, "checking"),
             RecurringItem("Piped Gas Bill", TxnCategory.utilities, -1400, 11, "checking"),
             RecurringItem("Groww Mutual Fund SIP", TxnCategory.investment_sip, -25_000, 3, "checking"),
@@ -210,7 +211,7 @@ def _arjun_config() -> PersonaConfig:
             SpendCategorySpec(TxnCategory.healthcare, ["Apollo Pharmacy", "Practo"], (1, 3), (300, 2500)),
         ],
         anomalies=[
-            AnomalySpec(months_ago=4, merchant="Taj Hotels Booking", category=TxnCategory.entertainment, amount=-45_000, account_key="credit_card", description="One-off family vacation"),
+            AnomalySpec(months_ago=5, merchant="Taj Hotels Booking", category=TxnCategory.entertainment, amount=-45_000, account_key="credit_card", description="One-off family vacation"),
         ],
     )
 
@@ -222,7 +223,7 @@ def _meera_config() -> PersonaConfig:
         city="Pune",
         salary=42_000,
         salary_day=1,
-        seed=303,
+        seed=305,
         accounts=[
             AccountSpec("checking", "Meera Checking - Kotak", "checking", balance=3_200),
             AccountSpec("savings", "Meera Savings - Kotak", "savings", balance=6_500),
@@ -291,6 +292,75 @@ def _safe_day(anchor: date, day_of_month: int) -> date:
     return anchor.replace(day=min(day_of_month, last_day))
 
 
+# Per-persona lifestyle creep (monthly growth) on discretionary categories.
+_CREEP: dict[str, tuple[float, set[str]]] = {
+    "demo-priya": (1.045, {"dining", "shopping", "entertainment"}),
+    "demo-arjun": (1.03, {"groceries", "dining", "shopping", "entertainment", "transport"}),
+}
+# Meera's freelance income by month index (oldest first): 3 strong, 2 dry, a late invoice, repeat.
+_MEERA_INCOME = [1.25, 1.3, 1.2, 0.05, 0.0, 0.9, 1.3, 1.2, 1.1, 0.05, 0.0, 1.0]
+_FESTIVE = {"shopping", "entertainment", "dining"}
+
+
+def _lognormal(rng: random.Random, lo: float, hi: float) -> float:
+    """Right-skewed amount: most near the geometric middle, a few large ones, clipped."""
+    x = rng.lognormvariate(math.log(math.sqrt(lo * hi)), math.log(hi / lo) / 6)
+    return min(max(x, lo * 0.7), hi * 1.15)
+
+
+def _month_factor(user_id: str, category: str, month_idx: int, anchor: date) -> float:
+    growth, cats = _CREEP.get(user_id, (1.0, set()))
+    f = growth**month_idx if category in cats else 1.0
+    if category in _FESTIVE:
+        f *= {10: 1.35, 11: 1.35, 12: 0.8}.get(anchor.month, 1.0)  # Diwali spike, then post-spike dip
+    return f
+
+
+def _fishy_rows(user_id: str, acc: dict[str, AccountRow]) -> list[TransactionRow]:
+    """Deterministic suspicious rows (tags JSON always contains "fishy") for the Evidence Room demo."""
+    out: list[TransactionRow] = []
+
+    def add(days_ago, amount, merchant, cat, kind, key="credit_card", desc=None, rec=False):
+        out.append(TransactionRow(
+            user_id=user_id, account_id=acc[key].id, date=TODAY - timedelta(days=days_ago),
+            amount=amount, merchant=merchant, category=cat, description=desc, is_recurring=rec,
+            recurring_group_id=f"rec-{user_id}-{merchant.lower().replace(' ', '-')}" if rec else None,
+            tags=json.dumps(["fishy", kind]),
+        ))
+
+    if user_id == "demo-priya":
+        add(12, -849.0, "Zomato", "dining", "duplicate")
+        add(12, -849.0, "Zomato", "dining", "duplicate")
+        add(31, -420.0, "BookMyShow", "entertainment", "duplicate")
+        add(30, -420.0, "BookMyShow", "entertainment", "duplicate")
+        add(20, -7499.0, "Amaz0n Pay Seller", "shopping", "lookalike")
+        for k in range(12):  # Hotstar price hike 199 -> 399 -> 649, tagged only on the hiked months
+            amt = (649, 399)[k] if k < 2 else 199
+            add(30 * k + 3, -float(amt), "Hotstar Sports Pass", "subscriptions", "price_hike" if k < 2 else "subscription", rec=True)
+        add(14, -185000.0, "Unknown Intl Wire", "other", "outlier", key="checking",
+            desc="INTL WIRE OUT 02:00 IST UNVERIFIED BENEFICIARY REF X9921")
+        for amt in (99, 149, 199, 299, 399, 499):  # card-testing burst
+            add(5, -float(amt), "PixelGift Store", "shopping", "burst")
+    elif user_id == "demo-arjun":
+        for amt in (25000, 22000, 20500, 17500):  # ATM burst, 85k in one day
+            add(7, -float(amt), "ATM Cash Withdrawal", "fees_interest", "cash_burst", key="checking")
+        add(8, -899.0, "Zomat0", "dining", "lookalike")
+        add(18, -24750.0, "Gyftr Gift Card Store", "fees_interest", "gift_card")
+        add(80, -78430.0, "Star Health Insurance Premium", "fees_interest", "lump", key="checking")  # real, not fishy
+        out[-1].tags = json.dumps(["lump"])
+    elif user_id == "demo-meera":
+        add(25, 1899.0, "Myntra Refund", "shopping", "refund_orphan")
+        add(-3, -499.0, "Swiggy", "dining", "data_quality_future")
+        add(11, 0.0, "Zepto", "groceries", "data_quality_zero")
+        add(6, -350.0, "", "shopping", "data_quality_no_merchant")
+        add(22, -94000.0, "Croma Electronics", "shopping", "outlier")
+        add(40, 28500.0, "Freelance Invoice 1042 - Studio Pixel", "income", "duplicate_income", key="checking")
+        add(38, 28500.0, "Freelance Invoice 1042 - Studio Pixel", "income", "duplicate_income", key="checking")
+        add(16, -380.0, "Swiggy", "dining", "duplicate")
+        add(15, -380.0, "Swiggy", "dining", "duplicate")
+    return out
+
+
 def generate_persona(config: PersonaConfig) -> PersonaData:
     rng = random.Random(config.seed)
 
@@ -317,7 +387,16 @@ def generate_persona(config: PersonaConfig) -> PersonaData:
             jitter_days = rng.randint(-2, 2)
             jitter_pct = rng.uniform(-0.03, 0.03)
             txn_date = _safe_day(anchor, item.day_of_month) + timedelta(days=jitter_days)
+            if txn_date > TODAY:
+                continue
             amount = round(item.amount * (1 + jitter_pct), 2)
+            if config.user_id == "demo-meera" and item.category == TxnCategory.income:
+                mult = _MEERA_INCOME[anchors.index(anchor)]
+                if mult == 0:
+                    continue
+                amount = round(amount * mult, 2)
+                if mult == 0.9:  # invoice paid late
+                    txn_date = txn_date + timedelta(days=23)
             transactions.append(
                 TransactionRow(
                     user_id=config.user_id,
@@ -334,14 +413,17 @@ def generate_persona(config: PersonaConfig) -> PersonaData:
 
     # Discretionary daily/weekly spend, spread randomly across each month.
     for spec in config.daily_spend:
-        for anchor in anchors:
+        for month_idx, anchor in enumerate(anchors):
             next_month = anchor.replace(day=28) + timedelta(days=4)
             days_in_month = (next_month - timedelta(days=next_month.day)).day
-            n_events = rng.randint(*spec.events_per_month)
+            days_avail = min(days_in_month, (TODAY - anchor).days + 1)  # no future-dated spend
+            factor = _month_factor(config.user_id, spec.category.value, month_idx, anchor)
+            # creep and festival effects scale how often she spends, keeping per-txn amounts stationary
+            n_events = round(rng.randint(*spec.events_per_month) * factor * days_avail / days_in_month)
             for _ in range(n_events):
-                day_offset = rng.randint(0, days_in_month - 1)
+                day_offset = rng.randint(0, days_avail - 1)
                 txn_date = anchor + timedelta(days=day_offset)
-                amount = -round(rng.uniform(*spec.amount_range), 2)
+                amount = -round(_lognormal(rng, *spec.amount_range), 2)
                 merchant = rng.choice(spec.merchants)
                 transactions.append(
                     TransactionRow(
@@ -376,14 +458,26 @@ def generate_persona(config: PersonaConfig) -> PersonaData:
             )
         )
 
+    fishy = _fishy_rows(config.user_id, accounts_by_key)
+    burst_days = {t.date for t in fishy if "burst" in (t.tags or "")}
+    # a burst day holds only the burst, so the pattern detector sees a single merchant
+    transactions = [t for t in transactions if t.date not in burst_days]
+    if config.user_id == "demo-arjun":  # duplicate EMI debit: the latest EMI plus an identical copy
+        emi = max((t for t in transactions if t.merchant == "ICICI Home Loan EMI"), key=lambda t: t.date)
+        emi.is_recurring, emi.tags = False, json.dumps(["fishy", "duplicate_emi"])
+        fishy.append(emi.model_copy(update={"id": TransactionRow().id, "date": emi.date + timedelta(days=1)}))
+    transactions += fishy
+
     transactions.sort(key=lambda t: t.date)
 
     now = datetime.now(timezone.utc)
     pending_cutoff = max(0, len(transactions) - 12)
     for idx, txn in enumerate(transactions):
         cat = txn.category
-        tags: list[str] = []
-        if cat == "subscriptions":
+        tags: list[str] = json.loads(txn.tags) if txn.tags else []  # injected rows keep their own tags
+        if tags:
+            pass
+        elif cat == "subscriptions":
             tags = ["Subscription"]
         elif cat == "investment_sip":
             tags = ["SIP", "Tax-Deductible"]
