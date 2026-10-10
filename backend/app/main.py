@@ -26,11 +26,13 @@ _MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    if os.getenv("VERCEL"):
-        # Firestore may be empty on a fresh deploy -- seed the demo personas if missing.
-        from app.ingest.seed import seed_if_empty
+    # Ensure demo personas (Priya, Arjun, Meera) and household fixtures are seeded and available
+    from app.ingest.seed import seed_if_empty
 
+    try:
         seed_if_empty()
+    except Exception as e:
+        print(f"[lifespan] seed_if_empty notice: {e}")
     yield
 
 
