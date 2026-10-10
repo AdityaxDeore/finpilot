@@ -919,7 +919,7 @@ function ReviewQueueSection({
               size="md"
               disabled={submitting}
               onClick={() => handleReviewAction(selectedCategory !== currentTxn.category ? "recategorize" : "confirm")}
-              className="w-full justify-center text-sm font-semibold shadow-sm h-11 bg-ember hover:bg-ember/90 text-white"
+              className="w-full justify-center text-sm font-semibold shadow-sm h-11 bg-[#172554] hover:bg-[#1e3a8a] text-white"
             >
               <CheckCircle2 className="h-4 w-4 mr-2" />
               <span>
@@ -1431,7 +1431,7 @@ function RulesManagerModal({
                 variant="primary"
                 size="sm"
                 disabled={saving || !pattern.trim()}
-                className="text-xs bg-ember hover:bg-ember/90 text-white"
+                className="text-xs bg-[#172554] hover:bg-[#1e3a8a] text-white"
               >
                 {saving ? "Creating..." : "Save Rule"}
               </Button>

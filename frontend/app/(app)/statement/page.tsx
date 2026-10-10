@@ -90,7 +90,7 @@ export default function StatementPage() {
           <Button
             variant="primary"
             onClick={handlePrint}
-            className="text-xs font-semibold gap-2 shadow-[0_2px_12px_rgba(255,89,0,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-transform"
+            className="text-xs font-semibold gap-2 shadow-[0_2px_12px_rgba(23,37,84,0.25)] hover:scale-[1.02] active:scale-[0.98] transition-transform"
           >
             <Printer className="h-4 w-4" />
             <span>Print / Save PDF</span>

@@ -26,7 +26,7 @@ export function FeatureCard({ feature, isActive, onActivate }: FeatureCardProps)
           onActivate();
         }
       }}
-      className={`group relative text-left rounded-[18px] p-5 sm:p-6 md:p-7 transition-all duration-300 ease-out outline-none cursor-pointer focus-visible:ring-2 focus-visible:ring-[#EA5B14] focus-visible:ring-offset-2 ${
+      className={`group relative text-left rounded-[18px] p-5 sm:p-6 md:p-7 transition-all duration-300 ease-out outline-none cursor-pointer focus-visible:ring-2 focus-visible:ring-[#172554] focus-visible:ring-offset-2 ${
         isActive
           ? "bg-[#FBF9F7] shadow-[0_8px_24px_rgba(26,24,20,0.06)] border border-[#ECE6DC]"
           : "bg-transparent border border-transparent hover:bg-black/[0.015]"
@@ -35,7 +35,7 @@ export function FeatureCard({ feature, isActive, onActivate }: FeatureCardProps)
       {/* Eyebrow Label */}
       <div
         className={`text-[11px] font-bold tracking-[0.08em] uppercase transition-colors duration-300 ${
-          isActive ? "text-[#EA5B14]" : "text-[#EFA56F]"
+          isActive ? "text-[#172554]" : "text-[#64748b]"
         }`}
       >
         {feature.eyebrow}
@@ -64,8 +64,8 @@ export function FeatureCard({ feature, isActive, onActivate }: FeatureCardProps)
         <span
           className={`inline-flex items-center justify-center px-4 py-1.5 rounded-full text-xs font-medium text-white transition-all duration-300 shadow-2xs ${
             isActive
-              ? "bg-[#EA5B14] shadow-sm hover:bg-[#d84e0b]"
-              : "bg-[#EFA56F] opacity-90"
+              ? "bg-[#172554] shadow-sm hover:bg-[#1e3a8a]"
+              : "bg-[#475569]/70 opacity-90"
           }`}
         >
           {feature.ctaText}
