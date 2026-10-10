@@ -28,6 +28,7 @@ import {
   Link2,
   UserRound,
   Globe,
+  Activity,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -101,6 +102,7 @@ export const NAV_GROUPS: { label: string; tone: string; links: NavLink[] }[] = [
       { href: "/evidence-room", label: "Evidence Council", icon: ScanSearch },
       { href: "/council", label: "Risk Council", icon: Users },
       { href: "/web-intel", label: "Web Intel", icon: Globe },
+  { href: "/agent-ops", label: "Agent Ops", icon: Activity },
       { href: "/twin", label: "Twin Simulator", icon: Network },
       { href: "/my-data", label: "My Data", icon: Database },
       { href: "/profile", label: "Profile", icon: UserRound },

@@ -11,6 +11,7 @@ from pathlib import Path
 
 import httpx
 
+from app import telemetry
 from app.core.config import get_settings
 
 log = logging.getLogger("finpilot.translate")
@@ -52,22 +53,33 @@ def _prompt(lang: str, texts: list[str]) -> str:
 def _call(prompt: str) -> list[str] | None:
     s = get_settings()
     if s.gemini_api_key:
+        t = telemetry.Timer()
         try:
             r = httpx.post(_GEMINI.format(s.gemini_model), headers={"x-goog-api-key": s.gemini_api_key}, timeout=40,
                            json={"contents": [{"parts": [{"text": prompt}]}],
                                  "generationConfig": {"temperature": 0, "maxOutputTokens": 4096, "responseMimeType": "application/json"}})
             r.raise_for_status()
-            return json.loads(r.json()["candidates"][0]["content"]["parts"][0]["text"])["t"]
+            out = json.loads(r.json()["candidates"][0]["content"]["parts"][0]["text"])["t"]
+            telemetry.record(kind="call", provider="gemini", key="GEMINI_API_KEY", model=s.gemini_model, agent="translate", ok=True, ms=t.ms,
+                             tokens=(r.json().get("usageMetadata") or {}).get("totalTokenCount"))
+            return out
         except Exception as exc:  # noqa: BLE001 - overloaded or bad key: fall through to NVIDIA
+            telemetry.record(kind="call", provider="gemini", key="GEMINI_API_KEY", model=s.gemini_model, agent="translate", ok=False, ms=t.ms, error=type(exc).__name__)
+            telemetry.record(kind="fallback", agent="translate", model=s.gemini_model, to=s.nvidia_council_model, reason=type(exc).__name__)
             log.warning("gemini translate failed: %s", exc)
     if s.nvidia_chat_api_key:
+        t = telemetry.Timer()
         try:
             r = httpx.post(_NVIDIA, headers={"Authorization": f"Bearer {s.nvidia_chat_api_key}"}, timeout=40,
                            json={"model": s.nvidia_council_model, "messages": [{"role": "user", "content": prompt}], "temperature": 0,
                                  "max_tokens": 4096, "response_format": {"type": "json_object"}, "chat_template_kwargs": {"enable_thinking": False}})
             r.raise_for_status()
-            return json.loads(r.json()["choices"][0]["message"]["content"])["t"]
+            out = json.loads(r.json()["choices"][0]["message"]["content"])["t"]
+            telemetry.record(kind="call", provider="nvidia", key="NVIDIA_CHAT_API_KEY", model=s.nvidia_council_model, agent="translate", ok=True, ms=t.ms,
+                             tokens=(r.json().get("usage") or {}).get("total_tokens"))
+            return out
         except Exception as exc:  # noqa: BLE001
+            telemetry.record(kind="call", provider="nvidia", key="NVIDIA_CHAT_API_KEY", model=s.nvidia_council_model, agent="translate", ok=False, ms=t.ms, error=type(exc).__name__)
             log.warning("nvidia translate failed: %s", exc)
     return None
 

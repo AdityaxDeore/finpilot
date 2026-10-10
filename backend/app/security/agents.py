@@ -11,6 +11,7 @@ import difflib
 import json
 import re
 import time
+import uuid
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 
@@ -19,7 +20,8 @@ from pydantic import BaseModel
 
 from app.analytics.anomalies import detect_anomalies
 from app.analytics.recurring import detect_recurring, find_redundant_subscriptions, normalize_merchant
-from app.copilot import nugen, nvidia
+from app import telemetry
+from app.copilot import nugen
 from app.core import store
 from app.core.config import get_settings
 from app.security import ai_agents
@@ -210,17 +212,30 @@ _VERDICT_SYSTEM = (
 )
 
 
-def write_verdict(findings: list[dict], score: int) -> tuple[dict | None, str | None, str | None]:
-    """(verdict, source, error). NVIDIA first, Nugen as backup, otherwise (None, None, reason)."""
-    s = get_settings()
-    brief = json.dumps({"risk_score": score, "findings": [{k: f[k] for k in ("agent", "severity", "title", "detail", "amount", "corroborated_by", "ai", "web") if k in f} for f in findings[:25]]}, default=str)
+def _brief(f: dict) -> dict:
+    """One finding as short JSON for the Verdict Writer: what, how bad, and what the other agents concluded."""
+    out = {"a": f["agent"], "s": f["severity"][0], "t": f["title"][:70], "amt": round(f["amount"])}
+    if f.get("corroborated_by"):
+        out["also"] = f["corroborated_by"]
+    if f.get("ai"):
+        out["ai"] = f["ai"]["verdict"]
+    if f.get("web"):
+        out["web"] = f["web"].get("verdict")
+    return out
+
+
+def write_verdict(findings: list[dict], score: int, run: str | None = None) -> tuple[dict | None, str | None, str | None]:
+    """(verdict, source, error). The Verdict Writer's model chain first, Nugen as a last resort, otherwise (None, None, reason)."""
+    top = sorted(findings, key=lambda f: -_WEIGHT[f["severity"]])[:12]
+    brief = {"score": score, "n": len(findings), "f": [_brief(f) for f in top]}
     errors = []
-    if s.has_nvidia:
+    if ai_agents._key()[0]:
         try:
-            return _Verdict.model_validate(nvidia.complete_json(_VERDICT_SYSTEM, brief)).model_dump(), "finpilot", None
+            data, model, _ = ai_agents.ask_json("verdict_writer", brief, 380, run=run, system=_VERDICT_SYSTEM)
+            return _Verdict.model_validate(data).model_dump(), model, None
         except Exception as exc:  # noqa: BLE001
-            errors.append(f"AI: {'busy' if '429' in str(exc) else 'unavailable'}")
-    text = nugen.complete(_VERDICT_SYSTEM, brief, 700)
+            errors.append(f"AI: {'busy' if '429' in str(exc) or '529' in str(exc) else 'unavailable'}")
+    text = nugen.complete(_VERDICT_SYSTEM, json.dumps(brief, separators=(",", ":")), 500)
     if text:
         try:
             return _Verdict.model_validate_json(re.search(r"\{.*\}", text, re.S).group(0)).model_dump(), "nugen", None
@@ -234,33 +249,34 @@ def investigate(user_id: str, pace: float = 0.35):
     """Generator of progress events; the last one is the saved report."""
     rows, accounts = store.query(TransactionRow, user_id=user_id), store.query(AccountRow, user_id=user_id)
     all_findings, summaries = [], {}
+    run, score = uuid.uuid4().hex[:8], 0
+    telemetry.record(kind="run", run=run, user=user_id, transactions=len(rows))
     for key, name, _ in AGENTS:
         yield {"type": "agent", "agent": key, "status": "running"}
         t0 = time.time()
         if key == "web_checker":
             cross_check(all_findings)  # so the web lookup targets merchants two agents agree on
-            _, extra = ai_agents.web_evidence(all_findings)
+            _, extra = ai_agents.web_evidence(all_findings, run)
             res = []
         elif key == "risk_scorer":
             cross_check(all_findings)
-            score = risk_score(all_findings)
-            res, extra = [], {"score": score}
+            score, extra = ai_agents.calibrate(risk_score(all_findings), all_findings, run)
+            res, extra = [], {**extra, "score": score}
         elif key == "verdict_writer":
-            verdict, source, error = write_verdict(all_findings, risk_score(all_findings)) if all_findings else ({"headline": "No security problems found.", "what_is_wrong": "All checks came back clean on your current data.", "what_to_do": ["Re-run after your next sync."]}, "rules", None)
+            verdict, source, error = write_verdict(all_findings, score, run) if all_findings else ({"headline": "No security problems found.", "what_is_wrong": "All checks came back clean on your current data.", "what_to_do": ["Re-run after your next sync."]}, "rules", None)
             res, extra = [], {"source": source, "error": error}
         else:
             res, extra = CHECKS[key](rows, accounts), {}
             if key in ai_agents.MODELS:
-                res, extra = ai_agents.review(key, res, rows, all_findings)
+                res, extra = ai_agents.review(key, res, rows, all_findings, run)
             all_findings += res
         time.sleep(pace)
         summaries[key] = {"agent": key, "name": name, "findings": len(res), "ms": int((time.time() - t0) * 1000), **extra}
         yield {"type": "agent", "agent": key, "status": "done", **summaries[key]}
-    score = risk_score(all_findings)
     report = {
         "created_at": datetime.now(timezone.utc).isoformat(), "risk_score": score, "risk_level": risk_level(score),
         "transactions_checked": len(rows), "agents": list(summaries.values()), "findings": all_findings,
-        "verdict": verdict, "verdict_source": source, "verdict_error": error,
+        "run": run, "verdict": verdict, "verdict_source": source, "verdict_error": error,
         "demo_threats_present": any(DEMO_TAG in (r.tags or "") for r in rows),
     }
     store.put(InvestigationRow(user_id=user_id, risk_score=score, report=json.dumps(report, default=str)))

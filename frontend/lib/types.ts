@@ -812,3 +812,18 @@ export type CouncilEvent =
   | { type: "vote"; vote: CouncilVote }
   | { type: "debate"; median: number; agents: string[] }
   | CouncilVerdict;
+
+export interface OpsStats { name: string; calls: number; errors: number; avg_ms: number; success: number; tokens: number }
+export interface OpsEvent {
+  kind: "call" | "fallback" | "cache" | "search" | "run";
+  ts: string; agent?: string; run?: string; provider?: string; key?: string; model?: string; to?: string; reason?: string;
+  ok?: boolean; ms?: number; tokens?: number; error?: string | null; op?: string; query?: string; sites?: string[]; results?: number;
+}
+export interface OpsOverview {
+  keys: { env: string; provider: string; use: string; configured: boolean; masked: string | null; stats: OpsStats | null }[];
+  agents: { agent: string; task: string; model: string | null; backup: string | null; stats: OpsStats | null }[];
+  models: OpsStats[];
+  totals: { tokens: number; fallbacks: number; cache_hits: number };
+  searches: OpsEvent[];
+  events: OpsEvent[];
+}

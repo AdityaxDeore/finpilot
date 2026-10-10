@@ -17,6 +17,7 @@ from collections.abc import AsyncIterator
 
 import httpx
 
+from app import telemetry
 from app.core import store
 from app.core.config import get_settings
 from app.ingest.snapshot import build_dashboard_snapshot
@@ -103,15 +104,21 @@ _REVISE = ' Reply with JSON only: {"score": 0-100, "why": under 15 words}.'
 
 async def _ask(client: httpx.AsyncClient, system: str, user: str, max_tokens: int) -> tuple[dict, int]:
     s = get_settings()
-    r = await client.post(
-        URL, headers={"Authorization": f"Bearer {s.nvidia_chat_api_key}"}, timeout=25,
-        json={"model": s.nvidia_council_model, "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-              "response_format": {"type": "json_object"}, "temperature": 0.4, "max_tokens": max_tokens,
-              "chat_template_kwargs": {"enable_thinking": False}})
-    r.raise_for_status()
+    t = telemetry.Timer()
+    try:
+        r = await client.post(
+            URL, headers={"Authorization": f"Bearer {s.nvidia_chat_api_key}"}, timeout=25,
+            json={"model": s.nvidia_council_model, "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+                  "response_format": {"type": "json_object"}, "temperature": 0.4, "max_tokens": max_tokens,
+                  "chat_template_kwargs": {"enable_thinking": False}})
+        r.raise_for_status()
+    except Exception as exc:
+        telemetry.record(kind="call", provider="nvidia", key="NVIDIA_CHAT_API_KEY", model=s.nvidia_council_model, agent="risk_council", ok=False, ms=t.ms, error=type(exc).__name__)
+        raise
     data = r.json()
-    out = json.loads(data["choices"][0]["message"]["content"])
-    return out, int(data.get("usage", {}).get("total_tokens", 0))
+    tokens = int(data.get("usage", {}).get("total_tokens", 0))
+    telemetry.record(kind="call", provider="nvidia", key="NVIDIA_CHAT_API_KEY", model=s.nvidia_council_model, agent="risk_council", ok=True, ms=t.ms, tokens=tokens)
+    return json.loads(data["choices"][0]["message"]["content"]), tokens
 
 
 def _vote(pid: str, name: str, score: float, why: str, do: str, source: str, rnd: int) -> dict:
