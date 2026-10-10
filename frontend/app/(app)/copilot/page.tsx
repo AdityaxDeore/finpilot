@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { BotIcon } from "@animateicons/react/lucide";
-import { CalendarClock, ChevronDown, Check, ExternalLink, History, Plus, Sparkles, Trash2, X } from "lucide-react";
+import { CalendarClock, ChevronDown, Check, ExternalLink, History, Paperclip, Plus, Sparkles, Trash2, X } from "lucide-react";
 import { LoopIcon } from "@/components/ui/LoopIcon";
 import { PromptInputBox } from "@/components/copilot/PromptInputBox";
 import { AnswerView } from "@/components/copilot/AnswerView";
+import { DocumentsPanel } from "@/components/copilot/DocumentsPanel";
 import { api } from "@/lib/api";
 import { newChatId, titleFrom, useChats, type Turn } from "@/lib/chats";
 import { useAsync, useUserId } from "@/lib/hooks";
@@ -34,6 +35,8 @@ const FinPilotAvatar = ({ className }: { className?: string }) => (
   </span>
 );
 
+const nowMs = () => Date.now();
+
 export default function CopilotPage() {
   const userId = useUserId();
   const { chats, save, remove } = useChats(userId);
@@ -45,12 +48,15 @@ export default function CopilotPage() {
   const [engine, setEngine] = useState<ChatEngine>("auto");
   const [railOpen, setRailOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  const [docsOpen, setDocsOpen] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
   const feed = useAsync(useCallback(() => api.schemes(), []), []);
 
   useEffect(() => {
     try {
       const saved = localStorage.getItem("finpilot-engine") as ChatEngine | null;
+      // localStorage only exists in the browser, so the saved engine is read after mount
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (saved && ENGINES.some((e) => e.id === saved)) setEngine(saved);
     } catch {
       // keep the default engine
@@ -108,9 +114,9 @@ export default function CopilotPage() {
     if (answer) {
       const done: Turn[] = [...withUser, { role: "assistant", message, answer }];
       setTurns(done);
-      save({ id, title, updatedAt: Date.now(), turns: done });
+      save({ id, title, updatedAt: nowMs(), turns: done });
     } else {
-      save({ id, title, updatedAt: Date.now(), turns: withUser });
+      save({ id, title, updatedAt: nowMs(), turns: withUser });
     }
     setLoading(false);
   }
@@ -333,6 +339,19 @@ export default function CopilotPage() {
 
         {/* input: always the same place, so it never jumps */}
         <div className="mx-auto w-full max-w-3xl shrink-0 px-4 pb-4 pt-2">
+          <button
+            type="button"
+            onClick={() => setDocsOpen((o) => !o)}
+            aria-expanded={docsOpen}
+            className="mb-2 flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium text-olive transition-colors hover:bg-tint-lime"
+          >
+            <Paperclip className="size-3.5" /> Add documents
+          </button>
+          {docsOpen && (
+            <div className="mb-2">
+              <DocumentsPanel userId={userId} />
+            </div>
+          )}
           <PromptInputBox
             value={input}
             onChange={setInput}

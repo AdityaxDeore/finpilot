@@ -14,6 +14,7 @@ import type {
   CreateHouseholdRequest,
   CreateInviteRequest,
   DashboardSnapshot,
+  DocumentInfo,
   Goal,
   GoalProgress,
   Household,
@@ -263,6 +264,18 @@ export const api = {
     notifyIfWrite("POST");
     return publishInsights((await res.json()) as RecomputeDiff);
   },
+
+  // Documents the Copilot reads when answering (.txt .md .csv .json, <=2MB)
+  documents: (userId: string) => apiFetch<DocumentInfo[]>(`/api/documents/${userId}`),
+  uploadDocument: async (userId: string, file: File): Promise<{ id: string; name: string; chars: number; chunks: number }> => {
+    const body = new FormData();
+    body.append("file", file);
+    const res = await fetch(`${API_URL}/api/documents/${userId}`, { method: "POST", headers: await authHeader(), body });
+    if (!res.ok) throw new Error(`Upload failed: ${res.status} ${await res.text()}`);
+    return res.json();
+  },
+  deleteDocument: (userId: string, id: string) =>
+    apiFetch<unknown>(`/api/documents/${userId}/${id}`, { method: "DELETE" }),
 
   // Financial plan (constrained action planner + monthly probabilistic forecast)
   plan: (userId: string, p: PlanParams = {}) =>

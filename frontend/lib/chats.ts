@@ -16,6 +16,7 @@ export interface Chat {
   turns: Turn[];
 }
 
+const EMPTY: Chat[] = [];
 const key = (userId: string) => `finpilot-chats:${userId}`;
 
 function read(userId: string): Chat[] {
@@ -30,7 +31,7 @@ function read(userId: string): Chat[] {
 /** Saved conversations for one user. Kept in this browser (localStorage), newest first. */
 export function useChats(userId: string) {
   const [state, setState] = useState<{ userId: string; chats: Chat[] } | null>(null);
-  const chats = state?.userId === userId ? state.chats : [];
+  const chats = state?.userId === userId ? state.chats : EMPTY;
   const loaded = state?.userId === userId;
   const setChats = useCallback((next: Chat[]) => setState({ userId, chats: next }), [userId]);
 

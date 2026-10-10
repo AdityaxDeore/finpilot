@@ -6,7 +6,9 @@ import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { Maximize2, MessageCircle, RotateCcw, Sparkles, X } from "lucide-react";
 import { PromptInputBox } from "@/components/copilot/PromptInputBox";
+import { hostOf } from "@/components/copilot/AnswerView";
 import { api } from "@/lib/api";
+import type { NextStep, SourceLink } from "@/lib/types";
 import { useUserId } from "@/lib/hooks";
 import { getOfflineOnly } from "@/lib/user";
 
@@ -26,6 +28,8 @@ function Rich({ text }: { text: string }) {
 interface Msg {
   role: "user" | "assistant";
   text: string;
+  steps?: NextStep[];
+  sources?: SourceLink[];
 }
 
 /** Floating FinPilot chat in the bottom-right corner. Quick questions; the full Copilot page keeps saved chats. */
@@ -53,7 +57,7 @@ export function ChatPopup() {
     setLoading(true);
     try {
       const a = await api.chat(message, userId, "auto", history);
-      setMsgs((m) => [...m, { role: "assistant", text: a.narrative || "I could not find an answer to that." }]);
+      setMsgs((m) => [...m, { role: "assistant", text: a.narrative || "I could not find an answer to that.", steps: a.next_steps, sources: a.sources }]);
     } catch {
       setMsgs((m) => [...m, { role: "assistant", text: "Sorry, I couldn't answer right now. Please try again in a minute." }]);
     } finally {
@@ -111,15 +115,34 @@ export function ChatPopup() {
               )}
               {msgs.map((m, i) => (
                 <div key={i} className={m.role === "user" ? "flex justify-end" : "flex"}>
-                  <p
+                  <div
                     className={
                       m.role === "user"
                         ? "max-w-[85%] whitespace-pre-line rounded-2xl rounded-br-md bg-ink px-3.5 py-2 text-sm text-white"
-                        : "max-w-[90%] whitespace-pre-line rounded-2xl rounded-bl-md bg-white px-3.5 py-2 text-sm leading-relaxed text-ink"
+                        : "max-w-[90%] rounded-2xl rounded-bl-md bg-white px-3.5 py-2 text-sm leading-relaxed text-ink"
                     }
                   >
-                    <Rich text={m.text} />
-                  </p>
+                    <p className="whitespace-pre-line">
+                      <Rich text={m.text} />
+                    </p>
+                    {m.steps?.slice(0, 2).map((s, k) => (
+                      <p key={k} className="mt-1.5 text-xs text-olive">
+                        →{" "}
+                        {s.link ? (
+                          s.link.startsWith("/") ? (
+                            <Link href={s.link} className="font-medium underline">{s.title}</Link>
+                          ) : (
+                            <a href={s.link} target="_blank" rel="noreferrer" className="font-medium underline">{s.title}</a>
+                          )
+                        ) : (
+                          <span className="font-medium">{s.title}</span>
+                        )}
+                      </p>
+                    ))}
+                    {m.sources && m.sources.length > 0 && (
+                      <p className="mt-1.5 text-[11px] text-pewter">Sources: {m.sources.map((s) => hostOf(s.url)).join(", ")}</p>
+                    )}
+                  </div>
                 </div>
               ))}
               {loading && <p className="animate-pulse text-xs text-pewter">FinPilot is thinking…</p>}

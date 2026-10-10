@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { AlertCircle, ArrowRight, CheckCircle2, Database, Search, TrendingUp, Zap } from "lucide-react";
+import { AlertCircle, ArrowRight, CheckCircle2, Database, ExternalLink, Search, TrendingUp, Zap } from "lucide-react";
 import type { AnswerContract, Recommendation } from "@/lib/types";
 import { ConfidenceChip } from "@/components/ui/ConfidenceChip";
 import { Chip } from "@/components/ui/Chip";
@@ -35,7 +35,7 @@ function getSimulatorUrl(rec: Recommendation): string {
 }
 
 export function AnswerView({ answer }: { answer: AnswerContract }) {
-  const { facts, predictions, recommendations, data_gaps, narrative, nugen_narrative, nugen_confidence } = answer;
+  const { facts, predictions, recommendations, data_gaps, narrative, nugen_narrative, nugen_confidence, next_steps, sources } = answer;
   const isEmpty =
     facts.length === 0 && predictions.length === 0 && recommendations.length === 0 && !narrative;
 
@@ -54,6 +54,36 @@ export function AnswerView({ answer }: { answer: AnswerContract }) {
           </p>
           {nugen_narrative}
         </div>
+      )}
+
+      {next_steps && next_steps.length > 0 && (
+        <section className="rounded-2xl bg-tint-lime p-4 ring-1 ring-lime/50">
+          <h4 className="mb-3 text-xs font-bold uppercase tracking-wider text-olive">What to do next</h4>
+          <ol className="flex flex-col gap-3">
+            {next_steps.map((s, i) => (
+              <li key={i} className="flex items-start gap-3">
+                <span className="grid size-6 shrink-0 place-items-center rounded-full bg-lime text-xs font-bold text-ink">{i + 1}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-bold text-ink">{s.title}</p>
+                    {s.when && <span className="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-medium text-olive">{s.when}</span>}
+                  </div>
+                  {s.why && <p className="text-xs leading-relaxed text-graphite">{s.why}</p>}
+                  {s.link &&
+                    (s.link.startsWith("/") ? (
+                      <Link href={s.link} className="mt-1.5 inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-ink hover:bg-lime/60">
+                        Open <ArrowRight className="size-3" />
+                      </Link>
+                    ) : (
+                      <a href={s.link} target="_blank" rel="noreferrer" className="mt-1.5 inline-flex items-center gap-1 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-ink hover:bg-lime/60">
+                        Open <ExternalLink className="size-3" />
+                      </a>
+                    ))}
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
       )}
 
       {/* Lane 1: Observed Facts */}
@@ -218,8 +248,28 @@ export function AnswerView({ answer }: { answer: AnswerContract }) {
           </ul>
         </div>
       )}
+
+      {sources && sources.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-pewter">Sources</span>
+          <span className="rounded-full bg-tint-lime px-1.5 py-0.5 text-[9px] font-semibold text-olive">Live web</span>
+          {sources.map((s, i) => (
+            <a key={i} href={s.url} target="_blank" rel="noreferrer" title={s.title} className="rounded-full border border-black/[0.08] px-2.5 py-0.5 text-[11px] text-graphite hover:bg-fog hover:text-ink">
+              {hostOf(s.url)}
+            </a>
+          ))}
+        </div>
+      )}
     </div>
   );
+}
+
+export function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
 }
 
 function CopilotLane({

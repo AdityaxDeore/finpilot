@@ -105,8 +105,29 @@ export interface DataGap {
   what_would_help: string;
 }
 
+export interface NextStep {
+  title: string;
+  why: string;
+  when?: string | null;
+  link?: string | null;
+}
+
+export interface SourceLink {
+  title: string;
+  url: string;
+}
+
+export interface DocumentInfo {
+  id: string;
+  name: string;
+  chars: number;
+  created_at: string;
+}
+
 export interface AnswerContract {
   query: string | null;
+  next_steps?: NextStep[];
+  sources?: SourceLink[];
   facts: Fact[];
   predictions: Prediction[];
   recommendations: Recommendation[];
