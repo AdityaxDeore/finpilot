@@ -7,6 +7,7 @@ import { Eye, EyeOff, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/NotificationBell";
 import { CurrencySelector } from "@/components/ui/CurrencySelector";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { CommandPalette } from "@/components/ui/CommandPalette";
 import { ConfettiCanvas } from "@/components/ui/Confetti";
 import { AppSidebar, NAV_GROUPS } from "@/components/AppSidebar";
@@ -140,6 +141,7 @@ export function NavShell({ children }: { children: ReactNode }) {
                 {hidden ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
               </Button>
               <div className="hidden sm:block">
+                <LanguageSwitcher />
                 <CurrencySelector />
               </div>
               <div className="hidden xl:block">

@@ -21,6 +21,8 @@ from app.api.plan_router import router as plan_router
 from app.api.routes import router
 from app.api.rules_router import router as rules_router
 from app.api.security_router import router as security_router
+from app.api.expenses_router import router as expenses_router
+from app.api.webhooks_router import router as webhooks_router
 from app.api.tax_router import router as tax_router
 from app.api.transactions_router import router as transactions_router
 from app.core.audit import log_audit_event
@@ -76,6 +78,8 @@ app.include_router(aa_router)
 app.include_router(tax_router)
 app.include_router(rules_router)
 app.include_router(security_router)
+app.include_router(expenses_router, prefix="/api")
+app.include_router(webhooks_router, prefix="/api")
 
 
 @app.middleware("http")

@@ -727,7 +727,7 @@ export type ConnectProfile = "priya" | "arjun" | "meera";
 
 // Security suite
 export type ProfileLevel = "basic" | "standard" | "deep";
-export interface ProfileQuestion { id: string; label: string; type: "text" | "number" | "choice"; options: string[]; hint: string }
+export interface ProfileQuestion { id: string; label: string; type: "text" | "number" | "choice"; options: string[]; hint: string; when?: { id: string; equals: string } | null }
 export interface Profile { completed: boolean; level: ProfileLevel | "skipped" | null; answers: Record<string, string> }
 
 export interface FinancialSecurity {

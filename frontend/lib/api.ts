@@ -1,3 +1,5 @@
+import { getLang, getSimpleNow } from "@/lib/i18n";
+
 import type {
   Account,
   AnswerContract,
@@ -163,7 +165,7 @@ export const api = {
   chat: (message: string, userId: string, model: ChatEngine = "auto", history: { role: "user" | "assistant"; content: string }[] = []) =>
     apiFetch<AnswerContract>("/api/chat", {
       method: "POST",
-      body: JSON.stringify({ message, user_id: userId, force_offline: getOfflineOnly(), model, history }),
+      body: JSON.stringify({ message, user_id: userId, force_offline: getOfflineOnly(), model, history, language: getLang(), simple: getSimpleNow() }),
     }),
   schemes: () => apiFetch<SchemesFeed>("/api/schemes"),
   simulate: (userId: string, req: SimulationRequest) =>

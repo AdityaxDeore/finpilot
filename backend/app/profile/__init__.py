@@ -4,22 +4,31 @@ from __future__ import annotations
 LEVELS = ("basic", "standard", "deep")
 
 
-def _q(id, label, kind="text", options=None, hint=""):
-    return {"id": id, "label": label, "type": kind, "options": options or [], "hint": hint}
+ROLES = ["Student", "Farmer", "Business owner", "Small vendor (shop, cart, stall)", "Salaried employee", "Freelancer", "Homemaker", "Retired", "Other"]
+
+
+COMFORT = ["I prefer to talk, not read", "I can read a little", "I am comfortable"]
+
+
+def _q(id, label, kind="text", options=None, hint="", when=None):
+    """`when` = {"id": ..., "equals": ...}: the question is only asked if that earlier answer matches."""
+    return {"id": id, "label": label, "type": kind, "options": options or [], "hint": hint, "when": when}
 
 
 _BASIC = [
+    _q("age", "What is your age?", "number"),
+    _q("role", "Who are you?", "choice", ROLES),
+    _q("role_other", "What do you do?", hint="e.g. auto driver, teacher, artist", when={"id": "role", "equals": "Other"}),
+    _q("monthly_income", "What is your monthly earning (₹)? Enter 0 if you do not earn yet", "number"),
+    _q("savings_goal", "What are your plans? What are you aiming for?", hint="e.g. emergency fund, buy a house, pay for college"),
+    _q("save_target", "How much do you want to save each month (₹)?", "number"),
+    _q("comfort", "How comfortable are you reading and using apps?", "choice", COMFORT),
     _q("name", "What should we call you?"),
-    _q("occupation", "What do you do for work?", hint="e.g. software engineer, shop owner, student"),
 ]
 _STANDARD = [
-    _q("employment_type", "How do you earn?", "choice", ["Salaried", "Self-employed", "Business owner", "Student", "Retired", "Other"]),
-    _q("age_group", "Your age group", "choice", ["Under 25", "25-34", "35-44", "45-59", "60+"]),
     _q("city", "Which city do you live in?"),
     _q("household", "Who do you live with?", "choice", ["Alone", "Partner", "Family with children", "Parents or relatives", "Flatmates"]),
-    _q("monthly_income", "Typical monthly take-home income (₹)", "number"),
     _q("fixed_costs", "Monthly rent and EMIs combined (₹)", "number"),
-    _q("savings_goal", "What is your main money goal right now?", hint="e.g. emergency fund, buy a house, clear a loan"),
     _q("risk_comfort", "How do you feel about investment risk?", "choice", ["I avoid it", "A little is fine", "Comfortable with ups and downs"]),
 ]
 _DEEP = [
