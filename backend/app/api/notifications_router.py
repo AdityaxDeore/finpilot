@@ -73,7 +73,7 @@ def get_notifications(user_id: str = Depends(resolve_user_id)) -> list[Notificat
             source_ref = fact.source_txn_ids[0] if fact.source_txn_ids else None
             items.append(
                 NotificationItem(
-                    id=_stable_id("anomaly", source_ref or fact.text, today.isoformat()),
+                    id=_stable_id("anomaly", source_ref or "", fact.text, today.isoformat()),
                     type="anomaly",
                     severity="warning",
                     text=fact.text,
@@ -177,4 +177,5 @@ def get_notifications(user_id: str = Depends(resolve_user_id)) -> list[Notificat
         pass
 
     items.sort(key=lambda i: (_SEVERITY_ORDER.get(i.severity, 3), i.date))
-    return items
+    # ids are React keys on the client: never ship two items with the same one
+    return list({i.id: i for i in reversed(items)}.values())[::-1]

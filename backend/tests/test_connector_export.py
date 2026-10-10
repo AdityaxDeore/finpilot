@@ -38,3 +38,16 @@ def test_demo_persona_sheet_link_keeps_fixture_and_unlinks_cleanly(monkeypatch):
     finally:
         assert c.delete("/api/connectors/demo-priya/google_sheets").status_code == 204
     assert len(store.query(TransactionRow, user_id="demo-priya")) == base
+
+
+def test_notification_ids_are_unique():
+    from fastapi.testclient import TestClient
+
+    from app.ingest.seed import seed_all
+    from app.main import app
+
+    seed_all()
+    c = TestClient(app)
+    for uid in ("demo-priya", "demo-arjun", "demo-meera"):
+        ids = [n["id"] for n in c.get(f"/api/notifications/{uid}").json()]
+        assert ids and len(ids) == len(set(ids)), uid
