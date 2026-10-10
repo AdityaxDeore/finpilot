@@ -1,4 +1,4 @@
-"""Evidence Room: eight agents that examine a user's real ledger.
+"""Evidence Council: eight agents that examine a user's real ledger.
 
 Seven are deterministic checks over TransactionRow data (every finding links the
 transactions behind it). The eighth, Verdict Writer, asks the NVIDIA model (Nugen as backup)
@@ -22,6 +22,7 @@ from app.analytics.recurring import detect_recurring, find_redundant_subscriptio
 from app.copilot import nugen, nvidia
 from app.core import store
 from app.core.config import get_settings
+from app.security import ai_agents
 from app.models import AccountRow, InvestigationRow, TransactionRow
 
 DEMO_TAG = "demo-threat"
@@ -223,6 +224,8 @@ def investigate(user_id: str, pace: float = 0.35):
             res, extra = [], {"source": source, "error": error}
         else:
             res, extra = CHECKS[key](rows, accounts), {}
+            if key in ai_agents.MODELS:
+                res, extra = ai_agents.review(key, res, rows)
             all_findings += res
         time.sleep(pace)
         summaries[key] = {"agent": key, "name": name, "findings": len(res), "ms": int((time.time() - t0) * 1000), **extra}
