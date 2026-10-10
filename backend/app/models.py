@@ -227,4 +227,18 @@ class ConnectionRow(SQLModel, table=True):
     connector: str
     status: str = "connected"
     detail: str | None = None  # e.g. the linked profile name
+    source_url: str | None = None  # live Google Sheet CSV export URL
+    content_hash: str | None = None  # last synced content, to skip no-op refreshes
     connected_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class InvestigationRow(SQLModel, table=True):
+    """A saved Evidence Room report (JSON blob), kept so later AI features can build on it."""
+
+    __tablename__ = "investigations"
+
+    id: str = Field(default_factory=_uuid, primary_key=True)
+    user_id: str = Field(index=True)
+    risk_score: int = 0
+    report: str = "{}"  # JSON-serialized report dict
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), index=True)
