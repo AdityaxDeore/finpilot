@@ -5,11 +5,14 @@
 Identity questions are answered locally. Offline mode uses the rule-based router and sends nothing anywhere.
 """
 import json
+from datetime import date
 import re
+import time
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
+from app import rag, web
 from app.copilot import nugen, nvidia, offline_router
 from app.core.config import get_settings
 from pydantic import BaseModel, Field
@@ -21,7 +24,9 @@ from app.schemas import (
     DataGap,
     Fact,
     ImpactEstimate,
+    NextStep,
     Prediction,
+    Source,
 )
 
 logger = logging.getLogger(__name__)
@@ -38,6 +43,13 @@ class _RecommendationSchema(BaseModel):
     confidence: float = Field(ge=0, le=1)
 
 
+class _NextStepSchema(BaseModel):
+    title: str
+    why: str
+    when: Optional[str] = None
+    link: Optional[str] = None
+
+
 class _AnswerSchema(BaseModel):
     query: Optional[str] = None
     facts: list[Fact] = Field(default_factory=list)
@@ -45,6 +57,7 @@ class _AnswerSchema(BaseModel):
     recommendations: list[_RecommendationSchema] = Field(default_factory=list)
     data_gaps: list[DataGap] = Field(default_factory=list)
     narrative: str = ""
+    next_steps: list[_NextStepSchema] = Field(default_factory=list)
 
 _SYSTEM_PROMPT_STRUCTURE = """You convert a financial copilot's grounded findings into strict JSON matching
 the AnswerContract schema.
@@ -66,6 +79,11 @@ Hard rules:
 
 Return ONLY the JSON object, nothing else.
 """
+
+
+def _last_month() -> str:
+    t = date.today()
+    return f"{t.year - (t.month == 1)}-{(t.month - 2) % 12 + 1:02d}"
 
 
 def _history_to_text(history: Optional[list[ChatMessage]]) -> str:
@@ -107,28 +125,90 @@ def _is_general(message: str) -> bool:
     return not _FINANCE.search(message)
 
 
-def _general_answer(message: str, history: Optional[list[ChatMessage]], user_id: Optional[str] = None) -> AnswerContract:
+_GROUNDING_RULES = (
+    "Answer ONLY from DATA, RETRIEVED and WEB. Quote ₹ amounts exactly. When a claim uses a web source cite it as [n]. "
+    "If web content conflicts with what you know, say to confirm on the official site. Personalise to the user's own situation "
+    "(income level, debts, goals, recent unusual activity) and state which of THEIR records led to the advice."
+)
+
+
+def _retrieved_block(chunks) -> str:
+    return "\n".join(f"- [{c.label}] {c.text}" for c in chunks) or "(none)"
+
+
+def _web_block(sources) -> str:
+    return "\n".join(f"[{n}] {w.title} ({w.url}): {w.content}" for n, w in enumerate(sources, 1)) or "(none)"
+
+
+def _next_step_from_text(text: str) -> list[NextStep]:
+    m = re.search(r"^\W*Next step:\s*(.+)$", text, re.I | re.M)
+    return [NextStep(title=m.group(1).strip(), why="")] if m else []
+
+
+def _general_answer(message: str, history: Optional[list[ChatMessage]], user_id: Optional[str] = None, chunks=(), sources=()) -> AnswerContract:
     """Fast chat model. With `user_id` it also gets the user's real numbers to answer money questions."""
     turns = [(m.role, m.content) for m in (history or []) if m.role in ("user", "assistant")]
     system = _GENERAL_SYSTEM + (("\n\nDATA (answer only from this, quote amounts exactly):\n" + json.dumps(nugen._context(user_id), default=str)) if user_id else "")
-    return AnswerContract(query=message, narrative=nvidia.chat(message, turns, system), source="FinPilot")
+    if user_id and chunks:
+        system += "\n\nRETRIEVED:\n" + _retrieved_block(chunks)
+    if sources:
+        system += "\n\nWEB:\n" + _web_block(sources)
+    if user_id or sources:
+        system += "\n\n" + _GROUNDING_RULES
+    if user_id:
+        system += " End with a last paragraph that starts with 'Next step:' giving one concrete action."
+    narrative = nvidia.chat(message, turns, system)
+    return AnswerContract(query=message, narrative=narrative, source="FinPilot", next_steps=_next_step_from_text(narrative) if user_id else [])
 
 
-def _nvidia_answer(user_id: str, message: str, history: Optional[list[ChatMessage]]) -> AnswerContract:
+def _nvidia_answer(user_id: str, message: str, history: Optional[list[ChatMessage]], chunks=(), sources=()) -> AnswerContract:
     """One NVIDIA call over the real, pre-fetched numbers (no recommendations: those need a simulation)."""
     convo = _history_to_text(history)
     user = (
         (f"Conversation so far:\n{convo}\n\n" if convo else "")
-        + f"User question: {message}\n\nGrounded findings (real data, JSON):\n{json.dumps(nugen._context(user_id), default=str)}\n\n"
+        + f"Today is {date.today().isoformat()}; 'last month' means {_last_month()}. Never add up or estimate figures yourself: quote month totals from RETRIEVED/DATA exactly.\n\n"
+        + f"User question: {message}\n\nDATA (real data, JSON):\n{json.dumps(nugen._context(user_id), default=str)}\n\n"
+        f"RETRIEVED:\n{_retrieved_block(chunks)}\n\nWEB:\n{_web_block(sources)}\n\n{_GROUNDING_RULES}\n\n"
         "Produce the strict AnswerContract JSON. Leave `recommendations` empty. Use EXACTLY this JSON schema:\n"
         f"{json.dumps(_AnswerSchema.model_json_schema())}\n"
         'Example fact: {"text": "Monthly income is ₹94,431", "value": 94431, "source_txn_ids": []}. '
-        "`text` is a full sentence and `value` is a plain number or null. Write `narrative` as 2 to 4 friendly plain sentences."
+        "`text` is a full sentence and `value` is a plain number or null. Write `narrative` as 2 to 4 friendly plain sentences.\n"
+        "For every money, security or scheme question give 1 to 4 `next_steps`, ordered by urgency, each a concrete imperative tied to the user's data and a deadline. "
+        "`link` is null or one of /transactions /budgets /goals /security /evidence-room /simulate /plan /tax /connect, or an official https URL taken from WEB or the schemes feed; never invent URLs. "
+        'Example next_step: {"title": "Dispute the duplicate ₹649 Netflix charge on 12 Sep", "why": "Netflix billed you twice in September.", "when": "this week", "link": "/transactions"}. '
+        "For small talk leave `next_steps` empty."
     )
     result = AnswerContract.model_validate(_AnswerSchema.model_validate(nvidia.complete_json(_SYSTEM_PROMPT_STRUCTURE, user)).model_dump(mode="json"))
     if not result.query:
         result.query = message
     return result
+
+
+def _prefetch(user_id: str, message: str, history: Optional[list[ChatMessage]]):
+    """RAG and web planning in parallel. Returns (chunks, plan, sources); never raises, both share a 40 s budget."""
+    prior = next((m.content for m in reversed(history or []) if m.role == "user"), "")
+    query = f"{prior}\n{message}" if prior else message
+    turns = [(m.role, m.content) for m in (history or [])]
+    gather = getattr(web, "gather_with_plan", None)
+    pool = ThreadPoolExecutor(max_workers=2)
+    rf = pool.submit(rag.retrieve, user_id, query, 8)
+    wf = pool.submit(gather, message, turns) if gather else None
+    pool.shutdown(wait=False)
+    deadline = time.monotonic() + 40  # one shared budget: both run in parallel, so neither waits twice
+    try:
+        chunks = rf.result(timeout=max(1, deadline - time.monotonic()))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("rag failed: %r", exc)
+        chunks = []
+    plan, sources = None, []
+    if wf is not None:
+        try:
+            plan, sources = wf.result(timeout=max(1, deadline - time.monotonic()))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("web failed: %r", exc)
+    logger.info("web_plan search=%s query=%r", getattr(plan, "search", None), getattr(plan, "query", None))
+    logger.info("rag_chunks=%d", len(chunks))
+    return chunks, plan, list(sources)
 
 
 def answer(
@@ -156,8 +236,9 @@ def answer(
     # a short follow-up ("and last month?") inherits the topic of the previous user turn
     prior = next((m.content for m in reversed(history or []) if m.role == "user"), "")
     money = not _is_general(message) or (len(message) < 40 and not _is_general(prior))
-    deep = lambda: _nvidia_answer(user_id, message, history)  # noqa: E731
-    fast = lambda: _general_answer(message, history, user_id if money else None)  # noqa: E731
+    chunks, plan, sources = _prefetch(user_id, message, history)
+    deep = lambda: _nvidia_answer(user_id, message, history, chunks, sources)  # noqa: E731
+    fast = lambda: _general_answer(message, history, user_id if money else None, chunks, sources)  # noqa: E731
     steps = [fast, deep] if model == "fast" or (model == "auto" and not money) else [deep, fast]
 
     # Nugen's second opinion runs alongside money questions only
@@ -179,6 +260,10 @@ def answer(
             narrative=f"I couldn't answer right now because {why}. Please try again in a minute.",
             data_gaps=[DataGap(text="The AI engine was unavailable.", what_would_help="Retry shortly, or turn on 'Keep my data on this device' for basic rule-based answers.")],
         )
+    if sources:
+        result.sources = [Source(title=w.title, url=w.url) for w in sources]
+    elif getattr(plan, "search", False):
+        result.data_gaps.append(DataGap(text="Live web search was not available for this question.", what_would_help="Add FIRECRAWL_API_KEY on the server."))
     if second is not None:
         result.nugen_narrative, result.nugen_confidence = second.result()
     pool.shutdown(wait=False)
