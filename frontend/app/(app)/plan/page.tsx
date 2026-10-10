@@ -134,7 +134,7 @@ export default function PlanPage() {
             }}
             className={cn(
               "inline-flex cursor-pointer items-center rounded-full border px-4 py-2.5 text-xs font-semibold transition-all",
-              source === s.key ? "border-ink bg-ink text-white shadow-md" : "border-black/[0.08] bg-white text-graphite hover:bg-fog hover:text-ink"
+              source === s.key ? "border-lime-dark bg-lime text-ink shadow-md" : "border-black/[0.08] bg-white text-graphite hover:bg-fog hover:text-ink"
             )}
           >
             {s.label}

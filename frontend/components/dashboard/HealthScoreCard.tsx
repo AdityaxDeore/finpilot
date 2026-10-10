@@ -67,7 +67,7 @@ export function HealthScoreCard({ score }: { score: HealthScore }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-8 items-center pt-1 pb-2">
         {/* Left Column: Radial Gauge + Trend */}
-        <div className="lg:col-span-4 flex flex-col items-center justify-center p-4 rounded-surface bg-fog/60 border border-black/[0.04]">
+        <div className="lg:col-span-4 flex flex-col items-center justify-center p-4 rounded-3xl bg-sage text-ink">
           <div className="relative flex items-center justify-center w-36 h-36 lg:w-40 lg:h-40">
             <svg className="w-full h-full -rotate-90" viewBox="0 0 140 140">
               {/* Background circle */}
@@ -75,7 +75,7 @@ export function HealthScoreCard({ score }: { score: HealthScore }) {
                 cx="70"
                 cy="70"
                 r={radius}
-                className="stroke-black/[0.07]"
+                className="stroke-white/70"
                 strokeWidth="10"
                 fill="transparent"
                 strokeDasharray={`${circumference * 0.75} ${circumference * 0.25}`}
@@ -88,9 +88,9 @@ export function HealthScoreCard({ score }: { score: HealthScore }) {
                 r={radius}
                 className={cn(
                   rounded >= 75
-                    ? "stroke-emerald-500"
+                    ? "stroke-[#5f7f0c]"
                     : rounded >= 55
-                    ? "stroke-amber-500"
+                    ? "stroke-amber-400"
                     : "stroke-ember"
                 )}
                 strokeWidth="10"
@@ -108,7 +108,7 @@ export function HealthScoreCard({ score }: { score: HealthScore }) {
               <span className="font-display text-5xl font-semibold text-ink leading-none tnum">
                 {rounded}
               </span>
-              <span className="text-xs font-medium text-pewter mt-1">out of 100</span>
+              <span className="text-xs font-medium text-ink/60 mt-1">out of 100</span>
             </div>
           </div>
 
@@ -118,10 +118,10 @@ export function HealthScoreCard({ score }: { score: HealthScore }) {
               className={cn(
                 "mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border",
                 trendUp
-                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                  ? "bg-lime/40 text-ink border-lime-dark/50"
                   : trendDown
-                  ? "bg-rose-50 text-rose-700 border-rose-200"
-                  : "bg-fog text-graphite border-black/[0.08]"
+                  ? "bg-rose-500/15 text-rose-300 border-rose-400/30"
+                  : "bg-white/55 text-ink/70 border-ink/10"
               )}
             >
               <span>{trendUp ? "↑" : trendDown ? "↓" : "→"}</span>

@@ -71,7 +71,7 @@ export default function TimelinePage() {
               className={cn(
                 "px-4 py-2 rounded-chip text-xs font-semibold transition-all cursor-pointer border",
                 kind === "transaction"
-                  ? "bg-ink text-white border-ink shadow-sm"
+                  ? "bg-lime text-ink border-lime-dark shadow-sm"
                   : "bg-white text-graphite border-black/[0.08] hover:bg-fog"
               )}
             >
@@ -83,7 +83,7 @@ export default function TimelinePage() {
               className={cn(
                 "px-4 py-2 rounded-chip text-xs font-semibold transition-all cursor-pointer border",
                 kind === "recurring"
-                  ? "bg-ink text-white border-ink shadow-sm"
+                  ? "bg-lime text-ink border-lime-dark shadow-sm"
                   : "bg-white text-graphite border-black/[0.08] hover:bg-fog"
               )}
             >

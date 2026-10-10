@@ -15,6 +15,8 @@ there.
 """
 from __future__ import annotations
 
+import re
+
 from fastapi import Header, HTTPException
 from google.auth import exceptions as google_exceptions
 from google.auth.transport import requests as google_requests
@@ -23,6 +25,16 @@ from google.oauth2 import id_token as google_id_token
 from app.core.config import get_settings
 
 DEMO_USER_IDS = {"demo-priya", "demo-arjun", "demo-meera"}
+
+# Anonymous sandbox visitors get a random, unguessable `guest-<id>` made in
+# their browser. Only synthetic connector data (see api/connectors_router.py)
+# ever lands under one, so it is reachable without a token like the demo
+# personas -- but isolated per id, and never mixed with real accounts.
+_GUEST_ID = re.compile(r"^guest-[a-z0-9]{12,32}$")
+
+
+def is_public_user(user_id: str) -> bool:
+    return user_id in DEMO_USER_IDS or bool(_GUEST_ID.match(user_id))
 
 
 def verify_firebase_token(token: str) -> dict:
@@ -60,12 +72,12 @@ async def resolve_user_id(user_id: str, authorization: str | None = Header(defau
         verified_user_id = claims.get("sub") or claims.get("user_id")
         if not verified_user_id:
             raise HTTPException(401, "Token has no subject claim")
-        if user_id in DEMO_USER_IDS:
-            return user_id  # demo personas stay browsable even while signed in
+        if is_public_user(user_id):
+            return user_id  # demo personas / guest sandboxes stay browsable even while signed in
         if verified_user_id != user_id:
             raise HTTPException(403, "Token does not authorize access to this user_id")
         return verified_user_id
 
-    if user_id in DEMO_USER_IDS:
+    if is_public_user(user_id):
         return user_id
     raise HTTPException(401, "Authentication required for non-demo users")

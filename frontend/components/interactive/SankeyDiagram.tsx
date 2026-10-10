@@ -239,7 +239,7 @@ export function SankeyDiagram({
         {/* Dynamic Tooltip Badge or Default Pill */}
         <div className="shrink-0">
           {activeDetails ? (
-            <div className="flex items-center gap-3 px-4 py-2 rounded-xl bg-ink text-white shadow-lg transition-all">
+            <div className="flex items-center gap-3 px-4 py-2 rounded-xl bg-sage text-ink shadow-lg transition-all">
               <span
                 className="h-2.5 w-2.5 rounded-full shrink-0"
                 style={{ backgroundColor: activeDetails.color }}

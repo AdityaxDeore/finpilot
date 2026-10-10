@@ -274,7 +274,7 @@ export default function CopilotPage() {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 className="ml-auto max-w-[85%] sm:max-w-[75%] flex flex-col items-end"
               >
-                <div className="rounded-2xl rounded-br-sm bg-ink text-white px-4 py-3 text-sm shadow-[0_2px_8px_rgba(0,0,0,0.1)]">
+                <div className="rounded-2xl rounded-br-sm bg-sage text-ink px-4 py-3 text-sm shadow-[0_2px_8px_rgba(0,0,0,0.1)]">
                   {t.message}
                 </div>
                 <span className="text-[10px] text-pewter mt-1 px-1">You</span>
@@ -414,7 +414,7 @@ function CopilotAnswerContractView({ answer }: { answer: AnswerContract }) {
         <CopilotLane
           title="Observed Facts"
           hint="Grounded in your actual transactions"
-          badgeColor="bg-ink"
+          badgeColor="bg-leaf"
           icon={<Database className="h-3 w-3 text-white" />}
         >
           <div className="rounded-surface border border-black/[0.08] bg-white p-4 shadow-sm">
@@ -568,7 +568,7 @@ function CopilotAnswerContractView({ answer }: { answer: AnswerContract }) {
                 <div className="mt-4 pt-3.5 border-t border-black/[0.06] flex items-center justify-end">
                   <Link
                     href={getSimulatorUrl(r)}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-ink hover:bg-black text-white text-xs font-semibold shadow-sm hover:shadow-md transition-all duration-150 active:scale-[0.98] group/btn border border-black/10"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-lime hover:bg-lime-dark text-ink text-xs font-semibold shadow-sm hover:shadow-md transition-all duration-150 active:scale-[0.98] group/btn border border-black/10"
                     aria-label={`Test ${r.text} in What-If Simulator`}
                   >
                     <span className="text-amber-400">⚡</span>

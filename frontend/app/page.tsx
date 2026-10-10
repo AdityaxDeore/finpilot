@@ -369,14 +369,14 @@ export default function Home() {
       {/* Bottom CTA Banner */}
       <section className="mx-auto w-full max-w-[1240px] px-4 pt-16 pb-16 sm:px-8 sm:pt-24 sm:pb-24">
         <Reveal>
-          <div className="rounded-card border border-ink/10 bg-ink text-white p-8 sm:p-14 relative overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.18)]">
+          <div className="rounded-card border border-ink/10 bg-sage text-ink p-8 sm:p-14 relative overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.18)]">
             <div className="landing-grid-dark absolute inset-0 pointer-events-none" aria-hidden />
             <div className="absolute -right-10 -bottom-10 w-96 h-96 bg-ember/25 rounded-full blur-3xl pointer-events-none" aria-hidden />
             <div className="relative z-10 max-w-xl">
               <span className="text-xs font-semibold text-ember-light uppercase tracking-wider">
                 No Installation Needed
               </span>
-              <h2 className="font-display text-3xl sm:text-5xl text-white mt-3 text-balance">
+              <h2 className="font-display text-3xl sm:text-5xl text-ink mt-3 text-balance">
                 Ready to see FinPilot in action?
               </h2>
               <p className="mt-4 text-sm sm:text-base text-mist leading-relaxed">
@@ -389,7 +389,7 @@ export default function Home() {
                   </Button>
                 </Link>
                 <Link href="/copilot">
-                  <Button variant="secondary" size="lg" className="w-full sm:w-auto bg-white/10 text-white border-white/20 hover:bg-white/20 text-base">
+                  <Button variant="secondary" size="lg" className="w-full sm:w-auto bg-white/55 text-ink border-ink/10 hover:bg-white/60 text-base">
                     Ask FinPilot Copilot
                   </Button>
                 </Link>

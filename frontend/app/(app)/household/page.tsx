@@ -479,7 +479,7 @@ export default function HouseholdPage() {
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-full bg-ink text-paper font-bold flex items-center justify-center text-xs">
+                      <div className="w-8 h-8 rounded-full bg-lime text-ink font-bold flex items-center justify-center text-xs">
                         {mb.display_name.slice(0, 1)}
                       </div>
                       <div>

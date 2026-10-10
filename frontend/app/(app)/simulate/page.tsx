@@ -185,7 +185,7 @@ function SimulateContent() {
               className={cn(
                 "inline-flex items-center gap-2 px-4 py-2.5 rounded-full text-xs font-semibold transition-all cursor-pointer border",
                 active
-                  ? "bg-ink text-white border-ink shadow-md"
+                  ? "bg-lime text-ink border-lime-dark shadow-md"
                   : "bg-white text-graphite border-black/[0.08] hover:bg-fog hover:text-ink"
               )}
             >

@@ -299,7 +299,7 @@ export function CommandPalette() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setOpen(false)}
-            className="fixed inset-0 bg-ink/40 backdrop-blur-md transition-opacity"
+            className="fixed inset-0 bg-sage/60 backdrop-blur-md transition-opacity"
             aria-hidden="true"
           />
 

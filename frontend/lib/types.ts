@@ -677,3 +677,16 @@ export interface PlanScenario {
   backtest: BacktestRow[];
 }
 export interface PlanScenarioSummary { name: string; title: string }
+
+export interface Connector {
+  id: string;
+  name: string;
+  description: string;
+  /** false = listed but not live yet ("coming soon"). */
+  available: boolean;
+  connected: boolean;
+  detail: string | null;
+  connected_at: string | null;
+}
+
+export type ConnectProfile = "priya" | "arjun" | "meera";

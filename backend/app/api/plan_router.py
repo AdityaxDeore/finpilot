@@ -14,7 +14,7 @@ from app.core import store
 from app.core.auth import resolve_user_id
 from app.ingest.personas import PLAN_PROFILES
 from app.ingest.snapshot import _transactions_df
-from app.models import DebtRow, TransactionRow
+from app.models import ConnectionRow, DebtRow, TransactionRow
 from app.plan.forecast import (
     N_PATHS,
     SEED,
@@ -49,7 +49,10 @@ class ReplanRequest(PlanParams):
 
 def _inputs(user_id: str, p: PlanParams) -> PlanInputs:
     if p.reserve is None and p.goal_amount is None and p.goal_month is None:
-        p = p.model_copy(update=PLAN_PROFILES.get(user_id, {}))
+        # Connected sandbox users inherit the declared reserve/goal of the persona they linked.
+        link = store.get(ConnectionRow, f"{user_id}:google_pay")
+        source = f"demo-{link.detail.lower()}" if link and link.detail else user_id
+        p = p.model_copy(update=PLAN_PROFILES.get(source, {}))
     if not 1 <= p.horizon <= MAX_HORIZON:
         raise HTTPException(422, f"horizon must be 1..{MAX_HORIZON}")
     if not 0 <= p.cut <= 0.30:

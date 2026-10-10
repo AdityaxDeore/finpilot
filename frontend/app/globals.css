@@ -1,4 +1,10 @@
 @import "tailwindcss";
+@import "@fontsource-variable/plus-jakarta-sans";
+@import "@fontsource-variable/outfit";
+/*
+ ---break---
+ */
+@custom-variant dark (&:is(.dark *));
 
 /*
  * FinPilot Design System — Refined Fintech Direction
@@ -10,57 +16,71 @@
 :root {
   /* Canvas & Surfaces */
   --color-paper: #ffffff;
-  --color-fog: #f8f9fa;
-  --color-surface-subtle: #fafbfc;
+  --color-fog: #f1f2ec;
+  --color-surface-subtle: #f6f8fd;
   --color-surface-card: #ffffff;
-  --color-surface-glass: rgba(255, 255, 255, 0.82);
+  --color-surface-glass: rgba(255, 255, 255, 0.72);
   --color-surface-glass-dark: rgba(9, 10, 15, 0.85);
 
   /* Monochrome Ink & Metal Scale */
-  --color-ink: #090a0f;
-  --color-carbon: #181a20;
-  --color-graphite: #4b5162;
-  --color-pewter: #717786;
-  --color-steel: #9aa0b0;
-  --color-mist: #d9dce5;
+  --color-ink: #0d0d0d;
+  --color-carbon: #1e293b;
+  --color-graphite: #475569;
+  --color-pewter: #7487a3;
+  --color-steel: #a3b0c7;
+  --color-mist: #e0e6f2;
 
   /* Core Accent (Luminous Ember) */
-  --color-ember: #ff5900;
-  --color-ember-dark: #d84900;
-  --color-ember-light: #ff7629;
-  --color-ember-glow: rgba(255, 89, 0, 0.18);
-  --color-ember-soft: rgba(255, 89, 0, 0.08);
+  --color-ember: #ff6b1a;
+  --color-ember-dark: #e0540a;
+  --color-ember-light: #ff9340;
+  --color-ember-glow: rgba(255, 107, 26, 0.22);
+  --color-ember-soft: rgba(255, 107, 26, 0.12);
+
+  /* Colourful accents: green / sky / sun + soft tints for card fills */
+  --color-leaf: #0fb67a;
+  --color-sky: #3b6bff;
+  --color-sun: #ffb81f;
+  --tint-leaf: #d8f6e9;
+  --tint-sky: #dfe7ff;
+  --tint-sun: #fff0c9;
+  --tint-ember: #ffe6d4;
+  --color-lime: #c6f135;
+  --color-lime-dark: #a6d11a;
+  --tint-lime: #eefacc;
+  --color-sage: #dfe8c4;
+  --color-sage-deep: #cddaa6;
 
   /* Semantic Category / Telemetry Badges */
-  --badge-emerald: #059669;
-  --badge-emerald-bg: rgba(5, 150, 105, 0.09);
-  --badge-amber: #d97706;
-  --badge-amber-bg: rgba(217, 119, 6, 0.09);
-  --badge-rose: #e11d48;
-  --badge-rose-bg: rgba(225, 29, 72, 0.09);
-  --badge-indigo: #4f46e5;
-  --badge-indigo-bg: rgba(79, 70, 229, 0.09);
-  --badge-cyan: #0891b2;
-  --badge-cyan-bg: rgba(8, 145, 178, 0.09);
+  --badge-emerald: #0fb67a;
+  --badge-emerald-bg: rgba(15, 182, 122, 0.12);
+  --badge-amber: #e09400;
+  --badge-amber-bg: rgba(224, 148, 0, 0.12);
+  --badge-rose: #f0455a;
+  --badge-rose-bg: rgba(240, 69, 90, 0.1);
+  --badge-indigo: #3b6bff;
+  --badge-indigo-bg: rgba(59, 107, 255, 0.12);
+  --badge-cyan: #12a5b8;
+  --badge-cyan-bg: rgba(18, 165, 184, 0.12);
 
   /* Borders & Hairlines */
-  --border-hairline: rgba(15, 23, 42, 0.08);
-  --border-hairline-subtle: rgba(15, 23, 42, 0.04);
+  --border-hairline: rgba(15, 23, 42, 0.09);
+  --border-hairline-subtle: rgba(15, 23, 42, 0.05);
   --border-highlight: rgba(255, 255, 255, 0.9);
   --border-focus: rgba(255, 89, 0, 0.45);
 
   /* Semantic Aliases */
-  --background: var(--color-paper);
+  --background: #eceee4;
   --foreground: var(--color-ink);
   --surface-muted: var(--color-fog);
   --text-secondary: var(--color-graphite);
   --text-tertiary: var(--color-pewter);
-  --accent: var(--color-ember);
-  --accent-foreground: #ffffff;
+  --accent: var(--color-fog);
+  --accent-foreground: var(--color-ink);
 
-  --radius-chip: 8px;
+  --radius-chip: 10px;
   --radius-surface: 16px;
-  --radius-card: 20px;
+  --radius-card: 28px;
 
   /* Shared motion + stacking scale -- additive only, keeps interactive
      transitions (buttons, chips, form controls) consistent across pages
@@ -74,6 +94,35 @@
   --z-overlay: 40;
   --z-modal: 50;
   --z-toast: 60;
+  /* shadcn/ui tokens mapped onto the FinPilot palette */
+  --card: var(--color-surface-card);
+  --card-foreground: var(--color-ink);
+  --popover: var(--color-paper);
+  --popover-foreground: var(--color-ink);
+  --primary: var(--color-lime);
+  --primary-foreground: var(--color-ink);
+  --secondary: var(--color-fog);
+  --secondary-foreground: var(--color-ink);
+  --muted: var(--color-fog);
+  --muted-foreground: var(--color-pewter);
+  --destructive: var(--badge-rose);
+  --border: var(--color-mist);
+  --input: var(--color-mist);
+  --ring: var(--color-ink);
+  --chart-1: var(--color-ember);
+  --chart-2: var(--badge-indigo);
+  --chart-3: var(--badge-emerald);
+  --chart-4: var(--badge-amber);
+  --chart-5: var(--badge-cyan);
+  --radius: 0.875rem;
+  --sidebar: #f8f9ef;
+  --sidebar-foreground: #3a4526;
+  --sidebar-primary: var(--color-lime);
+  --sidebar-primary-foreground: var(--color-ink);
+  --sidebar-accent: rgba(13, 13, 13, 0.06);
+  --sidebar-accent-foreground: var(--color-ink);
+  --sidebar-border: rgba(13, 13, 13, 0.08);
+  --sidebar-ring: var(--color-lime);
 }
 
 @theme inline {
@@ -88,10 +137,21 @@
   --color-graphite: var(--color-graphite);
   --color-carbon: var(--color-carbon);
   --color-ink: var(--color-ink);
+  --color-leaf: var(--color-leaf);
+  --color-sky: var(--color-sky);
+  --color-sun: var(--color-sun);
+  --color-tint-leaf: var(--tint-leaf);
+  --color-tint-sky: var(--tint-sky);
+  --color-tint-sun: var(--tint-sun);
+  --color-tint-ember: var(--tint-ember);
+  --color-lime: var(--color-lime);
+  --color-lime-dark: var(--color-lime-dark);
+  --color-sage: var(--color-sage);
+  --color-sage-deep: var(--color-sage-deep);
+  --color-tint-lime: var(--tint-lime);
   --color-ember: var(--color-ember);
   --color-ember-dark: var(--color-ember-dark);
   --color-ember-light: var(--color-ember-light);
-  --color-ember-soft: var(--color-ember-soft);
   --color-surface-muted: var(--surface-muted);
   --color-border-hairline: var(--border-hairline);
   --color-text-secondary: var(--text-secondary);
@@ -109,8 +169,39 @@
   --radius-surface: var(--radius-surface);
   --radius-card: var(--radius-card);
 
-  --font-sans: var(--font-inter);
-  --font-display: var(--font-display);
+  --font-sans: "Plus Jakarta Sans Variable", system-ui, sans-serif;
+  --font-display: "Outfit Variable", system-ui, sans-serif;
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
 }
 
 /* Base resets & typography */
@@ -121,10 +212,15 @@ body {
 }
 
 body {
-  background-color: var(--background);
+  /* Pale sage canvas with a faint grid, like a sheet of graph paper */
+  background:
+    linear-gradient(to right, rgba(13, 13, 13, 0.035) 1px, transparent 1px) 0 0 / 44px 44px,
+    linear-gradient(to bottom, rgba(13, 13, 13, 0.035) 1px, transparent 1px) 0 0 / 44px 44px,
+    var(--background);
+  background-attachment: fixed;
   color: var(--foreground);
-  font-family: var(--font-sans), Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  letter-spacing: -0.012em;
+  font-family: "Plus Jakarta Sans Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+  letter-spacing: -0.005em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -134,7 +230,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .font-display {
-  font-family: var(--font-display), "Fraunces", Georgia, serif;
+  font-family: "Outfit Variable", system-ui, sans-serif;
 }
 
 /* Tabular Numerals for stable, non-jumping financial counters */
@@ -147,10 +243,8 @@ h1, h2, h3, h4, h5, h6 {
 /* Multi-tier Tactile Elevation Shadows */
 .elevation-card {
   background-color: var(--color-surface-card);
-  border: 1px solid var(--border-hairline);
-  box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.03),
-    0 6px 20px -3px rgba(15, 23, 42, 0.05);
+  border: 1px solid rgba(13, 13, 13, 0.04);
+  box-shadow: 0 1px 2px rgba(13, 13, 13, 0.04), 0 10px 24px -16px rgba(13, 13, 13, 0.18);
 }
 
 .elevation-card-hover {
@@ -160,11 +254,19 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .elevation-card-hover:hover {
-  transform: translateY(-2px);
-  border-color: rgba(15, 23, 42, 0.12);
+  transform: translateY(-3px);
+  border-color: rgba(166, 209, 26, 0.55);
   box-shadow:
-    0 4px 12px rgba(15, 23, 42, 0.05),
-    0 16px 36px -4px rgba(15, 23, 42, 0.08);
+    0 2px 4px rgba(13, 13, 13, 0.05),
+    0 22px 38px -16px rgba(95, 127, 12, 0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .elevation-card-hover,
+  .elevation-card-hover:hover {
+    transition: none;
+    transform: none;
+  }
 }
 
 .elevation-card-active {
@@ -220,7 +322,7 @@ h1, h2, h3, h4, h5, h6 {
 .shimmer-mask {
   position: relative;
   overflow: hidden;
-  background-color: #f1f2f5;
+  background-color: #e6ebf6;
 }
 
 .shimmer-mask::after {
@@ -378,4 +480,17 @@ h1, h2, h3, h4, h5, h6 {
 .landing-orb { animation: landing-float 9s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) {
   .landing-orb { animation: none; }
+}
+/*
+ ---break---
+ */
+.dark {
+  --sidebar: hsl(240 5.9% 10%);
+  --sidebar-foreground: hsl(240 4.8% 95.9%);
+  --sidebar-primary: hsl(224.3 76.3% 48%);
+  --sidebar-primary-foreground: hsl(0 0% 100%);
+  --sidebar-accent: hsl(240 3.7% 15.9%);
+  --sidebar-accent-foreground: hsl(240 4.8% 95.9%);
+  --sidebar-border: hsl(240 3.7% 15.9%);
+  --sidebar-ring: hsl(217.2 91.2% 59.8%);
 }

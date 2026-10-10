@@ -1,11 +1,20 @@
 "use client";
 
 import { useCallback } from "react";
+import { Landmark, CreditCard, PiggyBank, TrendingUp, type LucideIcon } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAsync } from "@/lib/hooks";
-import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
-import { Chip } from "@/components/ui/Chip";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/shadcn/card";
+import { Badge } from "@/components/shadcn/badge";
+import { Button } from "@/components/shadcn/button";
 import { formatCurrency } from "@/lib/format";
+
+const TYPE_ICON: Record<string, LucideIcon> = {
+  credit_card: CreditCard,
+  loan: Landmark,
+  savings: PiggyBank,
+  investment: TrendingUp,
+};
 
 /**
  * Standalone, self-fetching -- takes only userId so the lead can drop this
@@ -20,32 +29,42 @@ export function AccountCards({ userId }: { userId: string }) {
       <CardHeader>
         <CardTitle>Accounts</CardTitle>
       </CardHeader>
-      {loading && !data && <p className="text-sm text-pewter">Loading accounts...</p>}
-      {error && (
-        <div className="flex flex-col gap-2">
-          <p className="text-sm text-ink">Could not load accounts: {error}</p>
-          <button onClick={reload} className="self-start text-xs text-graphite underline">
-            Retry
-          </button>
-        </div>
-      )}
-      {data && data.length === 0 && <p className="text-sm text-pewter">No linked accounts yet.</p>}
-      {data && data.length > 0 && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {data.map((account) => (
-            <div key={account.id} className="rounded-chip border border-mist p-4">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-medium text-ink">{account.name}</p>
-                <Chip tone="outline">{account.type.replace(/_/g, " ")}</Chip>
-              </div>
-              <p className="mt-2 text-lg font-semibold text-ink">{formatCurrency(account.balance)}</p>
-              {account.interest_rate_apr != null && (account.type === "credit_card" || account.type === "loan") && (
-                <p className="mt-1 text-xs text-pewter">{account.interest_rate_apr.toFixed(1)}% APR</p>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+      <CardContent>
+        {loading && !data && <p className="text-sm text-muted-foreground">Loading accounts...</p>}
+        {error && (
+          <div className="flex flex-col items-start gap-2">
+            <p className="text-sm">Could not load accounts: {error}</p>
+            <Button variant="outline" size="sm" onClick={reload}>
+              Retry
+            </Button>
+          </div>
+        )}
+        {data && data.length === 0 && <p className="text-sm text-muted-foreground">No linked accounts yet.</p>}
+        {data && data.length > 0 && (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {data.map((account) => {
+              const Icon = TYPE_ICON[account.type] ?? Landmark;
+              return (
+                <div key={account.id} className="rounded-lg border bg-muted/40 p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Icon className="size-4 shrink-0 text-muted-foreground" />
+                      <p className="truncate text-sm font-medium">{account.name}</p>
+                    </div>
+                    <Badge variant="outline" className="capitalize">
+                      {account.type.replace(/_/g, " ")}
+                    </Badge>
+                  </div>
+                  <p className="mt-3 text-xl font-semibold tnum">{formatCurrency(account.balance)}</p>
+                  {account.interest_rate_apr != null && (account.type === "credit_card" || account.type === "loan") && (
+                    <p className="mt-1 text-xs text-muted-foreground">{account.interest_rate_apr.toFixed(1)}% APR</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
     </Card>
   );
 }

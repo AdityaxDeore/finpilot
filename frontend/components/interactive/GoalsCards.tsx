@@ -118,7 +118,7 @@ export function GoalsCards({
           className={cn(
             "self-start sm:self-auto inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border text-xs font-semibold cursor-pointer transition-all active:scale-[0.98]",
             isEditing
-              ? "bg-ink text-white border-ink shadow-sm"
+              ? "bg-lime text-ink border-lime-dark shadow-sm"
               : "bg-fog text-graphite border-black/[0.08] hover:bg-white hover:text-ink"
           )}
         >

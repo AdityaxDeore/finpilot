@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { getUserId, USER_ID_CHANGE_EVENT } from "@/lib/user";
+import { DEFAULT_USER_ID, getUserId, USER_ID_CHANGE_EVENT } from "@/lib/user";
 
 function subscribeToUserIdChanges(onStoreChange: () => void) {
   if (typeof window === "undefined") return () => {};
@@ -19,7 +19,7 @@ function subscribeToUserIdChanges(onStoreChange: () => void) {
  * the new id -- and any useAsync() keyed on userId refetches automatically.
  */
 export function useUserId(): string {
-  return useSyncExternalStore(subscribeToUserIdChanges, getUserId, () => "demo-priya");
+  return useSyncExternalStore(subscribeToUserIdChanges, getUserId, () => DEFAULT_USER_ID);
 }
 
 interface AsyncState<T> {

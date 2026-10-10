@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { NavShell } from "@/components/NavShell";
+import { Toaster } from "@/components/shadcn/sonner";
 import { CopilotToaster } from "@/components/copilot/CopilotToaster";
 
 /**
@@ -14,6 +15,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     <NavShell>
       {children}
       <CopilotToaster />
+      <Toaster richColors position="top-right" />
     </NavShell>
   );
 }

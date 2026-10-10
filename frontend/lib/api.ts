@@ -19,6 +19,8 @@ import type {
   HouseholdSummary,
 
   NetWorthHistory,
+  Connector,
+  ConnectProfile,
   NotificationItem,
   PlanParams,
   PlanResult,
@@ -174,6 +176,16 @@ export const api = {
     apiFetch<Goal>(`/api/goals/${userId}/${goalId}`, { method: "PATCH", body: JSON.stringify(req) }),
   deleteGoal: (userId: string, goalId: string) =>
     apiFetch<void>(`/api/goals/${userId}/${goalId}`, { method: "DELETE" }),
+
+  // Connectors: linking a source is what fills the app with data
+  connectors: (userId: string) => apiFetch<Connector[]>(`/api/connectors/${userId}`),
+  connectConnector: (userId: string, connector: string, profile: ConnectProfile) =>
+    apiFetch<{ connected: boolean; accounts: number; transactions: number }>(
+      `/api/connectors/${userId}/${connector}/connect`,
+      { method: "POST", body: JSON.stringify({ profile }) }
+    ),
+  disconnectConnector: (userId: string, connector: string) =>
+    apiFetch<void>(`/api/connectors/${userId}/${connector}`, { method: "DELETE" }),
 
   // Net worth + accounts
   netWorthHistory: (userId: string, days = 180) =>

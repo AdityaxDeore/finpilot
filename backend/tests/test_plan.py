@@ -120,3 +120,18 @@ def test_demo_personas_get_seeded_plan_profiles():
     assert out["demo-priya"]["feasible"] and out["demo-arjun"]["feasible"]
     assert not out["demo-meera"]["feasible"] and out["demo-meera"]["relaxations"]
     assert out["demo-arjun"]["uncertainty_changed_choice"]
+
+
+def test_connected_guest_inherits_declared_reserve_and_six_periods():
+    from app.ingest.personas import PLAN_PROFILES
+
+    c = TestClient(app)
+    uid = "guest-plantest0000001"
+    try:
+        assert c.post(f"/api/connectors/{uid}/google_pay/connect", json={"profile": "priya"}).status_code == 200
+        out = c.get(f"/api/plan/{uid}").json()
+        assert out["constraints"]["min_reserve"] == PLAN_PROFILES["demo-priya"]["reserve"]
+        assert out["constraints"]["goal"] is not None
+        assert len(out["forecast"]) >= 6 and out["forecast"][0]["debt_min"] > 0
+    finally:
+        c.delete(f"/api/connectors/{uid}/google_pay")

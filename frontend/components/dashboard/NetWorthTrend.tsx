@@ -55,7 +55,7 @@ export function NetWorthTrend({ userId, days = 180 }: { userId: string; days?: n
               <Line
                 type="monotone"
                 dataKey="net_worth"
-                stroke="var(--color-ember)"
+                stroke="#5f7f0c"
                 strokeWidth={2}
                 dot={false}
                 isAnimationActive={false}

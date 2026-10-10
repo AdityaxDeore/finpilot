@@ -42,8 +42,6 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "@/lib/api";
 import { useAsync, useDebouncedValue, useUserId } from "@/lib/hooks";
-import { isDemoUserId } from "@/lib/user";
-import { AddDataPanel } from "@/components/dashboard/AddDataPanel";
 import type {
   CategorizationRule,
   CategorizationRuleCreate,
@@ -121,7 +119,6 @@ export default function TransactionsPage() {
   const userId = useUserId();
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 250);
-  const [showAdd, setShowAdd] = useState(false);
   const [showRulesModal, setShowRulesModal] = useState(false);
   const [category, setCategory] = useState<TxnCategory | "">("");
   const [reviewStatusFilter, setReviewStatusFilter] = useState<string>("");
@@ -349,7 +346,7 @@ export default function TransactionsPage() {
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded-full px-3.5 py-1 text-xs font-medium transition-all duration-150 cursor-pointer select-none",
                   isActive
-                    ? "bg-ink text-white shadow-sm ring-1 ring-ink font-semibold"
+                    ? "bg-sage text-ink shadow-sm ring-1 ring-ink font-semibold"
                     : "bg-fog text-graphite border border-mist hover:bg-white hover:text-ink hover:border-black/[0.15]"
                 )}
               >
@@ -365,21 +362,6 @@ export default function TransactionsPage() {
           })}
         </div>
       </div>
-
-      {!isDemoUserId(userId) && (
-        <div className="flex flex-col gap-4">
-          <div>
-            <Button variant="secondary" size="sm" onClick={() => setShowAdd((v) => !v)} className="text-xs font-semibold">
-              {showAdd ? "Close" : "+ Add transaction"}
-            </Button>
-          </div>
-          {showAdd && (
-            <Card className="p-5 sm:p-6">
-              <AddDataPanel userId={userId} />
-            </Card>
-          )}
-        </div>
-      )}
 
       {/* Primary Search & Date Filter Bar */}
       <Card className="p-4 sm:p-5">
@@ -1135,7 +1117,7 @@ function TransactionRowItem({
                         className={cn(
                           "flex items-center gap-2 rounded-chip px-2.5 py-1.5 text-left text-xs transition-colors cursor-pointer select-none",
                           isSelected
-                            ? "bg-ink text-white font-semibold shadow-xs"
+                            ? "bg-sage text-ink font-semibold shadow-xs"
                             : "text-graphite hover:bg-fog hover:text-ink"
                         )}
                       >

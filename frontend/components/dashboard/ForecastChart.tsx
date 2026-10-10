@@ -53,7 +53,7 @@ function CustomForecastTooltip({
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between gap-3">
           <span className="flex items-center gap-1.5 text-graphite">
-            <span className="h-2 w-2 rounded-full bg-ember" />
+            <span className="h-2 w-2 rounded-full bg-lime" />
             <span>P50 Expected</span>
           </span>
           <span className="font-bold text-ink tnum">{formatCurrency(data.p50)}</span>
@@ -146,8 +146,8 @@ export function ForecastChart({
           <ComposedChart data={data} margin={{ left: 8, right: 16, top: 12, bottom: 4 }}>
             <defs>
               <linearGradient id="emberForecastGlow" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#ff5900" stopOpacity={0.2} />
-                <stop offset="95%" stopColor="#ff5900" stopOpacity={0.0} />
+                <stop offset="5%" stopColor="#c6f135" stopOpacity={0.55} />
+                <stop offset="95%" stopColor="#c6f135" stopOpacity={0.0} />
               </linearGradient>
             </defs>
 
@@ -205,10 +205,10 @@ export function ForecastChart({
             <Line
               type="monotone"
               dataKey="p50"
-              stroke="#ff5900"
+              stroke="#5f7f0c"
               strokeWidth={2.5}
               dot={false}
-              activeDot={{ r: 5, fill: "#ff5900", stroke: "#ffffff", strokeWidth: 2 }}
+              activeDot={{ r: 6, fill: "#c6f135", stroke: "#5f7f0c", strokeWidth: 2 }}
               isAnimationActive={false}
             />
 
@@ -236,7 +236,7 @@ export function ForecastChart({
       <div className="flex flex-wrap items-center justify-between gap-4 pt-2 text-xs text-pewter border-t border-black/[0.04]">
         <div className="flex items-center gap-4">
           <span className="flex items-center gap-1.5">
-            <span className="h-0.5 w-4 bg-ember rounded-full" />
+            <span className="h-0.5 w-4 bg-[#5f7f0c] rounded-full" />
             <span className="text-graphite font-medium">P50 Expected</span>
           </span>
           <span className="flex items-center gap-1.5">

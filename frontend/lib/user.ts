@@ -8,7 +8,8 @@
  * for the real Firebase user id once accounts map to backend user records.
  */
 const STORAGE_KEY = "finpilot:user_id";
-export const DEFAULT_USER_ID = "demo-priya";
+/** Server-render / hydration placeholder; real visitors get a random guest id (below). */
+export const DEFAULT_USER_ID = "guest-loading00000";
 
 /** Fired on `window` whenever setUserId changes the active persona, so
  * useUserId() (lib/hooks.ts) can re-render and dependent useAsync() fetches
@@ -35,14 +36,21 @@ export function isDemoUserId(id: string): boolean {
   return DEMO_PERSONAS.some((p) => p.id === id);
 }
 
+/** Anonymous visitors get an isolated, empty sandbox: `guest-<random>`. It stays
+ * empty until they link a connector (see /connect). The backend accepts these
+ * ids without a token because only synthetic connector data is ever stored. */
+function guestId(): string {
+  const stored = window.localStorage.getItem(STORAGE_KEY);
+  if (stored) return stored;
+  const id = `guest-${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
+  window.localStorage.setItem(STORAGE_KEY, id);
+  return id;
+}
+
 export function getUserId(): string {
   if (typeof window === "undefined") return DEFAULT_USER_ID;
   try {
-    return (
-      window.localStorage.getItem(AUTH_USER_KEY) ??
-      window.localStorage.getItem(STORAGE_KEY) ??
-      DEFAULT_USER_ID
-    );
+    return window.localStorage.getItem(AUTH_USER_KEY) ?? guestId();
   } catch {
     return DEFAULT_USER_ID;
   }

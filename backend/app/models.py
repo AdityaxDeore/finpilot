@@ -216,3 +216,15 @@ class HouseholdInviteRow(SQLModel, table=True):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     expires_at: datetime
 
+
+class ConnectionRow(SQLModel, table=True):
+    """A linked data source (Google Pay, bank, ...) for a user."""
+
+    __tablename__ = "connections"
+
+    id: str = Field(primary_key=True)  # f"{user_id}:{connector}"
+    user_id: str = Field(index=True)
+    connector: str
+    status: str = "connected"
+    detail: str | None = None  # e.g. the linked profile name
+    connected_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

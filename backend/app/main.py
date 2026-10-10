@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.concurrency import run_in_threadpool
 
 from app.api.budgets_router import router as budgets_router
+from app.api.connectors_router import router as connectors_router
 from app.api.copilot_feed_router import router as copilot_feed_router
 from app.api.goals_router import router as goals_router
 from app.api.household_router import router as household_router
@@ -60,6 +61,7 @@ app.include_router(copilot_feed_router, prefix="/api")
 # These already embed "/api/..." in each route's own path decorator
 # (unlike routes.py/transactions_router/budgets_router, which rely on the
 # prefix="/api" above) -- no prefix here, or paths would double up.
+app.include_router(connectors_router)
 app.include_router(goals_router)
 app.include_router(household_router)
 app.include_router(networth_router)

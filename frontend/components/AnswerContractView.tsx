@@ -35,7 +35,7 @@ export function AnswerContractView({ answer }: { answer: AnswerContract }) {
         <Lane
           title="Observed Facts"
           hint="Grounded in your actual transactions"
-          badgeColor="bg-ink"
+          badgeColor="bg-leaf"
           icon="✓"
         >
           <div className="rounded-surface border border-black/[0.08] bg-white p-4 shadow-sm">

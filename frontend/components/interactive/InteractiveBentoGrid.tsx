@@ -89,7 +89,7 @@ const SAMPLE_TRANSACTIONS: Transaction[] = [
 ];
 
 const BUDGET_CATEGORIES = [
-  { name: "Housing & Utilities", spent: 1850, budget: 1900, color: "bg-ink/80 dark:bg-paper/80" },
+  { name: "Housing & Utilities", spent: 1850, budget: 1900, color: "bg-lime-dark" },
   { name: "Tech & Infrastructure", spent: 390, budget: 350, over: true, color: "bg-ember" },
   { name: "Dining & Social", spent: 480, budget: 600, color: "bg-sage" },
   { name: "Health & Wellness", spent: 240, budget: 300, color: "bg-slate-500" },

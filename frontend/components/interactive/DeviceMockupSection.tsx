@@ -211,7 +211,7 @@ export function DeviceMockupSection({
             </div>
 
             {/* Bottom floating copilot prompt */}
-            <div className="p-2 rounded-xl bg-ink text-white text-[9px] flex items-center justify-between shadow-sm">
+            <div className="p-2 rounded-xl bg-sage text-ink text-[9px] flex items-center justify-between shadow-sm">
               <span>Ask FinPilot...</span>
               <ArrowUpRight className="h-3 w-3 text-ember" />
             </div>

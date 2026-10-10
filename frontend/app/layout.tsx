@@ -1,18 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Fraunces } from "next/font/google";
 import "./globals.css";
-
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-});
-
-const fraunces = Fraunces({
-  variable: "--font-display",
-  subsets: ["latin"],
-  weight: ["500"],
-});
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://finpilot.ai"),
@@ -46,7 +33,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#090a0f",
+  themeColor: "#0b1220",
 };
 
 import { CurrencyProvider } from "@/lib/currency";
@@ -55,7 +42,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${fraunces.variable} h-full antialiased`}
+      className="h-full antialiased"
     >
       <body className="min-h-full flex flex-col bg-paper text-ink">
         <CurrencyProvider>{children}</CurrencyProvider>
