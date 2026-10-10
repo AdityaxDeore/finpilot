@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { CheckCircle2, Loader2, Lock, ShieldCheck } from "lucide-react";
@@ -23,6 +23,9 @@ const PROFILES: { id: ConnectProfile; name: string; blurb: string; color: string
 const STEPS = ["Consent approved", "Fetching encrypted bank data", "Decrypting and reading UPI payments", "Building your dashboard"];
 
 type Phase = "details" | "otp" | "working";
+
+// set while the user is away approving the consent on the Account Aggregator's own screens
+const PENDING_KEY = "finpilot-aa-pending";
 
 /** Links the user's UPI/Google Pay payments through their bank accounts using the RBI Account Aggregator flow. */
 export function LinkGooglePayDialog({ open, onOpenChange, userId }: { open: boolean; onOpenChange: (open: boolean) => void; userId: string }) {
@@ -47,9 +50,15 @@ export function LinkGooglePayDialog({ open, onOpenChange, userId }: { open: bool
   async function askConsent() {
     setBusy(true);
     try {
-      const r = await api.aaConsent(userId, mobile, profile);
+      const r = await api.aaConsent(userId, mobile, profile, `${window.location.origin}/connect`);
+      if (r.redirect_url) {
+        // real Account Aggregator: it takes the OTP and bank linking on its own screens, then sends the user back here
+        sessionStorage.setItem(PENDING_KEY, JSON.stringify({ userId, handle: r.handle }));
+        window.location.assign(r.redirect_url);
+        return;
+      }
       setHandle(r.handle);
-      setDemoOtp(r.demo_otp);
+      setDemoOtp(r.demo_otp ?? "");
       setPhase("otp");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not start the consent request");
@@ -60,9 +69,19 @@ export function LinkGooglePayDialog({ open, onOpenChange, userId }: { open: bool
 
   async function approveAndImport() {
     setBusy(true);
-    let ticker: ReturnType<typeof setInterval> | undefined;
     try {
       const { consent_id } = await api.aaApprove(userId, handle, otp);
+      await importConsent(consent_id);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not link your accounts");
+      setBusy(false);
+    }
+  }
+
+  async function importConsent(consent_id: string) {
+    setBusy(true);
+    let ticker: ReturnType<typeof setInterval> | undefined;
+    try {
       setPhase("working");
       setStep(0);
       ticker = setInterval(() => setStep((s) => Math.min(s + 1, STEPS.length - 1)), 650);
@@ -83,6 +102,21 @@ export function LinkGooglePayDialog({ open, onOpenChange, userId }: { open: bool
       setBusy(false);
     }
   }
+
+  // back from the Account Aggregator's consent screens: finish the import
+  useEffect(() => {
+    try {
+      const p = JSON.parse(sessionStorage.getItem(PENDING_KEY) ?? "null") as { userId: string; handle: string } | null;
+      if (p?.userId === userId) {
+        sessionStorage.removeItem(PENDING_KEY);
+        onOpenChange(true);
+        void importConsent(p.handle);
+      }
+    } catch {
+      // storage unavailable: the user just starts again
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <Dialog open={open} onOpenChange={(o) => phase !== "working" && onOpenChange(o)}>

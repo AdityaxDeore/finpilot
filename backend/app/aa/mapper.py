@@ -11,7 +11,10 @@ from app.models import AccountRow, TransactionRow
 def _merchant(narration: str) -> str:
     # UPI narrations look like UPI/<merchant>/<ref>; anything else keeps its first words
     parts = [p.strip() for p in narration.split("/")]
-    name = parts[1] if len(parts) >= 3 and parts[0].upper() == "UPI" and parts[1] else narration
+    if len(parts) >= 4 and parts[0].upper() == "UPI" and parts[1].upper() in ("CR", "DR") and parts[3]:
+        name = parts[3]  # real banks: UPI/CR/<ref>/<counterparty>/<bank>/<id>
+    else:
+        name = parts[1] if len(parts) >= 3 and parts[0].upper() == "UPI" and parts[1] else narration
     return name[:60] or "Unknown"
 
 

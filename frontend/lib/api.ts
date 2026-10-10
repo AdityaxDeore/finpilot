@@ -225,8 +225,8 @@ export const api = {
   // Connectors: linking a source is what fills the app with data
   connectors: (userId: string) => apiFetch<Connector[]>(`/api/connectors/${userId}`),
   /** Account Aggregator: ask consent, approve with the OTP, then import the bank data. */
-  aaConsent: (userId: string, mobile: string, profile: ConnectProfile) =>
-    apiFetch<{ handle: string; demo_otp: string }>(`/api/aa/${userId}/consent`, { method: "POST", body: JSON.stringify({ mobile, profile }) }),
+  aaConsent: (userId: string, mobile: string, profile: ConnectProfile, returnUrl: string) =>
+    apiFetch<{ handle: string; demo_otp?: string; redirect_url?: string }>(`/api/aa/${userId}/consent`, { method: "POST", body: JSON.stringify({ mobile, profile, return_url: returnUrl }) }),
   aaApprove: (userId: string, handle: string, otp: string) =>
     apiFetch<{ consent_id: string }>(`/api/aa/${userId}/consent/approve`, { method: "POST", body: JSON.stringify({ handle, otp }) }),
   aaImport: (userId: string, consentId: string) =>

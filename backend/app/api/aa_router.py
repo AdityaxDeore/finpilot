@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from app.aa import AAError, mapper, mock
+from app.aa import AAError, mapper, mock, setu
 from app.core import store
 from app.core.auth import DEMO_USER_IDS, resolve_user_id
 from app.ingest.seed import _clear_user
@@ -19,6 +19,7 @@ class ConsentBody(BaseModel):
     mobile: str
     profile: str = "priya"  # which sample bank customer the mock AA returns
     months: int = 12
+    return_url: str = ""  # where Setu sends the user back after approving (real AA only)
 
 
 class ApproveBody(BaseModel):
@@ -37,6 +38,10 @@ def _fail(e: AAError):
 @router.post("/{user_id}/consent")
 def create_consent(body: ConsentBody, user_id: str = Depends(resolve_user_id)) -> dict:
     try:
+        if setu.enabled():
+            if not mock._MOBILE.match(body.mobile or "") or not 1 <= body.months <= 24 or not body.return_url.startswith(("http://", "https://")):
+                raise AAError("Enter the 10-digit mobile number linked to your bank accounts.", 422)
+            return setu.create_consent(body.mobile, body.months, body.return_url)
         return {**mock.create_consent(body.mobile, body.profile, body.months), "demo_otp": mock.DEMO_OTP}
     except AAError as e:
         _fail(e)
@@ -54,8 +59,11 @@ def approve(body: ApproveBody, user_id: str = Depends(resolve_user_id)) -> dict:
 def import_data(body: ImportBody, user_id: str = Depends(resolve_user_id)) -> dict:
     """Fetch the consented data, decrypt it, and replace the user's ledger with it (demo personas keep their fixtures)."""
     try:
-        priv, pub = mock.new_keypair()
-        fi = mock.decrypt(priv, mock.fetch(body.consent_id, pub))
+        if setu.enabled():
+            fi = setu.fetch(body.consent_id)
+        else:
+            priv, pub = mock.new_keypair()
+            fi = mock.decrypt(priv, mock.fetch(body.consent_id, pub))
         accounts, txns = mapper.to_rows(user_id, fi)
     except AAError as e:
         _fail(e)
