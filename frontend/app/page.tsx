@@ -17,6 +17,7 @@ import { FeatureShowcase } from "@/components/showcase/FeatureShowcase";
 import { FinPilotLogo } from "@/components/FinPilotLogo";
 import { LandingHeader } from "@/components/landing/LandingHeader";
 import { Reveal } from "@/components/landing/Reveal";
+import { ShieldCheck, TrendingUp, Sparkles, CheckCircle2 } from "lucide-react";
 import type { ReactNode } from "react";
 
 const PREVIEW_ANSWER: AnswerContract = {
@@ -369,30 +370,108 @@ export default function Home() {
       {/* Bottom CTA Banner */}
       <section className="mx-auto w-full max-w-[1240px] px-4 pt-16 pb-16 sm:px-8 sm:pt-24 sm:pb-24">
         <Reveal>
-          <div className="rounded-card border border-ink/10 bg-sage text-ink p-8 sm:p-14 relative overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.18)]">
-            <div className="landing-grid-dark absolute inset-0 pointer-events-none" aria-hidden />
-            <div className="absolute -right-10 -bottom-10 w-96 h-96 bg-ember/25 rounded-full blur-3xl pointer-events-none" aria-hidden />
-            <div className="relative z-10 max-w-xl">
-              <span className="text-xs font-semibold text-ember-light uppercase tracking-wider">
-                No Installation Needed
-              </span>
-              <h2 className="font-display text-3xl sm:text-5xl text-ink mt-3 text-balance">
-                Ready to see FinPilot in action?
-              </h2>
-              <p className="mt-4 text-sm sm:text-base text-mist leading-relaxed">
-                Explore real-time health scoring, 90-day cash-flow forecasting, and simulated impact recommendations now.
-              </p>
-              <div className="mt-8 flex flex-col sm:flex-row gap-3.5">
-                <Link href="/dashboard">
-                  <Button variant="primary" size="lg" className="w-full sm:w-auto px-7 py-3 text-base">
-                    Launch Dashboard
-                  </Button>
-                </Link>
-                <Link href="/copilot">
-                  <Button variant="secondary" size="lg" className="w-full sm:w-auto bg-white/55 text-ink border-ink/10 hover:bg-white/60 text-base">
-                    Ask FinPilot Copilot
-                  </Button>
-                </Link>
+          <div className="rounded-card border border-ink/10 bg-sage text-ink p-8 sm:p-12 lg:p-14 relative overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.12)]">
+            <div className="landing-grid-dark absolute inset-0 pointer-events-none opacity-40" aria-hidden />
+            <div className="absolute -right-10 -bottom-10 w-96 h-96 bg-ember/15 rounded-full blur-3xl pointer-events-none" aria-hidden />
+
+            <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+              {/* Left Column: Heading, readable dark text & action buttons */}
+              <div className="lg:col-span-7 flex flex-col items-start">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/70 border border-ink/10 text-xs font-bold text-ink uppercase tracking-wider backdrop-blur-sm shadow-xs">
+                  <Sparkles className="h-3.5 w-3.5 text-ember" />
+                  No Installation Needed
+                </span>
+
+                <h2 className="font-display text-3xl sm:text-5xl text-ink mt-4 text-balance font-bold leading-[1.12]">
+                  Ready to see FinPilot in action?
+                </h2>
+
+                <p className="mt-4 text-sm sm:text-base text-graphite leading-relaxed max-w-xl font-medium">
+                  Explore real-time health scoring, 90-day cash-flow forecasting with confidence bands, and simulated impact recommendations now.
+                </p>
+
+                <div className="mt-8 flex flex-col sm:flex-row gap-3.5 w-full sm:w-auto">
+                  <Link href="/dashboard" className="w-full sm:w-auto">
+                    <Button variant="primary" size="lg" className="w-full sm:w-auto px-7 py-3 text-base">
+                      Launch Dashboard
+                    </Button>
+                  </Link>
+                  <Link href="/copilot" className="w-full sm:w-auto">
+                    <Button variant="secondary" size="lg" className="w-full sm:w-auto bg-white/80 text-ink border-ink/15 hover:bg-white text-base shadow-xs">
+                      Ask FinPilot Copilot
+                    </Button>
+                  </Link>
+                </div>
+
+                <div className="mt-6 flex flex-wrap items-center gap-4 text-xs font-semibold text-graphite">
+                  <span className="flex items-center gap-1.5">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-700" />
+                    Zero setup required
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-700" />
+                    100% Client-side safe
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-700" />
+                    Instant persona load
+                  </span>
+                </div>
+              </div>
+
+              {/* Right Column: Fulfilling Live Metric / Telemetry Snapshot Card */}
+              <div className="lg:col-span-5 flex justify-center lg:justify-end">
+                <div className="w-full max-w-sm rounded-2xl border border-black/[0.08] bg-white/90 p-5 shadow-[0_12px_32px_rgba(13,13,13,0.08)] backdrop-blur-md">
+                  <div className="flex items-center justify-between pb-3 border-b border-black/[0.06]">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-800">
+                        <TrendingUp className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-ink leading-tight">Live Forecast Health</p>
+                        <p className="text-[10px] text-graphite">Autonomous engine</p>
+                      </div>
+                    </div>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200">
+                      <span className="size-1.5 rounded-full bg-emerald-600 animate-pulse" />
+                      94 / 100
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5 my-4">
+                    <div className="rounded-xl border border-black/[0.06] bg-fog/80 p-2.5">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-pewter block">
+                        90-Day Runway
+                      </span>
+                      <span className="text-base font-bold text-ink tnum mt-0.5 block">
+                        8.4 Months
+                      </span>
+                      <span className="text-[10px] text-emerald-700 font-semibold">
+                        Stable buffer
+                      </span>
+                    </div>
+
+                    <div className="rounded-xl border border-black/[0.06] bg-fog/80 p-2.5">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-pewter block">
+                        Safe-to-Spend
+                      </span>
+                      <span className="text-base font-bold text-ink tnum mt-0.5 block">
+                        ₹1,420/day
+                      </span>
+                      <span className="text-[10px] text-navy font-semibold">
+                        Calibrated
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-black/[0.06] bg-fog/60 p-3 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2 text-graphite font-medium">
+                      <ShieldCheck className="h-4 w-4 text-emerald-700 shrink-0" />
+                      <span>Decision integrity verification</span>
+                    </div>
+                    <span className="font-mono text-[11px] font-bold text-ink">ACTIVE</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

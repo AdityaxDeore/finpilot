@@ -78,6 +78,8 @@
   /* Semantic Aliases */
   --background: #eceee4;
   --foreground: var(--color-ink);
+  --surface: #ffffff;
+  --surface-subtle: #f8f9fa;
   --surface-muted: var(--color-fog);
   --text-secondary: var(--color-graphite);
   --text-tertiary: var(--color-pewter);
@@ -109,7 +111,7 @@
   --primary-foreground: var(--color-ink);
   --secondary: var(--color-fog);
   --secondary-foreground: var(--color-ink);
-  --muted: var(--color-fog);
+  --muted: #64748b;
   --muted-foreground: var(--color-pewter);
   --destructive: var(--badge-rose);
   --border: var(--color-mist);

@@ -246,7 +246,7 @@ export function SankeyDiagram({
               />
               <div className="flex flex-col text-left">
                 <span className="text-xs font-semibold">{activeDetails.title}</span>
-                <span className="text-[11px] text-mist font-tabular tnum">
+                <span className="text-[11px] text-graphite font-tabular tnum">
                   {formatCurrency(activeDetails.amount)} &middot; {activeDetails.share}
                 </span>
               </div>
