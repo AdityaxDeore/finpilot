@@ -5,6 +5,7 @@
 Identity questions are answered locally. Offline mode uses the rule-based router and sends nothing anywhere.
 """
 import json
+import os
 from datetime import date
 import re
 import time
