@@ -84,9 +84,10 @@ class Connector(BaseModel):
     connected_at: datetime | None = None
 
 
-def _guard_not_demo(user_id: str) -> None:
-    if user_id in DEMO_USER_IDS:
-        raise HTTPException(400, "Demo personas are fixed fixtures and can't be re-linked")
+def _clear_sheet(user_id: str) -> None:
+    """Demo personas keep their fixture data: only the sheet's own account and rows are replaced."""
+    store.delete_where(TransactionRow, user_id=user_id, account_id=f"{user_id}-sheet")
+    store.delete(AccountRow, f"{user_id}-sheet")
 
 
 def _seed_from_persona(user_id: str, profile: str) -> dict[str, int]:
@@ -128,7 +129,7 @@ def _sync_sheet(user_id: str, csv_url: str, last_hash: str | None = None) -> tup
         txns = parse_transaction_csv(r.content, user_id=user_id, account_id=f"{user_id}-sheet")
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
-    _clear_user(user_id)
+    _clear_sheet(user_id) if user_id in DEMO_USER_IDS else _clear_user(user_id)
     # balance = everything that came in minus everything that went out, so it can't go negative unless spending beats income
     store.put(AccountRow(id=f"{user_id}-sheet", user_id=user_id, name="Google Sheet", type="checking", balance=round(sum(t.amount for t in txns), 2)), *txns)
     store.delete_where(InsightsSnapshotRow, user_id=user_id)
@@ -155,7 +156,6 @@ def connect(connector: str, body: ConnectRequest, user_id: str = Depends(resolve
     if not CATALOG[connector][2]:
         raise HTTPException(409, f"{CATALOG[connector][0]} isn't available yet")
     if connector == "google_sheets":
-        _guard_not_demo(user_id)
         csv_url = _sheet_csv_url(body.url)
         _, digest, n = _sync_sheet(user_id, csv_url)
         store.put(ConnectionRow(id=f"{user_id}:{connector}", user_id=user_id, connector=connector, detail=f"{n} rows, live",
@@ -209,10 +209,12 @@ def export(connector: str, user_id: str = Depends(resolve_user_id)) -> Response:
 
 @router.delete("/{user_id}/{connector}", status_code=204, response_model=None)
 def disconnect(connector: str, user_id: str = Depends(resolve_user_id)) -> None:
-    """Unlinking removes everything that source brought in (the app returns to empty); demo personas only lose the link."""
+    """Unlinking removes everything that source brought in (the app returns to empty); demo personas only lose the link (and any sheet rows)."""
     if connector not in CATALOG:
         raise HTTPException(404, "Unknown connector")
     if user_id not in DEMO_USER_IDS:
         _clear_user(user_id)
-        store.delete_where(InsightsSnapshotRow, user_id=user_id)
+    elif connector == "google_sheets":
+        _clear_sheet(user_id)
+    store.delete_where(InsightsSnapshotRow, user_id=user_id)
     store.delete(ConnectionRow, f"{user_id}:{connector}")
