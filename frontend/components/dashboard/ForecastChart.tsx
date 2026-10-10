@@ -1,6 +1,9 @@
 "use client";
 
 import {
+  Bar,
+  BarChart,
+  Cell,
   ComposedChart,
   Area,
   Line,
@@ -88,10 +91,13 @@ export function ForecastChart({
   forecast,
   compareForecast,
   compareLabel = "Before",
+  bars = false,
 }: {
   forecast: CashFlowForecast;
   compareForecast?: CashFlowForecast;
   compareLabel?: string;
+  /** Weekly end-of-week balance bars instead of the daily line (dashboard Outlook). */
+  bars?: boolean;
 }) {
   const data = forecast.points.map((p, i) => ({
     date: p.date,
@@ -99,6 +105,22 @@ export function ForecastChart({
     p50: p.p50,
     comparePoint: compareForecast?.points[i]?.p50 ?? null,
   }));
+
+  // One bar per 7 days: the balance at the end of the week, with that week's average P10-P90 band for the tooltip.
+  const weekly: typeof data = [];
+  for (let i = 0; i < data.length; i += 7) {
+    const week = data.slice(i, i + 7);
+    const last = week[week.length - 1];
+    weekly.push({
+      date: last.date,
+      p50: last.p50,
+      band: [
+        week.reduce((s, d) => s + d.band[0], 0) / week.length,
+        week.reduce((s, d) => s + d.band[1], 0) / week.length,
+      ],
+      comparePoint: null,
+    });
+  }
 
   const hasShortfall = Boolean(forecast.first_gap_date);
   const confidencePercent = Math.round(
@@ -143,6 +165,32 @@ export function ForecastChart({
       {/* Chart Canvas */}
       <div className="h-56 sm:h-64 w-full pt-2">
         <ResponsiveContainer width="100%" height="100%">
+          {bars ? (
+            <BarChart data={weekly} margin={{ left: 8, right: 16, top: 12, bottom: 4 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(15, 23, 42, 0.05)" vertical={false} />
+              <XAxis
+                dataKey="date"
+                tickFormatter={(d: string) => formatDate(d)}
+                tick={{ fontSize: 11, fill: "var(--color-pewter)" }}
+                axisLine={{ stroke: "rgba(15, 23, 42, 0.08)" }}
+                tickLine={false}
+                minTickGap={30}
+              />
+              <YAxis
+                tickFormatter={(v: number) => formatCurrency(v)}
+                tick={{ fontSize: 11, fill: "var(--color-pewter)" }}
+                axisLine={false}
+                tickLine={false}
+                width={82}
+              />
+              <Tooltip cursor={{ fill: "rgba(198, 241, 53, 0.18)" }} content={<CustomForecastTooltip compareLabel={compareLabel} />} />
+              <Bar dataKey="p50" radius={[6, 6, 0, 0]} maxBarSize={44} isAnimationActive={false}>
+                {weekly.map((w) => (
+                  <Cell key={w.date} fill={w.p50 < 0 ? "#e11d48" : "#a6d11a"} />
+                ))}
+              </Bar>
+            </BarChart>
+          ) : (
           <ComposedChart data={data} margin={{ left: 8, right: 16, top: 12, bottom: 4 }}>
             <defs>
               <linearGradient id="emberForecastGlow" x1="0" y1="0" x2="0" y2="1">
@@ -229,6 +277,7 @@ export function ForecastChart({
               />
             )}
           </ComposedChart>
+          )}
         </ResponsiveContainer>
       </div>
 

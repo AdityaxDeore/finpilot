@@ -14,6 +14,7 @@ import {
   YAxis,
 } from "recharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/shadcn/card";
+import { MerchantLogo } from "@/components/dashboard/MerchantLogo";
 import { formatCurrency } from "@/lib/format";
 import type { SpendSummary } from "@/lib/spend";
 
@@ -44,11 +45,11 @@ export function CategoryDonut({ summary }: { summary: SpendSummary }) {
         {top.length === 0 ? (
           <Empty>No spending recorded this month.</Empty>
         ) : (
-          <div className="flex flex-col items-center gap-4 2xl:flex-row">
-            <div className="relative h-40 w-40 shrink-0">
+          <div className="flex flex-col items-center gap-4 sm:flex-row sm:gap-8">
+            <div className="relative h-56 w-56 shrink-0">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={top} dataKey="total" nameKey="label" innerRadius={48} outerRadius={74} paddingAngle={3} cornerRadius={6} stroke="none" isAnimationActive={false}>
+                  <Pie data={top} dataKey="total" nameKey="label" innerRadius={66} outerRadius={104} paddingAngle={3} cornerRadius={6} stroke="none" isAnimationActive={false}>
                     {top.map((c) => (
                       <Cell key={c.category} fill={c.color} />
                     ))}
@@ -134,7 +135,10 @@ export function TopMerchants({ summary }: { summary: SpendSummary }) {
             {summary.merchants.map((m, i) => (
               <li key={m.merchant}>
                 <div className="mb-1 flex items-baseline justify-between gap-2 text-sm">
-                  <span className="truncate font-medium text-ink">{m.merchant}</span>
+                  <span className="flex min-w-0 items-center gap-2">
+                    <MerchantLogo merchant={m.merchant} color={colors[i % colors.length]} className="size-6 rounded-md" />
+                    <span className="truncate font-medium text-ink">{m.merchant}</span>
+                  </span>
                   <span className="shrink-0 font-semibold tnum text-ink">{formatCurrency(m.total)}</span>
                 </div>
                 <div className="h-2.5 overflow-hidden rounded-full bg-fog">
@@ -157,8 +161,8 @@ export function SpendingShifts({ summary }: { summary: SpendSummary }) {
   return (
     <Card className="min-w-0 bg-tint-sun">
       <CardHeader>
-        <CardTitle className="font-display text-lg">What changed vs. last month</CardTitle>
-        <CardDescription>Categories moving the most</CardDescription>
+        <CardTitle className="font-display text-lg">Spending: last month and this month</CardTitle>
+        <CardDescription>The biggest changes</CardDescription>
       </CardHeader>
       <CardContent>
         {shifts.length === 0 ? (
@@ -178,10 +182,10 @@ export function SpendingShifts({ summary }: { summary: SpendSummary }) {
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-ink">
-                      {c.label} {up ? "up" : "down"} {Math.abs(Math.round(c.change ?? 0))}%
+                      {c.label}: {up ? "spent more" : "spent less"}
                     </p>
                     <p className="text-xs text-graphite tnum">
-                      {formatCurrency(c.prev)} → {formatCurrency(c.total)}
+                      Last month {formatCurrency(c.prev)}, this month {formatCurrency(c.total)}
                     </p>
                   </div>
                 </li>

@@ -1,43 +1,54 @@
-import { formatCurrency, formatPercent } from "@/lib/format";
+"use client";
 
-/** Lime summary card, laid out like a bank card: balance on top, details underneath. */
+import { useCallback } from "react";
+import { PiggyBank, TrendingDown, TrendingUp } from "lucide-react";
+import { formatCurrency, formatPercent } from "@/lib/format";
+import { BigAmount } from "@/components/dashboard/BigAmount";
+import { api } from "@/lib/api";
+import { useAsync } from "@/lib/hooks";
+
+function Chip({ icon: Icon, label, value, tone }: { icon: typeof PiggyBank; label: string; value: string; tone?: string }) {
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full bg-fog px-3 py-2 text-xs text-graphite">
+      <Icon className="size-4 text-ink" />
+      {label}
+      <span className={`font-semibold tnum ${tone ?? "text-ink"}`}>{value}</span>
+    </span>
+  );
+}
+
+/** "My Balance" card: money you actually hold (bank + savings), with any debt shown separately so the headline is never a confusing negative. */
 export function CashSummaryCard({
-  netWorth,
+  userId,
   income,
   expenses,
   savingsRate,
 }: {
-  netWorth: number;
+  userId: string;
   income: number;
   expenses: number;
   savingsRate: number;
 }) {
-  const rows: [string, string][] = [
-    ["Money in / month", formatCurrency(income)],
-    ["Money out / month", formatCurrency(expenses)],
-    ["Savings rate", formatPercent(savingsRate)],
-  ];
+  const fetchAccounts = useCallback(() => api.accounts(userId), [userId]);
+  const { data: accounts } = useAsync(fetchAccounts, [userId]);
+  const held = (accounts ?? []).filter((a) => a.type === "checking" || a.type === "savings").reduce((s, a) => s + a.balance, 0);
+  const owed = (accounts ?? []).filter((a) => a.balance < 0 && a.type !== "checking" && a.type !== "savings").reduce((s, a) => s - a.balance, 0);
   return (
-    <div className="flex h-full flex-col gap-4 rounded-card bg-white p-4 shadow-sm">
-      <div className="rounded-3xl bg-lime p-5 text-ink">
-        <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-ink/60">
-          <span>Net worth</span>
-          <span className="flex">
-            <i className="size-5 rounded-full bg-lime-dark" />
-            <i className="-ml-2 size-5 rounded-full bg-lime-dark/40" />
-          </span>
-        </div>
-        <p className="mt-3 font-display text-4xl font-semibold tnum">{formatCurrency(netWorth)}</p>
-        <p className="mt-1 text-xs text-ink/60">Liquid + invested</p>
+    <div className="flex h-full flex-col justify-between gap-5 rounded-card bg-white p-5 shadow-sm">
+      <div className="flex items-center justify-between text-sm font-medium text-ink">
+        <span>My Balance</span>
+        <span className="text-graphite">Right now</span>
       </div>
-      <dl className="grid gap-2 px-1 text-sm">
-        {rows.map(([k, v]) => (
-          <div key={k} className="flex items-center justify-between">
-            <dt className="text-graphite">{k}</dt>
-            <dd className="font-semibold tnum text-ink">{v}</dd>
-          </div>
-        ))}
-      </dl>
+      <div>
+        <p className="text-sm text-graphite">Money in your accounts</p>
+        <BigAmount value={held} className="mt-1 block text-4xl" />
+        {owed > 0 && <p className="mt-1 text-xs text-graphite">You also owe {formatCurrency(owed)} on cards and loans.</p>}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Chip icon={TrendingUp} label="Money in each month" value={`+${formatCurrency(income)}`} tone="text-leaf" />
+        <Chip icon={TrendingDown} label="Money out each month" value={`-${formatCurrency(expenses)}`} />
+        <Chip icon={PiggyBank} label="You save" value={formatPercent(savingsRate)} tone={savingsRate < 0 ? "text-rose-600" : "text-leaf"} />
+      </div>
     </div>
   );
 }

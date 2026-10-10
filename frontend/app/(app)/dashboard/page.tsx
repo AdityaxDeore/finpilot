@@ -3,33 +3,32 @@
 import { useCallback, useMemo } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Calculator, FileText, Link2, RefreshCw, Sparkles, TrendingDown, TrendingUp } from "lucide-react";
+import { Calculator, FileText, Link2, RefreshCw, Sparkles, TrendingDown } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAsync, useUserId } from "@/lib/hooks";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/shadcn/card";
 import { Button } from "@/components/shadcn/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/shadcn/tabs";
-import {
-  Card as LegacyCard,
-  CardHeader as LegacyCardHeader,
-  CardTitle as LegacyCardTitle,
-} from "@/components/ui/Card";
+import { Card as LegacyCard } from "@/components/ui/Card";
 import { Button as LegacyButton } from "@/components/ui/Button";
 import { HealthScoreCard } from "@/components/dashboard/HealthScoreCard";
 import { ForecastChart } from "@/components/dashboard/ForecastChart";
-import { RecurringList } from "@/components/dashboard/RecurringList";
-import { DebtsList } from "@/components/dashboard/DebtsList";
-import { AccountCards } from "@/components/dashboard/AccountCards";
 import { NetWorthTrend } from "@/components/dashboard/NetWorthTrend";
 import { KpiCard } from "@/components/dashboard/KpiCard";
-import { RecentTransactions } from "@/components/dashboard/RecentTransactions";
+import { BudgetRemainingCard } from "@/components/dashboard/BudgetRemainingCard";
+import { IncomeCard } from "@/components/dashboard/IncomeCard";
+import { TransactionHistory } from "@/components/dashboard/TransactionHistory";
 import { CashSummaryCard } from "@/components/dashboard/CashSummaryCard";
+import { SpendByCategoryBars } from "@/components/dashboard/SpendByCategoryBars";
+import { MoneySummary } from "@/components/dashboard/MoneySummary";
+import { InvestGuide } from "@/components/dashboard/InvestGuide";
 import { PromoCard } from "@/components/dashboard/PromoCard";
 import { CategoryDonut, IncomeVsSpend, SpendingShifts, TopMerchants } from "@/components/dashboard/SpendCharts";
 import { EvilHoverTraceBarChart } from "@/components/shadcn/hover-trace-bar-chart";
 import { summarizeSpend } from "@/lib/spend";
 import type { Transaction } from "@/lib/types";
-import { AnswerContractView } from "@/components/AnswerContractView";
+import { WalletIcon } from "@animateicons/react/lucide";
+import { LoadingMark } from "@/components/ui/LoopIcon";
 import {
   StatTileSkeleton,
   HealthScoreSkeleton,
@@ -74,7 +73,9 @@ export default function DashboardPage() {
 
   if (loading && !data) {
     return (
-      <div className="flex flex-col gap-4 animate-pulse">
+      <div className="flex flex-col gap-4">
+        <LoadingMark icon={WalletIcon} label="Loading your dashboard" />
+        <div className="flex flex-col gap-4 animate-pulse">
         <div className="h-60 rounded-card elevation-card p-6">
           <HealthScoreSkeleton />
         </div>
@@ -95,6 +96,7 @@ export default function DashboardPage() {
           <LegacyCard>
             <ListItemSkeleton rows={2} />
           </LegacyCard>
+        </div>
         </div>
       </div>
     );
@@ -188,69 +190,53 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Bento grid: three stretching columns, so every column ends on the same line while the cards inside differ in height */}
+      {/* Row 1: four equal summary cards */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <BudgetRemainingCard userId={userId} spend={spend} />
+        <CashSummaryCard
+          userId={userId}
+          income={data.monthly_income}
+          expenses={data.monthly_expenses}
+          savingsRate={data.savings_rate}
+        />
+        <IncomeCard months={spend.months} txns={txns ?? []} />
+        <KpiCard
+          label="Money out"
+          value={formatCurrency(data.monthly_expenses)}
+          sub="per month"
+          icon={TrendingDown}
+          variant="ink"
+          series={months.map((m) => m.spend)}
+        />
+      </div>
+
+      {/* Row 2: big category donut, smaller monthly spend, promo */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-        <div className="flex flex-col gap-4 lg:col-span-4 [&>*]:flex-1 [&>*>*]:h-full">
-          <div className="lg:flex-[3]">
-            <RecentTransactions txns={txns ?? []} />
-          </div>
-          <div className="lg:flex-[2]">
-            <CashSummaryCard
-              netWorth={data.net_worth}
-              income={data.monthly_income}
-              expenses={data.monthly_expenses}
-              savingsRate={data.savings_rate}
-            />
-          </div>
+        <div className="flex lg:col-span-6 [&>*]:flex-1">
+          <CategoryDonut summary={spend} />
         </div>
-
-        <div className="flex flex-col gap-4 lg:col-span-5 [&>*]:flex-1 [&>*>*]:h-full">
-          <div className="lg:flex-[3]">
-            <CategoryDonut summary={spend} />
-          </div>
-          <Card className="min-w-0 lg:flex-[2]">
-            <CardHeader>
-              <CardTitle className="font-display text-lg">Monthly spend</CardTitle>
-              <CardDescription>Hover a bar to trace its value</CardDescription>
-            </CardHeader>
-            <CardContent className="h-56">
-              {spend.months.length > 0 ? (
-                <EvilHoverTraceBarChart
-                  label="Spent"
-                  data={spend.months.map((m) => ({ month: m.label, amount: Math.round(m.spend) }))}
-                />
-              ) : (
-                <Empty>Monthly spending will chart here.</Empty>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="flex flex-col gap-4 lg:col-span-3 [&>*]:flex-1 [&>*>*]:h-full">
-          <div>
-          <KpiCard
-            label="Money in"
-            value={formatCurrency(data.monthly_income)}
-            sub="per month"
-            icon={TrendingUp}
-            series={months.map((m) => m.income)}
-          />
-          </div>
-          <div>
-          <KpiCard
-            label="Money out"
-            value={formatCurrency(data.monthly_expenses)}
-            sub="per month"
-            icon={TrendingDown}
-            variant="ink"
-            series={months.map((m) => m.spend)}
-          />
-          </div>
-          <div className="lg:flex-[1.3]">
-            <PromoCard connected={connected} topCategory={topCategory} />
-          </div>
+        <Card className="min-w-0 lg:col-span-3">
+          <CardHeader>
+            <CardTitle className="font-display text-lg">Monthly spend</CardTitle>
+            <CardDescription>Hover a bar to trace its value</CardDescription>
+          </CardHeader>
+          <CardContent className="min-h-52 flex-1">
+            {spend.months.length > 0 ? (
+              <EvilHoverTraceBarChart
+                label="Spent"
+                data={spend.months.map((m) => ({ month: m.label, amount: Math.round(m.spend) }))}
+              />
+            ) : (
+              <Empty>Monthly spending will chart here.</Empty>
+            )}
+          </CardContent>
+        </Card>
+        <div className="flex lg:col-span-3 [&>*]:flex-1">
+          <PromoCard connected={connected} topCategory={topCategory} />
         </div>
       </div>
+
+      <TransactionHistory txns={txns ?? []} />
 
       {connected ? (
         <HealthScoreCard score={data.health_score} />
@@ -260,20 +246,24 @@ export default function DashboardPage() {
 
       {/* Forecast / net worth */}
       <Card className="min-w-0">
-        <Tabs defaultValue="forecast">
+        <Tabs defaultValue="spend">
           <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
             <div>
               <CardTitle>Outlook</CardTitle>
-              <CardDescription>Bootstrap-resampled volatility bands and balance history</CardDescription>
+              <CardDescription>Weekly spending by category, the 90-day forecast and net worth</CardDescription>
             </div>
             <TabsList>
+              <TabsTrigger value="spend">Spending mix</TabsTrigger>
               <TabsTrigger value="forecast">90-day cash flow</TabsTrigger>
               <TabsTrigger value="networth">Net worth</TabsTrigger>
             </TabsList>
           </CardHeader>
           <CardContent className="min-w-0">
+            <TabsContent value="spend">
+              <SpendByCategoryBars txns={txns ?? []} />
+            </TabsContent>
             <TabsContent value="forecast">
-              {connected ? <ForecastChart forecast={data.forecast} /> : <Empty>Your 90-day cash-flow forecast will draw here.</Empty>}
+              {connected ? <ForecastChart forecast={data.forecast} bars /> : <Empty>Your 90-day cash-flow forecast will draw here.</Empty>}
             </TabsContent>
             <TabsContent value="networth">
               {connected ? <NetWorthTrend userId={userId} /> : <Empty>Net worth history will appear here.</Empty>}
@@ -282,43 +272,22 @@ export default function DashboardPage() {
         </Tabs>
       </Card>
 
-      {/* Spending visuals */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      {/* Spending visuals: three cards in one row */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <IncomeVsSpend summary={spend} />
         <TopMerchants summary={spend} />
-      </div>
-      <SpendingShifts summary={spend} />
-
-      {/* Account Balances Cards */}
-      <AccountCards userId={userId} />
-
-      {/* Two-Column Grid: Recurring Commitments & Debts */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <RecurringList obligations={data.recurring_obligations} />
-        <DebtsList debts={data.debts} />
+        <SpendingShifts summary={spend} />
       </div>
 
-      {/* Three-Lane Insights Panel */}
-      <LegacyCard className="p-4 sm:p-5">
-        <LegacyCardHeader>
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-ember text-ink font-bold text-xs shadow-sm">
-              AI
-            </div>
-            <div>
-              <LegacyCardTitle>Autonomous Financial Insights & Guidance</LegacyCardTitle>
-              <p className="text-xs text-pewter mt-0.5">
-                Observed facts, forward-looking predictions, and high-impact actions
-              </p>
-            </div>
-          </div>
-        </LegacyCardHeader>
-        {connected ? (
-          <AnswerContractView answer={data.insights} />
-        ) : (
-          <Empty>Insights and next-best actions show up once your data is connected.</Empty>
-        )}
-      </LegacyCard>
+      <InvestGuide userId={userId} income={data.monthly_income} expenses={data.monthly_expenses} debts={data.debts} />
+
+      <MoneySummary
+        userId={userId}
+        debts={data.debts}
+        obligations={data.recurring_obligations}
+        insights={data.insights}
+        connected={connected}
+      />
     </motion.div>
   );
 }

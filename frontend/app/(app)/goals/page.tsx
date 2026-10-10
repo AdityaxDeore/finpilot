@@ -557,7 +557,7 @@ function CoverGoalCard({
 
         {/* Top Badges over image */}
         <div className="absolute top-3 left-3 right-3 flex items-center justify-between">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-white/90 bg-black/40 backdrop-blur-md px-2.5 py-0.5 rounded-full border border-white/20">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-white/90 bg-[#3f7d5c]/70 backdrop-blur-md px-2.5 py-0.5 rounded-full border border-white/20">
             {cover.category}
           </span>
 
