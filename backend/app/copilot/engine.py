@@ -35,7 +35,7 @@ from typing import Optional
 
 from pydantic import ValidationError
 
-from app.copilot import nugen, offline_router, tools
+from app.copilot import grok, nugen, offline_router, tools
 from app.core.config import get_settings
 from pydantic import BaseModel, Field
 
@@ -285,6 +285,20 @@ def _gemini_answer(user_id: str, message: str, history: Optional[list[ChatMessag
     raise RuntimeError(f"Gemini structured-output phase failed: {last_error}")
 
 
+def _grok_answer(user_id: str, message: str, history: Optional[list[ChatMessage]]) -> AnswerContract:
+    """One Grok call over the real, pre-fetched numbers (no recommendations: those need a simulation)."""
+    convo = _history_to_text(history)
+    user = (
+        (f"Conversation so far:\n{convo}\n\n" if convo else "")
+        + f"User question: {message}\n\nGrounded findings (real data, JSON):\n{json.dumps(nugen._context(user_id), default=str)}\n\n"
+        "Produce the strict AnswerContract JSON. Leave `recommendations` empty."
+    )
+    result = AnswerContract.model_validate(grok.complete_json(_SYSTEM_PROMPT_STRUCTURE, user))
+    if not result.query:
+        result.query = message
+    return result
+
+
 def answer(
     user_id: str,
     message: str,
@@ -308,7 +322,12 @@ def answer(
     pool = ThreadPoolExecutor(max_workers=1)
     second = pool.submit(nugen.second_opinion, user_id, message, history) if settings.has_nugen and not force_offline else None
     result = None
-    if settings.has_gemini and not force_offline:
+    if settings.has_xai and not force_offline:  # Grok first, Gemini is the fallback
+        try:
+            result = _grok_answer(user_id, message, history)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Grok copilot engine failed, falling back to Gemini: %s", exc)
+    if result is None and settings.has_gemini and not force_offline:
         try:
             result = _gemini_answer(user_id, message, history)
         except Exception as exc:  # noqa: BLE001 - deliberate broad boundary

@@ -18,6 +18,10 @@ load_dotenv(_REPO_ROOT / "backend" / ".env", override=False)
 
 
 class Settings:
+    # xAI Grok (first choice for the copilot; Gemini is the fallback)
+    xai_api_key: str = os.getenv("XAI_API_KEY", "")
+    xai_model: str = os.getenv("XAI_MODEL", "grok-4")
+
     # Gemini
     gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
     gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
@@ -43,6 +47,10 @@ class Settings:
     @property
     def has_firebase(self) -> bool:
         return bool(self.firebase_project_id)
+
+    @property
+    def has_xai(self) -> bool:
+        return bool(self.xai_api_key)
 
     @property
     def has_gemini(self) -> bool:
