@@ -4,11 +4,24 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { Maximize2, MessageCircle, Sparkles, X } from "lucide-react";
+import { Maximize2, MessageCircle, RotateCcw, Sparkles, X } from "lucide-react";
 import { PromptInputBox } from "@/components/copilot/PromptInputBox";
 import { api } from "@/lib/api";
 import { useUserId } from "@/lib/hooks";
 import { getOfflineOnly } from "@/lib/user";
+
+const STARTERS = ["How am I doing financially?", "What deadlines are coming up?", "Where did I spend the most?", "Which govt schemes suit me?"];
+
+/** Renders **bold** from the model as real bold text. */
+function Rich({ text }: { text: string }) {
+  return (
+    <>
+      {text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
+        part.startsWith("**") && part.endsWith("**") ? <strong key={i}>{part.slice(2, -2)}</strong> : part,
+      )}
+    </>
+  );
+}
 
 interface Msg {
   role: "user" | "assistant";
@@ -31,8 +44,8 @@ export function ChatPopup() {
 
   if (pathname.startsWith("/copilot")) return null;
 
-  async function send() {
-    const message = input.trim();
+  async function send(text?: string) {
+    const message = (text ?? input).trim();
     if (!message || loading) return;
     const history = msgs.slice(-8).map((m) => ({ role: m.role, content: m.text }));
     setMsgs((m) => [...m, { role: "user", text: message }]);
@@ -67,6 +80,11 @@ export function ChatPopup() {
                 <p className="text-sm font-semibold leading-tight">FinPilot</p>
                 <p className="text-[11px] text-white/60">Ask me about your money</p>
               </div>
+              {msgs.length > 0 && (
+                <button onClick={() => setMsgs([])} title="New chat" aria-label="New chat" className="rounded-full p-1.5 text-white/70 hover:bg-white/10 hover:text-white">
+                  <RotateCcw className="size-4" />
+                </button>
+              )}
               <Link href="/copilot" title="Open full Copilot" className="rounded-full p-1.5 text-white/70 hover:bg-white/10 hover:text-white">
                 <Maximize2 className="size-4" />
               </Link>
@@ -82,6 +100,15 @@ export function ChatPopup() {
                   {getOfflineOnly() && <span className="mt-1 block text-[11px] text-pewter">Offline mode is on: basic answers only.</span>}
                 </div>
               )}
+              {msgs.length === 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {STARTERS.map((q) => (
+                    <button key={q} onClick={() => send(q)} className="rounded-full border border-olive/25 bg-white px-3 py-1.5 text-xs text-olive transition-colors hover:bg-tint-lime">
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              )}
               {msgs.map((m, i) => (
                 <div key={i} className={m.role === "user" ? "flex justify-end" : "flex"}>
                   <p
@@ -91,16 +118,16 @@ export function ChatPopup() {
                         : "max-w-[90%] whitespace-pre-line rounded-2xl rounded-bl-md bg-white px-3.5 py-2 text-sm leading-relaxed text-ink"
                     }
                   >
-                    {m.text}
+                    <Rich text={m.text} />
                   </p>
                 </div>
               ))}
-              {loading && <p className="text-xs text-pewter">FinPilot is thinking…</p>}
+              {loading && <p className="animate-pulse text-xs text-pewter">FinPilot is thinking…</p>}
               <div ref={endRef} />
             </div>
 
             <div className="bg-white p-2.5">
-              <PromptInputBox value={input} onChange={setInput} onSend={send} isLoading={loading} placeholder="Ask FinPilot..." />
+              <PromptInputBox value={input} onChange={setInput} onSend={() => send()} isLoading={loading} placeholder="Ask FinPilot..." />
             </div>
           </motion.div>
         )}
