@@ -11,6 +11,8 @@ import { Button } from "@/components/shadcn/button";
 import { Badge } from "@/components/shadcn/badge";
 import { Progress } from "@/components/shadcn/progress";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/shadcn/dialog";
+import { LockKeyholeIcon } from "@animateicons/react/huge";
+import { LoopIcon } from "@/components/ui/LoopIcon";
 import { GooglePayMark } from "@/components/connect/GooglePayMark";
 
 const PROFILES: { id: ConnectProfile; name: string; blurb: string; color: string }[] = [
@@ -112,6 +114,12 @@ export function LinkGooglePayDialog({
 
         {step >= 0 && (
           <div className="grid gap-4 py-2">
+            <div className="flex items-center gap-3 rounded-2xl bg-tint-lime p-3 text-sm text-ink">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-lime">
+                <LoopIcon icon={LockKeyholeIcon} size={22} every={1600} />
+              </span>
+              Signing in securely. Your password is never shared with FinPilot.
+            </div>
             <Progress value={Math.min(100, ((step + 0.5) / STEPS.length) * 100)} className="h-2" />
             <ul className="grid gap-2.5">
               {STEPS.map((label, i) => (

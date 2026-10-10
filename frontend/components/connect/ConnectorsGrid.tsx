@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Banknote, FileText, Link2, LineChart, Unlink, type LucideIcon } from "lucide-react";
+import { Banknote, Download, FileText, Link2, LineChart, Sheet, Unlink, type LucideIcon } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Connector } from "@/lib/types";
 import { useConnectors } from "@/lib/connectors";
@@ -12,15 +12,30 @@ import { Badge } from "@/components/shadcn/badge";
 import { Card, CardContent } from "@/components/shadcn/card";
 import { Skeleton } from "@/components/shadcn/skeleton";
 import { LinkGooglePayDialog } from "@/components/connect/LinkGooglePayDialog";
+import { LinkSheetDialog } from "@/components/connect/LinkSheetDialog";
+import { AddCardDialog } from "@/components/connect/AddCardDialog";
+import { WalletCardsIcon } from "@animateicons/react/lucide";
+import { LoopIcon } from "@/components/ui/LoopIcon";
 import { GooglePayMark } from "@/components/connect/GooglePayMark";
 
 const ICONS: Record<string, { icon: LucideIcon; tone: string }> = {
   bank: { icon: Banknote, tone: "bg-tint-sky text-sky" },
   invoices: { icon: FileText, tone: "bg-tint-ember text-ember-dark" },
   investments: { icon: LineChart, tone: "bg-tint-leaf text-leaf" },
+  google_sheets: { icon: Sheet, tone: "bg-tint-leaf text-leaf" },
 };
 
-function ConnectorCard({ c, onLink, onUnlink }: { c: Connector; onLink: () => void; onUnlink: () => void }) {
+function ConnectorCard({
+  c,
+  onLink,
+  onUnlink,
+  onExport,
+}: {
+  c: Connector;
+  onLink: () => void;
+  onUnlink: () => void;
+  onExport: () => void;
+}) {
   const meta = ICONS[c.id];
   return (
     <Card className="relative gap-4 overflow-hidden py-5">
@@ -52,9 +67,14 @@ function ConnectorCard({ c, onLink, onUnlink }: { c: Connector; onLink: () => vo
           )}
         </div>
         {c.connected ? (
-          <Button variant="outline" className="rounded-full" onClick={onUnlink}>
-            <Unlink /> Disconnect
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1 rounded-full" onClick={onExport}>
+              <Download /> Export
+            </Button>
+            <Button variant="outline" className="flex-1 rounded-full" onClick={onUnlink}>
+              <Unlink /> Disconnect
+            </Button>
+          </div>
         ) : (
           <Button
             disabled={!c.available}
@@ -72,6 +92,8 @@ function ConnectorCard({ c, onLink, onUnlink }: { c: Connector; onLink: () => vo
 export function ConnectorsGrid() {
   const { data, loading, error, userId } = useConnectors();
   const [dialog, setDialog] = useState(false);
+  const [cardDialog, setCardDialog] = useState(false);
+  const [sheetDialog, setSheetDialog] = useState(false);
 
   async function unlink(c: Connector) {
     try {
@@ -79,6 +101,25 @@ export function ConnectorsGrid() {
       toast(`${c.name} disconnected. Imported data was removed.`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not disconnect");
+    }
+  }
+
+  async function link(c: Connector) {
+    if (c.id === "google_pay") return setDialog(true);
+    if (c.id === "google_sheets") return setSheetDialog(true);
+    try {
+      await api.connectConnector(userId, c.id, "priya");
+      toast(`${c.name} connected.`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not connect");
+    }
+  }
+
+  async function exportData(c: Connector) {
+    try {
+      await api.exportConnector(userId, c.id);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not export");
     }
   }
 
@@ -96,9 +137,22 @@ export function ConnectorsGrid() {
     <>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {data?.map((c) => (
-          <ConnectorCard key={c.id} c={c} onLink={() => setDialog(true)} onUnlink={() => unlink(c)} />
+          <ConnectorCard key={c.id} c={c} onLink={() => link(c)} onUnlink={() => unlink(c)} onExport={() => exportData(c)} />
         ))}
+        <button
+          type="button"
+          onClick={() => setCardDialog(true)}
+          className="flex min-h-52 flex-col items-center justify-center gap-3 rounded-card border-2 border-dashed border-lime-dark/60 bg-tint-lime p-5 text-ink transition hover:bg-lime/40"
+        >
+          <span className="flex size-14 items-center justify-center rounded-full bg-lime">
+            <LoopIcon icon={WalletCardsIcon} size={28} />
+          </span>
+          <span className="font-display text-lg font-semibold">Add a card</span>
+          <span className="text-xs text-graphite">Credit or debit, demo only</span>
+        </button>
       </div>
+      <AddCardDialog open={cardDialog} onOpenChange={setCardDialog} />
+      <LinkSheetDialog open={sheetDialog} onOpenChange={setSheetDialog} userId={userId} />
       <LinkGooglePayDialog open={dialog} onOpenChange={setDialog} userId={userId} />
     </>
   );
