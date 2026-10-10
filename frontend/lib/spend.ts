@@ -5,7 +5,7 @@ const NON_SPEND: TxnCategory[] = ["transfer", "credit_card_payment", "income"];
 
 export const CATEGORY_META: Record<TxnCategory, { label: string; color: string }> = {
   income: { label: "Income", color: "#12a56b" },
-  rent_housing: { label: "Rent & housing", color: "#14213d" },
+  rent_housing: { label: "Rent & housing", color: "#6d7cf5" },
   emi_loan: { label: "EMI & loans", color: "#e5484d" },
   groceries: { label: "Groceries", color: "#12a56b" },
   dining: { label: "Dining", color: "#ff7a2f" },
@@ -115,4 +115,60 @@ export function summarizeSpend(txns: Transaction[], monthsBack = 6): SpendSummar
     merchants: [...merch.values()].sort((a, b) => b.total - a.total).slice(0, 6),
     totalSpend: categories.reduce((n, c) => n + c.total, 0),
   };
+}
+
+export interface WeeklyStack {
+  /** Stack segments, bottom to top: biggest categories first, the rest merged into "Other". */
+  keys: { key: string; label: string; color: string }[];
+  /** One row per Monday-start week: { week: "YYYY-MM-DD", total, [categoryKey]: amount }. */
+  rows: ({ week: string; total: number } & Record<string, number | string>)[];
+}
+
+const DAY = 86_400_000;
+
+/** Monday (UTC) of the week containing an ISO date, as YYYY-MM-DD. */
+function weekStart(date: string): string {
+  const d = new Date(`${date.slice(0, 10)}T00:00:00Z`);
+  return new Date(d.getTime() - ((d.getUTCDay() + 6) % 7) * DAY).toISOString().slice(0, 10);
+}
+
+/** Real spend per week split by category (same spend rules as summarizeSpend), over the last `weeks` weeks of data. */
+export function weeklyCategorySpend(txns: Transaction[], weeks = 26, topN = 6): WeeklyStack {
+  const spend = txns.filter((t) => t.amount < 0 && !NON_SPEND.includes(t.category));
+  if (spend.length === 0) return { keys: [], rows: [] };
+
+  const lastWeek = weekStart(spend.reduce((m, t) => (t.date > m ? t.date : m), spend[0].date));
+  const firstWeek = new Date(new Date(`${lastWeek}T00:00:00Z`).getTime() - (weeks - 1) * 7 * DAY).toISOString().slice(0, 10);
+
+  const byWeek = new Map<string, Map<TxnCategory, number>>();
+  const totals = new Map<TxnCategory, number>();
+  for (const t of spend) {
+    const w = weekStart(t.date);
+    if (w < firstWeek || w > lastWeek) continue;
+    const cats = byWeek.get(w) ?? new Map<TxnCategory, number>();
+    cats.set(t.category, (cats.get(t.category) ?? 0) + -t.amount);
+    byWeek.set(w, cats);
+    totals.set(t.category, (totals.get(t.category) ?? 0) + -t.amount);
+  }
+
+  const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1]).map(([c]) => c);
+  const top = ranked.slice(0, topN);
+  const hasOther = ranked.length > topN;
+  const keys = top.map((c) => ({ key: c as string, label: CATEGORY_META[c].label, color: CATEGORY_META[c].color }));
+  if (hasOther) keys.push({ key: "other_merged", label: "Everything else", color: "#c9bfa8" });
+
+  const rows: WeeklyStack["rows"] = [];
+  for (let t = new Date(`${firstWeek}T00:00:00Z`).getTime(); t <= new Date(`${lastWeek}T00:00:00Z`).getTime(); t += 7 * DAY) {
+    const week = new Date(t).toISOString().slice(0, 10);
+    const cats = byWeek.get(week) ?? new Map<TxnCategory, number>();
+    const row: WeeklyStack["rows"][number] = { week, total: 0 };
+    for (const k of keys) row[k.key] = 0;
+    for (const [c, v] of cats) {
+      const k = top.includes(c) ? (c as string) : "other_merged";
+      row[k] = (row[k] as number) + v;
+      row.total += v;
+    }
+    rows.push(row);
+  }
+  return { keys, rows };
 }

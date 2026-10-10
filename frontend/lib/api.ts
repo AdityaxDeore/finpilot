@@ -43,6 +43,11 @@ import type {
   TransactionUpdate,
   UpdateBudgetRequest,
   UpdateGoalRequest,
+  SecurityEvent,
+  SecurityFinding,
+  SecurityGraph,
+  SecurityReport,
+  MyData,
 } from "./types";
 import { publishCopilotInsights } from "./copilotBus";
 import { DATA_CHANGED_EVENT } from "./hooks";
@@ -179,13 +184,62 @@ export const api = {
 
   // Connectors: linking a source is what fills the app with data
   connectors: (userId: string) => apiFetch<Connector[]>(`/api/connectors/${userId}`),
-  connectConnector: (userId: string, connector: string, profile: ConnectProfile) =>
+  connectConnector: (userId: string, connector: string, profile: ConnectProfile, url = "") =>
     apiFetch<{ connected: boolean; accounts: number; transactions: number }>(
       `/api/connectors/${userId}/${connector}/connect`,
-      { method: "POST", body: JSON.stringify({ profile }) }
+      { method: "POST", body: JSON.stringify({ profile, url }) }
     ),
+  /** Re-reads the linked Google Sheet. Only announces a data change when the sheet actually changed. */
+  syncSheet: async (userId: string): Promise<boolean> => {
+    const res = await fetch(`${API_URL}/api/connectors/${userId}/google_sheets/sync`, { method: "POST", headers: await authHeader() });
+    if (!res.ok) throw new Error(`Sheet sync failed: ${res.status}`);
+    const { changed } = (await res.json()) as { changed: boolean };
+    if (changed) notifyIfWrite("POST");
+    return changed;
+  },
+  /** Downloads a connected source's dataset as a JSON file. */
+  exportConnector: async (userId: string, connector: string) => {
+    const res = await fetch(`${API_URL}/api/connectors/${userId}/${connector}/export`, { headers: await authHeader() });
+    if (!res.ok) throw new Error(`Export failed: ${res.status} ${await res.text()}`);
+    const url = URL.createObjectURL(await res.blob());
+    const a = Object.assign(document.createElement("a"), { href: url, download: `${connector}.json` });
+    a.click();
+    URL.revokeObjectURL(url);
+  },
   disconnectConnector: (userId: string, connector: string) =>
     apiFetch<void>(`/api/connectors/${userId}/${connector}`, { method: "DELETE" }),
+
+  // Security suite: Evidence Room, Twin Simulator, My Data
+  /** Streams agent progress events (NDJSON); the last event is the saved report. */
+  investigate: async (userId: string, onEvent: (e: SecurityEvent) => void) => {
+    const res = await fetch(`${API_URL}/api/security/${userId}/investigate`, { method: "POST", headers: await authHeader() });
+    if (!res.ok || !res.body) throw new Error(`Investigation failed: ${res.status}`);
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split("\n");
+      buf = lines.pop() ?? "";
+      lines.filter(Boolean).forEach((l) => onEvent(JSON.parse(l)));
+    }
+  },
+  securityReport: (userId: string) => apiFetch<SecurityReport | null>(`/api/security/${userId}/report`),
+  plantThreats: (userId: string) => apiFetch<{ planted: number }>(`/api/security/${userId}/demo-threats`, { method: "POST" }),
+  clearThreats: (userId: string) => apiFetch<{ removed: number }>(`/api/security/${userId}/demo-threats`, { method: "DELETE" }),
+  securityGraph: (userId: string, months: number) => apiFetch<SecurityGraph>(`/api/security/${userId}/graph?months=${months}`),
+  simulateFraud: (userId: string, merchant: string, amount: number) =>
+    apiFetch<{ caught: boolean; findings: SecurityFinding[] }>(`/api/security/${userId}/simulate-fraud`, { method: "POST", body: JSON.stringify({ merchant, amount }) }),
+  myData: (userId: string) => apiFetch<MyData>(`/api/security/${userId}/data`),
+  exportAllData: async (userId: string) => {
+    const res = await fetch(`${API_URL}/api/security/${userId}/data/export`, { headers: await authHeader() });
+    if (!res.ok) throw new Error(`Export failed: ${res.status}`);
+    const url = URL.createObjectURL(await res.blob());
+    Object.assign(document.createElement("a"), { href: url, download: "finpilot-all-data.json" }).click();
+    URL.revokeObjectURL(url);
+  },
 
   // Net worth + accounts
   netWorthHistory: (userId: string, days = 180) =>

@@ -112,6 +112,8 @@ export interface AnswerContract {
   recommendations: Recommendation[];
   data_gaps: DataGap[];
   narrative: string;
+  nugen_narrative?: string | null;
+  nugen_confidence?: number | null;
 }
 
 export interface RecurringObligation {
@@ -690,3 +692,41 @@ export interface Connector {
 }
 
 export type ConnectProfile = "priya" | "arjun" | "meera";
+
+// Security suite
+export interface SecurityFinding {
+  agent: string;
+  severity: "high" | "medium" | "low";
+  title: string;
+  detail: string;
+  merchant: string | null;
+  amount: number;
+  txn_ids: string[];
+}
+export interface AgentSummary { agent: string; name: string; findings: number; ms: number; score?: number; source?: string | null; error?: string | null }
+export interface SecurityReport {
+  created_at: string;
+  risk_score: number;
+  risk_level: "high" | "medium" | "low";
+  transactions_checked: number;
+  agents: AgentSummary[];
+  findings: SecurityFinding[];
+  verdict: { headline: string; what_is_wrong: string; what_to_do: string[] } | null;
+  verdict_source: string | null;
+  verdict_error: string | null;
+  demo_threats_present: boolean;
+}
+export type SecurityEvent =
+  | ({ type: "agent"; agent: string; status: "running" | "done" } & Partial<AgentSummary>)
+  | { type: "report"; report: SecurityReport };
+export interface GraphNode { id: string; label: string; kind: "you" | "account" | "category" | "merchant"; amount: number; flagged: boolean; findings: string[] }
+export interface GraphEdge { source: string; target: string; amount: number; flagged: boolean }
+export interface SecurityGraph {
+  months: number;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  summary: { flagged_merchants: number; money_at_risk: number; total_spend: number };
+}
+export interface DataSource { id: string; name: string; detail: string | null; records: number; preview: unknown[]; disconnectable: boolean }
+export interface AccessEntry { when: string; event: string; method: string; path: string; detail: string; status: number }
+export interface MyData { sources: DataSource[]; access_log: AccessEntry[] }
