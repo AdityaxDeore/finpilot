@@ -8,14 +8,12 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlmodel import Session, select
 
 from app.api.goals_router import router
-from app.core.db import engine, init_db
+from app.core import store
 from app.ingest.seed import seed_all
 from app.models import GoalRow
 
-init_db()
 seed_all()
 
 app = FastAPI()
@@ -24,10 +22,7 @@ client = TestClient(app)
 
 
 def _cleanup_goals(user_id: str) -> None:
-    with Session(engine) as session:
-        for row in session.exec(select(GoalRow).where(GoalRow.user_id == user_id)).all():
-            session.delete(row)
-        session.commit()
+    store.delete_where(GoalRow, user_id=user_id)
 
 
 def test_create_then_list_shows_goal_with_progress():

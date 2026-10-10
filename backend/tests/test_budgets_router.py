@@ -10,18 +10,15 @@ exercise the router's business logic directly.
 from __future__ import annotations
 
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlmodel import Session
 
 from app.api.budgets_router import router as budgets_router
 from app.core.auth import resolve_user_id
-from app.core.db import engine, init_db
+from app.core import store
 from app.models import TransactionRow
-
-init_db()
 
 USER = f"test-budget-user-{uuid.uuid4()}"
 OTHER_USER = f"test-budget-user-other-{uuid.uuid4()}"
@@ -31,23 +28,21 @@ app.include_router(budgets_router, prefix="/api")
 app.dependency_overrides[resolve_user_id] = lambda: USER
 client = TestClient(app)
 
-TODAY = date.today()
+TODAY = datetime.now(timezone.utc).date()  # app code uses UTC dates
 
 
 def _add_txn(user_id: str, *, days_ago: int, amount: float, merchant: str, category: str, is_recurring: bool = False):
-    with Session(engine) as session:
-        session.add(
-            TransactionRow(
-                user_id=user_id,
-                account_id="acc-test",
-                date=TODAY - timedelta(days=days_ago),
-                amount=amount,
-                merchant=merchant,
-                category=category,
-                is_recurring=is_recurring,
-            )
+    store.put(
+        TransactionRow(
+            user_id=user_id,
+            account_id="acc-test",
+            date=TODAY - timedelta(days=days_ago),
+            amount=amount,
+            merchant=merchant,
+            category=category,
+            is_recurring=is_recurring,
         )
-        session.commit()
+    )
 
 
 def setup_module(_module):
@@ -133,14 +128,11 @@ def test_delete_budget_removes_it_from_list():
 
 
 def test_delete_someone_elses_budget_returns_404():
-    with Session(engine) as session:
-        from app.models import BudgetRow
+    from app.models import BudgetRow
 
-        row = BudgetRow(user_id=OTHER_USER, category="shopping", monthly_limit=1000.0)
-        session.add(row)
-        session.commit()
-        session.refresh(row)
-        other_budget_id = row.id
+    row = BudgetRow(user_id=OTHER_USER, category="shopping", monthly_limit=1000.0)
+    store.put(row)
+    other_budget_id = row.id
 
     r = client.delete(f"/api/budgets/{USER}/{other_budget_id}")
     assert r.status_code == 404

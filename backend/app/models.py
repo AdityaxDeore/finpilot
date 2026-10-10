@@ -1,8 +1,8 @@
-"""SQLModel ORM models -- mirror supabase/migrations/*.sql exactly.
+"""Row schemas for the Firestore collections (via app.core.store).
 
-Every user-owned table carries `user_id` (Supabase auth.uid()) and RLS is
-enforced at the Postgres level (see migrations); these models are used for
-querying via SQLAlchemy with the service-role connection on the backend.
+Collection name = __tablename__, document id = id. Every user-owned row carries
+`user_id` (the Firebase Auth uid). SQLModel is kept only for validation and
+JSON (de)serialisation of rows.
 """
 from __future__ import annotations
 
@@ -110,6 +110,22 @@ class EventRow(SQLModel, table=True):
     user_id: str = Field(index=True)
     kind: str
     payload_json: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class CopilotInsightRow(SQLModel, table=True):
+    """Always-on copilot pop-up insight produced when new data lands."""
+
+    __tablename__ = "copilot_insights"
+
+    id: str = Field(default_factory=_uuid, primary_key=True)
+    user_id: str = Field(index=True)
+    txn_id: str | None = None
+    severity: str  # "info" | "positive" | "warning" | "critical"
+    title: str
+    body: str
+    action_label: str | None = None
+    action_href: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 

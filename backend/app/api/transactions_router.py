@@ -7,10 +7,9 @@ import json
 from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlmodel import Session, func, select
 
+from app.core import store
 from app.core.auth import resolve_user_id
-from app.core.db import engine
 from app.ingest.categorize import matches_pattern
 from app.models import CategorizationRuleRow, TransactionRow
 from app.schemas import (
@@ -79,43 +78,32 @@ def list_transactions(
         except ValueError:
             raise HTTPException(400, f"Unknown category: {category!r}")
 
-    conditions = [TransactionRow.user_id == user_id]
+    rows = store.query(TransactionRow, user_id=user_id)
     if category is not None:
-        conditions.append(TransactionRow.category == category)
+        rows = [r for r in rows if r.category == category]
     if merchant is not None:
-        conditions.append(func.lower(TransactionRow.merchant).contains(merchant.lower()))
+        rows = [r for r in rows if merchant.lower() in r.merchant.lower()]
     if date_from is not None:
-        conditions.append(TransactionRow.date >= date_from)
+        rows = [r for r in rows if r.date >= date_from]
     if date_to is not None:
-        conditions.append(TransactionRow.date <= date_to)
+        rows = [r for r in rows if r.date <= date_to]
     if review_status is not None:
-        conditions.append(TransactionRow.review_status == review_status)
+        rows = [r for r in rows if r.review_status == review_status]
     if tag is not None:
-        conditions.append(func.lower(func.coalesce(TransactionRow.tags, "")).contains(tag.lower()))
+        rows = [r for r in rows if tag.lower() in (r.tags or "").lower()]
     if search is not None:
-        needle = f"%{search.lower()}%"
-        conditions.append(
-            func.lower(TransactionRow.merchant).like(needle)
-            | func.lower(func.coalesce(TransactionRow.description, "")).like(needle)
-            | func.lower(func.coalesce(TransactionRow.notes, "")).like(needle)
-            | func.lower(func.coalesce(TransactionRow.tags, "")).like(needle)
-        )
+        needle = search.lower()
+        rows = [
+            r for r in rows
+            if any(needle in (v or "").lower() for v in (r.merchant, r.description, r.notes, r.tags))
+        ]
 
-    with Session(engine) as session:
-        total = session.exec(
-            select(func.count()).select_from(TransactionRow).where(*conditions)
-        ).one()
-
-        rows = session.exec(
-            select(TransactionRow)
-            .where(*conditions)
-            .order_by(TransactionRow.date.desc())
-            .offset((page - 1) * page_size)
-            .limit(page_size)
-        ).all()
+    total = len(rows)
+    rows.sort(key=lambda r: (r.date, r.created_at), reverse=True)
+    rows = rows[(page - 1) * page_size : page * page_size]
 
     items = [_row_to_transaction(row) for row in rows]
-    return TransactionPage(items=items, total=int(total), page=page, page_size=page_size)
+    return TransactionPage(items=items, total=total, page=page, page_size=page_size)
 
 
 @router.get("/transactions/{user_id}/review-queue", response_model=ReviewQueueResponse)
@@ -123,24 +111,12 @@ def get_review_queue(
     user_id: str = Depends(resolve_user_id),
     limit: int = Query(default=20, ge=1, le=100),
 ) -> ReviewQueueResponse:
-    with Session(engine) as session:
-        conditions = [
-            TransactionRow.user_id == user_id,
-            (TransactionRow.review_status == "pending") | (TransactionRow.review_status == None),  # noqa: E711
-        ]
-        pending_count = session.exec(
-            select(func.count()).select_from(TransactionRow).where(*conditions)
-        ).one()
-
-        rows = session.exec(
-            select(TransactionRow)
-            .where(*conditions)
-            .order_by(TransactionRow.date.desc(), TransactionRow.created_at.desc())
-            .limit(limit)
-        ).all()
+    pending = [r for r in store.query(TransactionRow, user_id=user_id) if r.review_status in ("pending", None)]
+    pending.sort(key=lambda r: (r.date, r.created_at), reverse=True)
+    rows = pending[:limit]
 
     items = [_row_to_transaction(r) for r in rows]
-    return ReviewQueueResponse(pending_count=int(pending_count), items=items)
+    return ReviewQueueResponse(pending_count=len(pending), items=items)
 
 
 @router.post("/transactions/{user_id}/{transaction_id}/review", response_model=Transaction)
@@ -151,73 +127,69 @@ def review_transaction(
 ) -> Transaction:
     now = datetime.now(timezone.utc)
 
-    with Session(engine) as session:
-        row = session.get(TransactionRow, transaction_id)
-        if row is None or row.user_id != user_id:
-            raise HTTPException(404, "Transaction not found")
+    row = store.get(TransactionRow, transaction_id)
+    if row is None or row.user_id != user_id:
+        raise HTTPException(404, "Transaction not found")
 
-        if payload.action == ReviewAction.confirm:
-            row.review_status = "reviewed"
-            row.reviewed_at = now
-            if payload.category is not None:
-                row.category = payload.category.value
-            if payload.tags is not None:
-                row.tags = json.dumps(payload.tags)
-            if payload.notes is not None:
-                row.notes = payload.notes
-
-        elif payload.action == ReviewAction.recategorize:
-            if not payload.category:
-                raise HTTPException(400, "Category is required for recategorize action")
+    if payload.action == ReviewAction.confirm:
+        row.review_status = "reviewed"
+        row.reviewed_at = now
+        if payload.category is not None:
             row.category = payload.category.value
-            row.review_status = "reviewed"
-            row.reviewed_at = now
-            if payload.tags is not None:
-                row.tags = json.dumps(payload.tags)
-            if payload.notes is not None:
-                row.notes = payload.notes
+        if payload.tags is not None:
+            row.tags = json.dumps(payload.tags)
+        if payload.notes is not None:
+            row.notes = payload.notes
 
-        elif payload.action == ReviewAction.skip:
-            row.review_status = "skipped"
-            row.reviewed_at = now
+    elif payload.action == ReviewAction.recategorize:
+        if not payload.category:
+            raise HTTPException(400, "Category is required for recategorize action")
+        row.category = payload.category.value
+        row.review_status = "reviewed"
+        row.reviewed_at = now
+        if payload.tags is not None:
+            row.tags = json.dumps(payload.tags)
+        if payload.notes is not None:
+            row.notes = payload.notes
 
-        # If create_rule is requested on confirm or recategorize
-        if payload.create_rule and payload.action in (ReviewAction.confirm, ReviewAction.recategorize):
-            pattern = (payload.rule_pattern or row.merchant).strip()
-            if pattern:
-                target_cat = payload.category.value if payload.category else row.category
-                rule_row = CategorizationRuleRow(
-                    user_id=user_id,
-                    match_type="contains",
-                    pattern=pattern,
-                    category=target_cat,
-                    tags=row.tags,
-                )
-                session.add(rule_row)
+    elif payload.action == ReviewAction.skip:
+        row.review_status = "skipped"
+        row.reviewed_at = now
 
-                # Auto-apply to any other pending transactions for this user matching pattern
-                other_pending = session.exec(
-                    select(TransactionRow).where(
-                        TransactionRow.user_id == user_id,
-                        TransactionRow.id != row.id,
-                        (TransactionRow.review_status == "pending") | (TransactionRow.review_status == None),  # noqa: E711
-                    )
-                ).all()
+    to_put: list = [row]
 
-                for opt in other_pending:
-                    if matches_pattern(opt.merchant, "contains", pattern):
-                        opt.category = target_cat
-                        if row.tags:
-                            opt.tags = row.tags
-                        opt.review_status = "reviewed"
-                        opt.reviewed_at = now
-                        session.add(opt)
+    # If create_rule is requested on confirm or recategorize
+    if payload.create_rule and payload.action in (ReviewAction.confirm, ReviewAction.recategorize):
+        pattern = (payload.rule_pattern or row.merchant).strip()
+        if pattern:
+            target_cat = payload.category.value if payload.category else row.category
+            rule_row = CategorizationRuleRow(
+                user_id=user_id,
+                match_type="contains",
+                pattern=pattern,
+                category=target_cat,
+                tags=row.tags,
+            )
+            to_put.append(rule_row)
 
-        session.add(row)
-        session.commit()
-        session.refresh(row)
+            # Auto-apply to any other pending transactions for this user matching pattern
+            other_pending = [
+                t for t in store.query(TransactionRow, user_id=user_id)
+                if t.id != row.id and t.review_status in ("pending", None)
+            ]
 
-        return _row_to_transaction(row)
+            for opt in other_pending:
+                if matches_pattern(opt.merchant, "contains", pattern):
+                    opt.category = target_cat
+                    if row.tags:
+                        opt.tags = row.tags
+                    opt.review_status = "reviewed"
+                    opt.reviewed_at = now
+                    to_put.append(opt)
+
+    store.put(*to_put)
+
+    return _row_to_transaction(row)
 
 
 @router.patch("/transactions/{user_id}/{transaction_id}", response_model=Transaction)
@@ -226,26 +198,23 @@ def update_transaction(
     update: TransactionUpdate,
     user_id: str = Depends(resolve_user_id),
 ) -> Transaction:
-    with Session(engine) as session:
-        row = session.get(TransactionRow, transaction_id)
-        if row is None or row.user_id != user_id:
-            raise HTTPException(404, "Transaction not found")
+    row = store.get(TransactionRow, transaction_id)
+    if row is None or row.user_id != user_id:
+        raise HTTPException(404, "Transaction not found")
 
-        if update.category is not None:
-            row.category = update.category.value
-        if update.merchant is not None:
-            row.merchant = update.merchant
-        if update.tags is not None:
-            row.tags = json.dumps(update.tags)
-        if update.notes is not None:
-            row.notes = update.notes
-        if update.review_status is not None:
-            row.review_status = update.review_status
-            if update.review_status in ("reviewed", "skipped"):
-                row.reviewed_at = datetime.now(timezone.utc)
+    if update.category is not None:
+        row.category = update.category.value
+    if update.merchant is not None:
+        row.merchant = update.merchant
+    if update.tags is not None:
+        row.tags = json.dumps(update.tags)
+    if update.notes is not None:
+        row.notes = update.notes
+    if update.review_status is not None:
+        row.review_status = update.review_status
+        if update.review_status in ("reviewed", "skipped"):
+            row.reviewed_at = datetime.now(timezone.utc)
 
-        session.add(row)
-        session.commit()
-        session.refresh(row)
+    store.put(row)
 
-        return _row_to_transaction(row)
+    return _row_to_transaction(row)

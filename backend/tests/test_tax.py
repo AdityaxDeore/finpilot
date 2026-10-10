@@ -27,7 +27,6 @@ from app.analytics.tax import (
     detect_user_tax_deductions,
 )
 from app.core.auth import resolve_user_id
-from app.core.db import init_db
 from app.main import app
 from app.schemas import (
     Debt,
@@ -36,7 +35,6 @@ from app.schemas import (
     TxnCategory,
 )
 
-init_db()
 client = TestClient(app)
 
 

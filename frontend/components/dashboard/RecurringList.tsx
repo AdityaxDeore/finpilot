@@ -37,17 +37,17 @@ export function RecurringList({ obligations }: { obligations: RecurringObligatio
             No recurring commitments detected.
           </div>
         ) : (
-          <ul className="flex flex-col divide-y divide-black/[0.04]">
+          <ul className="flex max-h-80 flex-col divide-y divide-black/[0.04] overflow-y-auto pr-1">
             {obligations.map((o) => (
               <li
                 key={o.group_id}
                 className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0 hover:bg-fog/40 px-1 rounded-chip transition-colors"
               >
-                <div className="flex items-center gap-3">
+                <div className="flex min-w-0 items-center gap-3">
                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-fog border border-black/[0.06] text-ink font-semibold text-xs shrink-0">
                     {getMerchantIcon(o.merchant)}
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-sm font-semibold text-ink leading-snug">{o.merchant}</p>
                     <p className="text-[11px] text-pewter">
                       Due: {formatDate(o.next_expected_date)} &middot;{" "}

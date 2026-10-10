@@ -141,7 +141,7 @@ export function ForecastChart({
       </div>
 
       {/* Chart Canvas */}
-      <div className="h-72 w-full pt-2">
+      <div className="h-56 sm:h-64 w-full pt-2">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={data} margin={{ left: 8, right: 16, top: 12, bottom: 4 }}>
             <defs>

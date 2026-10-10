@@ -1,27 +1,23 @@
 """Integration tests for the real DB-backed dashboard snapshot pipeline
 (app.ingest.snapshot) and the /api/events real-recompute-diff endpoint.
 
-Uses the same sqlite DB the rest of the test suite shares (app.core.db.engine
--- default sqlite:///./finpilot_dev.db unless DATABASE_URL is overridden),
+Uses the Firestore emulator (see tests/conftest.py),
 seeding the 3 demo personas fresh at module setup so these tests are
 independent of whatever `python -m app.ingest.seed` state happens to already
-be on disk.
+be in the emulator.
 """
 from __future__ import annotations
 
 from datetime import date
 
 from fastapi.testclient import TestClient
-from sqlmodel import Session
 
-from app.core.db import engine, init_db
 from app.ingest.personas import PERSONA_CONFIGS
 from app.ingest.seed import seed_all
 from app.ingest.snapshot import build_dashboard_snapshot, get_last_snapshot
 from app.main import app
 from app.schemas import ActionType
 
-init_db()
 seed_all()
 
 client = TestClient(app)
@@ -34,8 +30,7 @@ client = TestClient(app)
 
 def test_build_dashboard_snapshot_all_personas_well_formed():
     for user_id in PERSONA_CONFIGS:
-        with Session(engine) as session:
-            snap = build_dashboard_snapshot(user_id, session)
+        snap = build_dashboard_snapshot(user_id)
 
         assert snap.user_id == user_id
         assert 0 <= snap.health_score.overall <= 100
@@ -55,8 +50,7 @@ def test_build_dashboard_snapshot_all_personas_well_formed():
 def test_health_scores_differ_meaningfully_across_personas():
     scores = {}
     for user_id in PERSONA_CONFIGS:
-        with Session(engine) as session:
-            snap = build_dashboard_snapshot(user_id, session)
+        snap = build_dashboard_snapshot(user_id)
         scores[user_id] = snap.health_score.overall
 
     # Meera is the deliberately "fragile" persona (near-zero buffer, highest
@@ -71,17 +65,15 @@ def test_snapshot_forecast_reflects_real_starting_balance():
     """Meera's persona has a very small checking+savings balance relative to
     her obligations -- her forecast should show meaningfully lower balances
     than Arjun's comfortably-funded forecast at day 0."""
-    with Session(engine) as session:
-        meera = build_dashboard_snapshot("demo-meera", session)
-        arjun = build_dashboard_snapshot("demo-arjun", session)
+    meera = build_dashboard_snapshot("demo-meera")
+    arjun = build_dashboard_snapshot("demo-arjun")
 
     assert meera.forecast.points[0].p50 < arjun.forecast.points[0].p50
 
 
 def test_snapshot_is_cached_and_retrievable():
-    with Session(engine) as session:
-        snap = build_dashboard_snapshot("demo-priya", session)
-        cached = get_last_snapshot("demo-priya", session)
+    snap = build_dashboard_snapshot("demo-priya")
+    cached = get_last_snapshot("demo-priya")
 
     assert cached is not None
     assert cached.user_id == "demo-priya"
@@ -89,8 +81,7 @@ def test_snapshot_is_cached_and_retrievable():
 
 
 def test_unknown_user_gets_empty_snapshot():
-    with Session(engine) as session:
-        snap = build_dashboard_snapshot("totally-unknown-user-id", session)
+    snap = build_dashboard_snapshot("totally-unknown-user-id")
     assert snap.user_id == "totally-unknown-user-id"
     # a real user with no data is NOT shown demo data
     assert snap.has_data is False
@@ -105,8 +96,7 @@ def test_unknown_user_gets_empty_snapshot():
 def test_events_endpoint_recomputes_real_diff():
     # Seed a "before" snapshot explicitly so this test doesn't depend on
     # ordering relative to the module-level snapshot tests above.
-    with Session(engine) as session:
-        before = build_dashboard_snapshot("demo-arjun", session)
+    before = build_dashboard_snapshot("demo-arjun")
 
     # A single small transaction is unlikely to change much on its own, but
     # the response must still reflect a REAL recompute (not a before==after
@@ -126,8 +116,7 @@ def test_events_endpoint_recomputes_real_diff():
 
     # after must reflect the just-added transaction: recompute again and
     # confirm the new transaction is now part of this user's data.
-    with Session(engine) as session:
-        after = build_dashboard_snapshot("demo-arjun", session)
+    after = build_dashboard_snapshot("demo-arjun")
     assert after.generated_at >= before.generated_at
 
 
@@ -191,8 +180,7 @@ def test_events_endpoint_recurring_kind_is_supported():
     diff = r.json()
     assert diff["trigger"] == "recurring"
 
-    with Session(engine) as session:
-        after = build_dashboard_snapshot("demo-priya", session)
+    after = build_dashboard_snapshot("demo-priya")
     matches = [o for o in after.recurring_obligations if "test gym membership" in o.merchant]
     assert matches, "new recurring obligation should be detected after 3 backdated occurrences"
     # Obligation must be an outflow (negative) regardless of the sign posted.

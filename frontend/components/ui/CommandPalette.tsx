@@ -22,6 +22,7 @@ import {
   PlusCircle,
   X,
   Keyboard,
+  ListChecks,
 } from "lucide-react";
 import { useUserId } from "@/lib/hooks";
 import { DEMO_PERSONAS, isDemoUserId, setUserId } from "@/lib/user";
@@ -144,6 +145,15 @@ export function CommandPalette() {
         icon: SlidersHorizontal,
         shortcut: "G S",
         onSelect: () => router.push("/simulate"),
+      },
+      {
+        id: "nav-plan",
+        group: "navigation",
+        label: "Financial Plan",
+        sublabel: "6-month constrained plan with probabilistic forecast",
+        icon: ListChecks,
+        shortcut: "G N",
+        onSelect: () => router.push("/plan"),
       },
       {
         id: "nav-tax",

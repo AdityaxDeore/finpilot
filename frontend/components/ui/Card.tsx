@@ -10,7 +10,7 @@ export function Card({ className, hoverable = false, ...props }: CardProps) {
   return (
     <div
       className={cn(
-        "rounded-card elevation-card p-4 sm:p-7 relative transition-all duration-200",
+        "rounded-card elevation-card p-4 sm:p-5 relative transition-all duration-200",
         hoverable && "elevation-card-hover",
         className
       )}
@@ -20,7 +20,7 @@ export function Card({ className, hoverable = false, ...props }: CardProps) {
 }
 
 export function CardHeader({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("mb-5 flex flex-wrap items-center justify-between gap-3 sm:gap-4", className)} {...props} />;
+  return <div className={cn("mb-3 sm:mb-4 flex flex-wrap items-center justify-between gap-3 sm:gap-4", className)} {...props} />;
 }
 
 export function CardTitle({ className, ...props }: HTMLAttributes<HTMLHeadingElement>) {

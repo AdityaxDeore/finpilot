@@ -14,8 +14,10 @@ import { GoalsCards } from "@/components/interactive/GoalsCards";
 import { DeviceMockupSection } from "@/components/interactive/DeviceMockupSection";
 import { InteractiveBentoGrid } from "@/components/interactive/InteractiveBentoGrid";
 import { FeatureShowcase } from "@/components/showcase/FeatureShowcase";
-import { SignInButton } from "@/components/SignInButton";
 import { FinPilotLogo } from "@/components/FinPilotLogo";
+import { LandingHeader } from "@/components/landing/LandingHeader";
+import { Reveal } from "@/components/landing/Reveal";
+import type { ReactNode } from "react";
 
 const PREVIEW_ANSWER: AnswerContract = {
   query: "Can I afford to increase my SIP by ₹3,000/month?",
@@ -48,179 +50,215 @@ const PREVIEW_ANSWER: AnswerContract = {
   data_gaps: [],
 };
 
+function Section({ children, band = false, className = "" }: { children: ReactNode; band?: boolean; className?: string }) {
+  return (
+    <section className={`w-full ${band ? "bg-fog/70 border-y border-black/[0.04]" : ""}`}>
+      <div className={`mx-auto w-full max-w-[1240px] px-4 py-16 sm:px-8 sm:py-24 ${className}`}>
+        <Reveal>{children}</Reveal>
+      </div>
+    </section>
+  );
+}
+
+const ICON = "flex h-11 w-11 items-center justify-center rounded-xl mb-5 border";
+
+const PERSONAS = [
+  {
+    id: "demo-priya",
+    initial: "P",
+    name: "Priya",
+    city: "Bengaluru",
+    tag: "High Debt APR",
+    avatar: "bg-orange-100 text-ember",
+    chip: "text-ember bg-orange-50",
+    text: "₹95,000/mo salary with ₹42,000 car loan + high APR credit card balance. Needs debt avalanche strategy.",
+  },
+  {
+    id: "demo-arjun",
+    initial: "A",
+    name: "Arjun",
+    city: "Mumbai",
+    tag: "Strong Savings",
+    avatar: "bg-emerald-100 text-emerald-700",
+    chip: "text-emerald-700 bg-emerald-50",
+    text: "₹160,000/mo salary with home loan EMI and twin education obligations. Strong emergency fund.",
+  },
+  {
+    id: "demo-meera",
+    initial: "M",
+    name: "Meera",
+    city: "Pune",
+    tag: "Tight Cash Flow",
+    avatar: "bg-indigo-100 text-indigo-700",
+    chip: "text-indigo-700 bg-indigo-50",
+    text: "₹42,000/mo salary with shared rent and student loan. Thin margin for unexpected cash shocks.",
+  },
+];
+
 export default function Home() {
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
-      {/* Background ambient glow */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-[1200px] h-[500px] bg-gradient-to-b from-ember-soft/40 via-transparent to-transparent pointer-events-none -z-10 blur-3xl" />
-
-      {/* Top Header */}
-      <header className="mx-auto flex w-full max-w-[1240px] items-center justify-between px-4 py-4 sm:px-8 border-b border-black/[0.04]">
-        <Link href="/" className="flex items-center gap-2">
-          <FinPilotLogo variant="horizontal" size={28} showWordmark={true} />
-        </Link>
-        <div className="flex items-center gap-4">
-          <Link href="/dashboard" className="text-xs sm:text-sm font-medium text-graphite hover:text-ink transition-colors">
-            Dashboard
-          </Link>
-          <Link href="/copilot" className="text-xs sm:text-sm font-medium text-graphite hover:text-ink transition-colors">
-            AI Copilot
-          </Link>
-          <SignInButton />
-        </div>
-      </header>
+    <div className="flex flex-1 flex-col overflow-x-clip">
+      <LandingHeader />
 
       {/* Hero Section */}
-      <section className="mx-auto flex w-full max-w-[1240px] flex-col items-center text-center px-4 pt-12 pb-10 sm:px-8 sm:pt-20 sm:pb-16">
-        {/* Status Pill */}
-        <div className="inline-flex items-center gap-2 rounded-full border border-black/[0.08] bg-white/80 px-3.5 py-1 text-xs font-medium text-graphite shadow-[0_1px_3px_rgba(0,0,0,0.03)] backdrop-blur-md mb-6">
-          <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span>Fintech Intelligence Engine • 90-Day Cash-Flow Modeling</span>
-        </div>
+      <section className="relative isolate w-full overflow-hidden">
+        <div className="landing-grid absolute inset-0 -z-10" aria-hidden />
+        <div className="landing-orb absolute -top-24 left-1/2 -z-10 h-[420px] w-[min(900px,100%)] -translate-x-1/2 rounded-full bg-ember-soft blur-3xl pointer-events-none" aria-hidden />
+        <div className="mx-auto flex w-full max-w-[1240px] flex-col items-center text-center px-4 pt-16 pb-16 sm:px-8 sm:pt-28 sm:pb-24">
+          {/* Status Pill */}
+          <Reveal>
+            <div className="inline-flex items-center gap-2 rounded-full border border-black/[0.08] bg-white/80 px-3.5 py-1.5 text-xs font-medium text-graphite shadow-[0_1px_3px_rgba(0,0,0,0.03)] backdrop-blur-md mb-8">
+              <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Fintech Intelligence Engine • 90-Day Cash-Flow Modeling</span>
+            </div>
+          </Reveal>
 
-        {/* Editorial Headline */}
-        <h1 className="font-display max-w-4xl text-4xl sm:text-6xl md:text-7xl leading-[1.08] text-ink tracking-tight">
-          Your financial health, <br />
-          <span className="italic font-normal text-ink">explained</span> — not just reported.
-        </h1>
+          {/* Editorial Headline */}
+          <Reveal delay={0.05}>
+            <h1 className="font-display max-w-5xl text-[2.5rem] sm:text-6xl md:text-7xl lg:text-[5.5rem] leading-[1.05] text-ink tracking-tight text-balance">
+              Your financial health, <br className="hidden sm:block" />
+              <span className="italic font-normal text-ember">explained</span> — not just reported.
+            </h1>
+          </Reveal>
 
-        {/* Subtitle */}
-        <p className="mt-6 max-w-2xl text-base sm:text-xl text-graphite leading-relaxed">
-          FinPilot reads your transactions, forecasts 90-day cash flow with P10/P90 confidence bands,
-          and shows the simulated before → after impact of every financial recommendation.
-        </p>
+          {/* Subtitle */}
+          <Reveal delay={0.1}>
+            <p className="mt-7 max-w-2xl text-base sm:text-xl text-graphite leading-relaxed text-pretty">
+              FinPilot reads your transactions, forecasts 90-day cash flow with P10/P90 confidence bands,
+              and shows the simulated before → after impact of every financial recommendation.
+            </p>
+          </Reveal>
 
-        {/* CTA Group */}
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-3.5">
-          <Link href="/dashboard">
-            <Button variant="primary" size="lg" className="px-7 py-3.5 text-base">
-              Explore Live Demo
-              <svg className="w-4 h-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-              </svg>
-            </Button>
-          </Link>
-          <Link href="/simulate">
-            <Button variant="secondary" size="lg" className="px-6 py-3.5 text-base">
-              Run What-If Simulator
-            </Button>
-          </Link>
-        </div>
+          {/* CTA Group */}
+          <Reveal delay={0.15} className="w-full">
+            <div className="mt-10 flex flex-col sm:flex-row flex-wrap items-center justify-center gap-3.5 w-full">
+              <Link href="/dashboard" className="w-full sm:w-auto">
+                <Button variant="primary" size="lg" className="w-full sm:w-auto px-8 py-3.5 text-base">
+                  Explore Live Demo
+                  <svg className="w-4 h-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                  </svg>
+                </Button>
+              </Link>
+              <Link href="/simulate" className="w-full sm:w-auto">
+                <Button variant="secondary" size="lg" className="w-full sm:w-auto px-6 py-3.5 text-base">
+                  Run What-If Simulator
+                </Button>
+              </Link>
+            </div>
+          </Reveal>
 
-        {/* Trust Badges */}
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-6 text-xs text-pewter font-medium">
-          <span className="flex items-center gap-1.5">
-            <svg className="w-3.5 h-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-            Zero signup required
-          </span>
-          <span className="flex items-center gap-1.5">
-            <svg className="w-3.5 h-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-            Offline rule router fallback
-          </span>
-          <span className="flex items-center gap-1.5">
-            <svg className="w-3.5 h-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-            Three-lane verified insights
-          </span>
+          {/* Trust Badges */}
+          <Reveal delay={0.2}>
+            <div className="mt-10 flex flex-wrap items-center justify-center gap-3 text-xs text-graphite font-medium">
+              {["Zero signup required", "Offline rule router fallback", "Three-lane verified insights"].map((t) => (
+                <span key={t} className="flex items-center gap-1.5 rounded-full border border-black/[0.06] bg-white/70 px-3 py-1.5 backdrop-blur">
+                  <svg className="w-3.5 h-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                  {t}
+                </span>
+              ))}
+            </div>
+          </Reveal>
         </div>
       </section>
 
       {/* Feature Showcase (Interactive 3-Column Center Stage) */}
-      <section className="w-full">
-        <FeatureShowcase />
+      <section className="w-full bg-gradient-to-b from-transparent via-fog/80 to-transparent py-4 sm:py-8">
+        <Reveal>
+          <FeatureShowcase />
+        </Reveal>
       </section>
 
-      {/* COMPONENT 6: Device Mockup Section (Desktop + Phone) */}
-      <section className="mx-auto w-full max-w-[1240px] px-4 py-8 sm:px-8 border-t border-black/[0.06]">
+      {/* Device Mockup Section (Desktop + Phone) */}
+      <Section>
         <DeviceMockupSection />
-      </section>
+      </Section>
 
-      {/* COMPONENT 1: Floating Overlap Card Section (Reference 075432 / 075404) */}
-      <section className="mx-auto w-full max-w-[1240px] px-4 py-12 sm:px-8 border-t border-black/[0.06]">
+      {/* Floating Overlap Card Section */}
+      <Section band>
         <FloatingOverlapCard
           badge="Everyday Spend Intelligence"
           headline="Stay on top of your everyday spending."
           bodyText="Get an effortless breakdown of your finances to see where your money is going and how to improve. We notify you of important pace changes and balance alerts so you are never caught off guard."
           actionText="Track My Spending"
         />
-      </section>
+      </Section>
 
-      {/* COMPONENT 5: Interactive Line Chart Section (Reference 075230) */}
-      <section className="mx-auto w-full max-w-[1240px] px-4 py-12 sm:px-8 border-t border-black/[0.06]">
+      {/* Interactive Line Chart Section */}
+      <Section>
         <InteractiveLineChart
           title="Follow the Line: Real-Time Spending Velocity"
           subtitle="Start your day with a quick look at your spending curve, pending transactions, and budget margin. Scrub across points to inspect daily variance."
         />
-      </section>
+      </Section>
 
-      {/* COMPONENT 3: Sankey Cash-Flow Section (References 075539 / 075603) */}
-      <section className="mx-auto w-full max-w-[1240px] px-4 py-12 sm:px-8 border-t border-black/[0.06]">
+      {/* Sankey Cash-Flow Section */}
+      <Section band>
         <SankeyDiagram />
-      </section>
+      </Section>
 
-      {/* COMPONENT 4: Goals Cards Section (Reference 075552) */}
-      <section className="mx-auto w-full max-w-[1240px] px-4 py-12 sm:px-8 border-t border-black/[0.06]">
+      {/* Goals Cards Section */}
+      <Section>
         <GoalsCards />
-      </section>
+      </Section>
 
-      {/* COMPONENT 2: Cash-Flow Floating Chips Section (Reference 075230) */}
-      <section className="mx-auto w-full max-w-[1240px] px-4 py-12 sm:px-8 border-t border-black/[0.06]">
+      {/* Cash-Flow Floating Chips Section */}
+      <Section band>
         <CashFlowChips
           title="Tactile Cash-Flow Streams"
           subtitle="Explore live inflows, fixed loan obligations, and investment channels. Hover to trigger magnetic repulsion, or drag any chip with spring return physics."
         />
-      </section>
+      </Section>
 
-      {/* COMPONENT 7: Interactive Bento Grid Section */}
-      <section className="mx-auto w-full max-w-[1240px] px-4 py-12 sm:px-8 border-t border-black/[0.06]">
+      {/* Interactive Bento Grid Section */}
+      <Section>
         <InteractiveBentoGrid />
-      </section>
+      </Section>
 
       {/* Three-Lane Integrity Live Component Preview */}
-      <section className="mx-auto w-full max-w-[1240px] px-4 py-16 sm:px-8 border-t border-black/[0.06]">
-        <div className="max-w-xl mb-8">
-          <span className="text-xs font-semibold text-ember uppercase tracking-wider">
-            Verified Decision Engine
-          </span>
-          <h2 className="font-display text-2xl sm:text-3xl text-ink mt-1">
-            Observed Facts, Predictions &amp; Recommendations
-          </h2>
-          <p className="mt-2 text-xs sm:text-sm text-graphite">
-            Every answer is decomposed into three distinct lanes. Zero blurred claims.
-          </p>
+      <Section band>
+        <div className="grid gap-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-14 lg:items-start">
+          <div className="max-w-xl lg:sticky lg:top-28">
+            <span className="text-xs font-semibold text-ember uppercase tracking-wider">
+              Verified Decision Engine
+            </span>
+            <h2 className="font-display text-3xl sm:text-4xl text-ink mt-2 text-balance">
+              Observed Facts, Predictions &amp; Recommendations
+            </h2>
+            <p className="mt-3 text-sm sm:text-base text-graphite">
+              Every answer is decomposed into three distinct lanes. Zero blurred claims.
+            </p>
+          </div>
+          <Card className="p-6 sm:p-8 min-w-0">
+            <AnswerContractView answer={PREVIEW_ANSWER} />
+          </Card>
         </div>
-        <Card className="p-6 sm:p-8">
-          <AnswerContractView answer={PREVIEW_ANSWER} />
-        </Card>
-      </section>
+      </Section>
 
       {/* Feature Bento Grid (System Architecture) */}
-      <section className="mx-auto w-full max-w-[1240px] px-4 py-16 sm:px-8 border-t border-black/[0.06]">
-        <div className="text-center max-w-xl mx-auto mb-12">
-          <h2 className="font-display text-3xl sm:text-4xl text-ink">
+      <Section>
+        <div className="text-center max-w-2xl mx-auto mb-14">
+          <h2 className="font-display text-3xl sm:text-5xl text-ink text-balance">
             Engineered for financial precision.
           </h2>
-          <p className="mt-3 text-sm sm:text-base text-graphite">
+          <p className="mt-4 text-sm sm:text-base text-graphite">
             Four specialized engines working in concert to consolidate, forecast, and optimize your wealth.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
           {/* Bento 1: 90-Day Forecast */}
-          <Card hoverable className="flex flex-col justify-between">
+          <Card hoverable className="flex flex-col justify-between lg:col-span-2 lg:p-10 bg-gradient-to-br from-white to-ember-soft">
             <div>
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 text-ember mb-4 border border-ember/20">
+              <div className={`${ICON} bg-orange-50 text-ember border-ember/20`}>
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                 </svg>
               </div>
-              <h3 className="text-lg font-semibold text-ink">90-Day Cash-Flow Forecast</h3>
-              <p className="mt-2 text-sm text-graphite leading-relaxed">
+              <h3 className="text-lg lg:text-2xl font-semibold text-ink">90-Day Cash-Flow Forecast</h3>
+              <p className="mt-2 text-sm lg:text-base text-graphite leading-relaxed lg:max-w-md">
                 P10/P50/P90 bootstrap-resampled trajectories. Detects upcoming deficit days weeks before they strike.
               </p>
             </div>
@@ -232,7 +270,7 @@ export default function Home() {
           {/* Bento 2: Three-Lane Answer Contract */}
           <Card hoverable className="flex flex-col justify-between">
             <div>
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-indigo-600 mb-4 border border-indigo-200">
+              <div className={`${ICON} bg-blue-50 text-indigo-600 border-indigo-200`}>
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
@@ -250,7 +288,7 @@ export default function Home() {
           {/* Bento 3: What-If Simulation Engine */}
           <Card hoverable className="flex flex-col justify-between">
             <div>
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 mb-4 border border-emerald-200">
+              <div className={`${ICON} bg-emerald-50 text-emerald-600 border-emerald-200`}>
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
                 </svg>
@@ -266,15 +304,15 @@ export default function Home() {
           </Card>
 
           {/* Bento 4: Privacy & Offline Mode */}
-          <Card hoverable className="flex flex-col justify-between">
+          <Card hoverable className="flex flex-col justify-between md:col-span-2 lg:p-10 bg-gradient-to-br from-white to-purple-50/70">
             <div>
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-50 text-purple-600 mb-4 border border-purple-200">
+              <div className={`${ICON} bg-purple-50 text-purple-600 border-purple-200`}>
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                 </svg>
               </div>
-              <h3 className="text-lg font-semibold text-ink">Complete Data Privacy</h3>
-              <p className="mt-2 text-sm text-graphite leading-relaxed">
+              <h3 className="text-lg lg:text-2xl font-semibold text-ink">Complete Data Privacy</h3>
+              <p className="mt-2 text-sm lg:text-base text-graphite leading-relaxed lg:max-w-md">
                 Google Gemini function calling with a 100% offline rule-based router toggle. Your financial data stays local.
               </p>
             </div>
@@ -283,131 +321,103 @@ export default function Home() {
             </div>
           </Card>
         </div>
-      </section>
+      </Section>
 
       {/* Demo Personas Section */}
-      <section className="mx-auto w-full max-w-[1240px] px-4 py-16 sm:px-8 border-t border-black/[0.06]">
-        <div className="flex flex-col md:flex-row md:items-end justify-between mb-8">
+      <Section band>
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-12">
           <div>
             <span className="text-xs font-semibold text-ember uppercase tracking-wider">
               Immediate Exploration
             </span>
-            <h2 className="font-display text-2xl sm:text-3xl text-ink mt-1">
+            <h2 className="font-display text-3xl sm:text-4xl text-ink mt-2 text-balance">
               Test drive on 3 curated personas.
             </h2>
           </div>
-          <p className="text-xs sm:text-sm text-pewter mt-2 md:mt-0 max-w-md">
+          <p className="text-sm text-graphite max-w-md">
             Each persona is pre-loaded with 12 months of realistic transactions, distinct debt structures, and cash-flow characteristics.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-          {/* Persona 1: Priya */}
-          <Card hoverable className="flex flex-col justify-between bg-white">
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="h-8 w-8 rounded-full bg-orange-100 text-ember font-bold text-xs flex items-center justify-center">
-                  P
-                </span>
-                <span className="text-xs font-semibold text-ember bg-orange-50 px-2.5 py-0.5 rounded-full">
-                  High Debt APR
-                </span>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 sm:gap-6">
+          {PERSONAS.map((p) => (
+            <Card key={p.id} hoverable className="flex flex-col justify-between bg-white">
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className={`h-8 w-8 rounded-full font-bold text-xs flex items-center justify-center ${p.avatar}`}>
+                    {p.initial}
+                  </span>
+                  <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${p.chip}`}>{p.tag}</span>
+                </div>
+                <h4 className="text-lg font-semibold text-ink mt-3">
+                  {p.name} • {p.city}
+                </h4>
+                <p className="text-xs text-graphite mt-1">{p.text}</p>
               </div>
-              <h4 className="text-lg font-semibold text-ink mt-3">Priya • Bengaluru</h4>
-              <p className="text-xs text-graphite mt-1">
-                ₹95,000/mo salary with ₹42,000 car loan + high APR credit card balance. Needs debt avalanche strategy.
-              </p>
-            </div>
-            <Link
-              href="/dashboard"
-              onClick={() => setUserId("demo-priya")}
-              className="mt-6 inline-flex items-center gap-1.5 text-xs font-semibold text-ink hover:text-ember transition-colors"
-            >
-              Load Priya&apos;s Snapshot →
-            </Link>
-          </Card>
-
-          {/* Persona 2: Arjun */}
-          <Card hoverable className="flex flex-col justify-between bg-white">
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="h-8 w-8 rounded-full bg-emerald-100 text-emerald-700 font-bold text-xs flex items-center justify-center">
-                  A
-                </span>
-                <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full">
-                  Strong Savings
-                </span>
-              </div>
-              <h4 className="text-lg font-semibold text-ink mt-3">Arjun • Mumbai</h4>
-              <p className="text-xs text-graphite mt-1">
-                ₹160,000/mo salary with home loan EMI and twin education obligations. Strong emergency fund.
-              </p>
-            </div>
-            <Link
-              href="/dashboard"
-              onClick={() => setUserId("demo-arjun")}
-              className="mt-6 inline-flex items-center gap-1.5 text-xs font-semibold text-ink hover:text-ember transition-colors"
-            >
-              Load Arjun&apos;s Snapshot →
-            </Link>
-          </Card>
-
-          {/* Persona 3: Meera */}
-          <Card hoverable className="flex flex-col justify-between bg-white">
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="h-8 w-8 rounded-full bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center justify-center">
-                  M
-                </span>
-                <span className="text-xs font-semibold text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-full">
-                  Tight Cash Flow
-                </span>
-              </div>
-              <h4 className="text-lg font-semibold text-ink mt-3">Meera • Pune</h4>
-              <p className="text-xs text-graphite mt-1">
-                ₹42,000/mo salary with shared rent and student loan. Thin margin for unexpected cash shocks.
-              </p>
-            </div>
-            <Link
-              href="/dashboard"
-              onClick={() => setUserId("demo-meera")}
-              className="mt-6 inline-flex items-center gap-1.5 text-xs font-semibold text-ink hover:text-ember transition-colors"
-            >
-              Load Meera&apos;s Snapshot →
-            </Link>
-          </Card>
+              <Link
+                href="/dashboard"
+                onClick={() => setUserId(p.id)}
+                className="mt-6 inline-flex min-h-11 items-center gap-1.5 text-xs font-semibold text-ink hover:text-ember transition-colors"
+              >
+                Load {p.name}&apos;s Snapshot →
+              </Link>
+            </Card>
+          ))}
         </div>
-      </section>
+      </Section>
 
       {/* Bottom CTA Banner */}
-      <section className="mx-auto w-full max-w-[1240px] px-4 pb-20 sm:px-8">
-        <div className="rounded-card border border-ink/10 bg-ink text-white p-8 sm:p-12 relative overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.18)]">
-          <div className="absolute right-0 bottom-0 w-96 h-96 bg-ember/15 rounded-full blur-3xl pointer-events-none" />
-          <div className="relative z-10 max-w-xl">
-            <span className="text-xs font-semibold text-ember uppercase tracking-wider">
-              No Installation Needed
-            </span>
-            <h2 className="font-display text-3xl sm:text-4xl text-white mt-2">
-              Ready to see FinPilot in action?
-            </h2>
-            <p className="mt-3 text-sm text-mist leading-relaxed">
-              Explore real-time health scoring, 90-day cash-flow forecasting, and simulated impact recommendations now.
-            </p>
-            <div className="mt-8 flex flex-wrap gap-4">
-              <Link href="/dashboard">
-                <Button variant="primary" size="lg" className="px-7 py-3 text-base">
-                  Launch Dashboard
-                </Button>
-              </Link>
-              <Link href="/copilot">
-                <Button variant="secondary" size="lg" className="bg-white/10 text-white border-white/20 hover:bg-white/20 text-base">
-                  Ask FinPilot Copilot
-                </Button>
-              </Link>
+      <section className="mx-auto w-full max-w-[1240px] px-4 pt-16 pb-16 sm:px-8 sm:pt-24 sm:pb-24">
+        <Reveal>
+          <div className="rounded-card border border-ink/10 bg-ink text-white p-8 sm:p-14 relative overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.18)]">
+            <div className="landing-grid-dark absolute inset-0 pointer-events-none" aria-hidden />
+            <div className="absolute -right-10 -bottom-10 w-96 h-96 bg-ember/25 rounded-full blur-3xl pointer-events-none" aria-hidden />
+            <div className="relative z-10 max-w-xl">
+              <span className="text-xs font-semibold text-ember-light uppercase tracking-wider">
+                No Installation Needed
+              </span>
+              <h2 className="font-display text-3xl sm:text-5xl text-white mt-3 text-balance">
+                Ready to see FinPilot in action?
+              </h2>
+              <p className="mt-4 text-sm sm:text-base text-mist leading-relaxed">
+                Explore real-time health scoring, 90-day cash-flow forecasting, and simulated impact recommendations now.
+              </p>
+              <div className="mt-8 flex flex-col sm:flex-row gap-3.5">
+                <Link href="/dashboard">
+                  <Button variant="primary" size="lg" className="w-full sm:w-auto px-7 py-3 text-base">
+                    Launch Dashboard
+                  </Button>
+                </Link>
+                <Link href="/copilot">
+                  <Button variant="secondary" size="lg" className="w-full sm:w-auto bg-white/10 text-white border-white/20 hover:bg-white/20 text-base">
+                    Ask FinPilot Copilot
+                  </Button>
+                </Link>
+              </div>
             </div>
           </div>
-        </div>
+        </Reveal>
       </section>
+
+      {/* Footer */}
+      <footer className="w-full border-t border-black/[0.06]">
+        <div className="mx-auto flex w-full max-w-[1240px] flex-col items-center justify-between gap-4 px-4 py-8 sm:flex-row sm:px-8">
+          <Link href="/" aria-label="FinPilot home" className="flex min-h-11 items-center">
+            <FinPilotLogo variant="horizontal" size={24} showWordmark={true} />
+          </Link>
+          <nav className="flex items-center gap-1 text-sm text-graphite">
+            {[
+              ["/dashboard", "Dashboard"],
+              ["/copilot", "AI Copilot"],
+              ["/simulate", "What-If Simulator"],
+            ].map(([href, label]) => (
+              <Link key={href} href={href} className="inline-flex min-h-11 items-center rounded-chip px-3 hover:text-ink transition-colors">
+                {label}
+              </Link>
+            ))}
+          </nav>
+        </div>
+      </footer>
     </div>
   );
 }

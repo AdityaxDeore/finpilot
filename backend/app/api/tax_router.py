@@ -11,11 +11,10 @@ from __future__ import annotations
 
 import pandas as pd
 from fastapi import APIRouter, Depends
-from sqlmodel import Session, select
 
 from app.analytics.tax import analyze_tax_optimization
+from app.core import store
 from app.core.auth import resolve_user_id
-from app.core.db import engine
 from app.ingest.snapshot import build_dashboard_snapshot
 from app.models import DebtRow, TransactionRow
 from app.schemas import (
@@ -42,10 +41,9 @@ def get_tax_analysis(user_id: str = Depends(resolve_user_id)) -> TaxOptimization
     """Analyze current tax liability under Old and New Regimes using
     automatically detected deductions from the user's financial ledger.
     """
-    with Session(engine) as session:
-        snap = build_dashboard_snapshot(user_id, session)
-        txn_rows = session.exec(select(TransactionRow).where(TransactionRow.user_id == user_id)).all()
-        debt_rows = session.exec(select(DebtRow).where(DebtRow.user_id == user_id)).all()
+    snap = build_dashboard_snapshot(user_id)
+    txn_rows = store.query(TransactionRow, user_id=user_id)
+    debt_rows = store.query(DebtRow, user_id=user_id)
 
     df = _transactions_df(list(txn_rows))
     debts = [
@@ -80,10 +78,9 @@ def calculate_tax(
     """Calculate tax liability with user-customized what-if deductions or
     overridden gross salary.
     """
-    with Session(engine) as session:
-        snap = build_dashboard_snapshot(user_id, session)
-        txn_rows = session.exec(select(TransactionRow).where(TransactionRow.user_id == user_id)).all()
-        debt_rows = session.exec(select(DebtRow).where(DebtRow.user_id == user_id)).all()
+    snap = build_dashboard_snapshot(user_id)
+    txn_rows = store.query(TransactionRow, user_id=user_id)
+    debt_rows = store.query(DebtRow, user_id=user_id)
 
     df = _transactions_df(list(txn_rows))
     debts = [

@@ -1,9 +1,7 @@
 """Tests for 5D COLLABORATE: Household models, multi-member co-piloting, hashed invites, and combined net worth."""
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session, select
 
-from app.core.db import engine, init_db
 from app.main import app
 from app.models import HouseholdInviteRow, HouseholdMemberRow, HouseholdRow
 from app.ingest.seed import seed_all
@@ -11,7 +9,6 @@ from app.ingest.seed import seed_all
 
 @pytest.fixture(autouse=True)
 def _clean_seed():
-    init_db()
     seed_all()
     yield
 

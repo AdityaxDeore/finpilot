@@ -15,7 +15,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Tailwind CSS v4](https://img.shields.io/badge/Tailwind_CSS-v4.0-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 [![Framer Motion](https://img.shields.io/badge/Framer_Motion-13.4-FF0055?style=for-the-badge&logo=framer&logoColor=white)](https://www.framer.com/motion/)
-[![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL_%2B_RLS-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com/)
+[![Firebase](https://img.shields.io/badge/Firebase-Auth_%2B_Firestore-FFCA28?style=for-the-badge&logo=firebase&logoColor=black)](https://firebase.google.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-amber?style=for-the-badge)](LICENSE)
 
 <br/>
@@ -149,9 +149,9 @@ flowchart TD
         LaneContract["Three-Lane Contract Formatter<br/>(Observed Facts • Predictions • Actions)"]
     end
 
-    subgraph Data["Persistence & Storage Layer (Supabase Postgres)"]
+    subgraph Data["Persistence & Storage Layer (Firebase Firestore)"]
         DB_Users[("User Personas & Auth")]
-        DB_Txns[("Transactions & Accounts<br/>(RLS Scoped)")]
+        DB_Txns[("Transactions & Accounts<br/>(user_id Scoped)")]
         DB_Budgets[("Envelopes & Goals")]
         DB_Snapshots[("Insights & Diff Cache")]
     end
@@ -237,7 +237,7 @@ $$P_{90}(t) = \text{Percentile}_{90}\left(\{B_k(t)\}_{k=1}^K\right)$$
 | **Data Visualization** | Recharts 3.10 | Glassmorphic tooltips, multi-band trajectory areas |
 | **Icons & Typography** | Lucide React, Google Fonts | Fraunces (Display Serif), Inter (Sans), Tabular Numerals |
 | **Backend Engine** | Python 3.11+, FastAPI, Uvicorn | Async I/O, Pydantic v2 schemas, automated CORS |
-| **Database & Auth** | Supabase (PostgreSQL, GoTrue, RLS) | Row-level security, local JWKS verification, TOTP MFA |
+| **Database & Auth** | Firebase (Auth, Firestore) | Firestore security rules, backend ID-token verification, TOTP MFA |
 | **AI Copilot** | Google Gemini Pro, Function Calling | Two-phase tool execution, offline deterministic router |
 
 ### Directory Layout
@@ -279,7 +279,7 @@ hackmatrix/
 │   │   └── interactive/     # Tactile interactive showcase components
 │   └── lib/                 # API client, TypeScript types, formatters, hooks
 ├── screenshots/             # High-resolution documentation preview assets
-└── supabase/                # SQL migrations with user-scoped Row-Level Security
+└── firestore.rules          # Firestore security rules (read-only, own documents)
 ```
 
 ---
@@ -311,9 +311,14 @@ pip install -r requirements.txt
 ```
 
 #### Environment Configuration (Optional for Demo Mode)
-FinPilot operates **100% offline out-of-the-box** using seeded demo personas and the offline rule engine. If you wish to configure live Gemini AI or Supabase authentication:
+FinPilot operates **100% offline out-of-the-box** using seeded demo personas and the offline rule engine. If you wish to configure live Gemini AI or Firebase authentication/Firestore:
 ```bash
 cp ../.env.example .env
+```
+Run Firestore locally with the emulator (separate terminal, repo root), then point the backend at it:
+```bash
+firebase emulators:start --only firestore --project demo-hackmatrix
+# backend shell: FIREBASE_PROJECT_ID=demo-hackmatrix FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
 ```
 Start the FastAPI server:
 ```bash
@@ -336,10 +341,10 @@ Open **`http://localhost:3000`** in your browser.
 One Vercel project, two services (see `vercel.json`): the Next.js **frontend** (`frontend/`) serves every path, and the FastAPI **backend** (`backend/`) serves `/api/*` on the same domain -- so no CORS setup or `NEXT_PUBLIC_API_URL` is needed in production (the frontend calls relative `/api/...` URLs).
 
 1. Import the repo into Vercel; it picks up the services from `vercel.json`.
-2. Add environment variables (they are shared by both services): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `GEMINI_API_KEY` (optional -- the offline copilot works without it), and `RESEND_API_KEY` / `EMAIL_FROM` / `HR_ALERT_EMAIL` if you want alert emails. `NEXT_PUBLIC_*` values are inlined at build time, so redeploy after changing them.
-3. Supabase -> Authentication -> URL Configuration: Site URL `https://<your-domain>`, and add `https://<your-domain>/auth/callback` to the Redirect URLs (keep `http://localhost:3000/auth/callback` for local dev). The Google OAuth client's redirect URI stays `https://<project-ref>.supabase.co/auth/v1/callback`.
+2. Add environment variables (they are shared by both services): the `NEXT_PUBLIC_FIREBASE_*` web config, `FIREBASE_PROJECT_ID`, `FIREBASE_SERVICE_ACCOUNT_JSON` (full service-account JSON), `GEMINI_API_KEY` (optional -- the offline copilot works without it), and `RESEND_API_KEY` / `EMAIL_FROM` / `HR_ALERT_EMAIL` if you want alert emails. `NEXT_PUBLIC_*` values are inlined at build time, so redeploy after changing them.
+3. Firebase console -> Authentication -> Settings -> Authorized domains: add `<your-domain>`.
 
-**Data persistence caveat:** without `DATABASE_URL`, the backend uses SQLite in `/tmp` on Vercel -- it is per-instance and ephemeral, so the demo personas are re-seeded on every cold start but data a signed-in user enters will not reliably persist. Point `DATABASE_URL` at a Postgres database for real persistence (note: the `supabase/migrations` tables are a different schema from the backend's SQLModel one).
+**Data persistence:** the backend stores everything in Firestore (Admin SDK). Locally set `GOOGLE_APPLICATION_CREDENTIALS` to a service-account JSON path; to run the tests, start the emulator from the repo root: `firebase emulators:exec --only firestore --project demo-hackmatrix "python -m pytest backend"`.
 
 Local dev is unchanged: run uvicorn and `npm run dev` separately (frontend talks to `http://127.0.0.1:8000`; use `127.0.0.1` rather than `localhost` for the API, since `localhost` can resolve to IPv6 first and add ~2s per request).
 
@@ -359,8 +364,8 @@ FinPilot includes 3 realistic personas, each pre-loaded with 12 months of synthe
 
 ## 🔒 Security & Privacy Architecture
 
-- **Zero-Trust Token Verification**: Every API endpoint taking a `user_id` verifies real Supabase access tokens locally against the project's JWKS (`backend/app/core/auth.py`). Token subjects must match the requested `user_id`.
-- **Row-Level Security (RLS)**: Enforced across all PostgreSQL tables (`auth.uid() = user_id`). Users cannot access peer data.
+- **Zero-Trust Token Verification**: Every API endpoint taking a `user_id` verifies Firebase ID tokens (signature, expiry, audience) with Google's public certs (`backend/app/core/auth.py`). Token subjects must match the requested `user_id`.
+- **Per-User Data Isolation**: Firestore security rules (`firestore.rules`) and per-user backend scoping keep each user's documents private. Users cannot access peer data.
 - **Two-Factor Authentication (TOTP MFA)**: Integrated authenticator-app enrollment with QR code generation and challenge gating at sign-in.
 - **100% Offline Privacy Guarantee**: Users can toggle **"Offline Rule-Engine Only"** on `/security` or `/copilot`. When active, zero financial data is ever transmitted to Google Gemini or external APIs; all queries resolve locally via deterministic Python routers.
 - **Immutable Audit Vault**: Every mutation, auth challenge, and export is recorded in `audit_logs` for forensic review.

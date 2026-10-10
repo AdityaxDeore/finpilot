@@ -20,15 +20,12 @@ from datetime import date, timedelta
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlmodel import Session
 
 from app.api.rules_router import router as rules_router
 from app.api.transactions_router import router as transactions_router
 from app.core.auth import resolve_user_id
-from app.core.db import engine, init_db
+from app.core import store
 from app.models import CategorizationRuleRow, TransactionRow
-
-init_db()
 
 USER_A = f"test-track-user-a-{uuid.uuid4()}"
 USER_B = f"test-track-user-b-{uuid.uuid4()}"
@@ -47,19 +44,16 @@ BASE_DATE = date(2026, 3, 1)
 
 def _seed_txns(user_id: str, rows: list[dict]) -> list[str]:
     ids = []
-    with Session(engine) as session:
-        for r in rows:
-            defaults = {
-                "account_id": "acc-track-test",
-                "is_recurring": False,
-                "description": None,
-                "review_status": "pending",
-            }
-            row = TransactionRow(user_id=user_id, **{**defaults, **r})
-            session.add(row)
-            session.commit()
-            session.refresh(row)
-            ids.append(row.id)
+    for r in rows:
+        defaults = {
+            "account_id": "acc-track-test",
+            "is_recurring": False,
+            "description": None,
+            "review_status": "pending",
+        }
+        row = TransactionRow(user_id=user_id, **{**defaults, **r})
+        store.put(row)
+        ids.append(row.id)
     return ids
 
 
@@ -271,17 +265,14 @@ def test_cross_user_isolation_on_review():
 
 def test_cross_user_isolation_on_rules():
     # Create rule under User B directly
-    with Session(engine) as session:
-        b_rule = CategorizationRuleRow(
-            user_id=USER_B,
-            match_type="contains",
-            pattern="Secret B Merchant",
-            category="other",
-        )
-        session.add(b_rule)
-        session.commit()
-        session.refresh(b_rule)
-        b_rule_id = b_rule.id
+    b_rule = CategorizationRuleRow(
+        user_id=USER_B,
+        match_type="contains",
+        pattern="Secret B Merchant",
+        category="other",
+    )
+    store.put(b_rule)
+    b_rule_id = b_rule.id
 
     # User A cannot delete User B's rule
     del_res = client.delete(f"/api/rules/{USER_A}/{b_rule_id}")

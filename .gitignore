@@ -43,11 +43,11 @@ AGENTS.md
 .DS_Store
 Thumbs.db
 
-# supabase local
-supabase/.branches/
-supabase/.temp/
 
 # media & temp assets
 antigravity_pack/
 antigravity_pack.zip
 *.mp4
+
+# firebase service-account keys
+*firebase-adminsdk*.json

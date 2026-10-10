@@ -49,7 +49,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import pandas as pd
-from sqlmodel import Session, select
+from app.core import store
 
 from app.analytics.anomalies import detect_anomalies
 from app.analytics.benchmarks import benchmark_context
@@ -177,28 +177,25 @@ def _spending_consistency_cov(df: pd.DataFrame) -> float:
 # ---------------------------------------------------------------------------
 
 
-def get_last_snapshot(user_id: str, session: Session) -> Optional[DashboardSnapshot]:
+def get_last_snapshot(user_id: str) -> Optional[DashboardSnapshot]:
     """Most recently cached DashboardSnapshot for `user_id`, or None if this
     user has never had one computed/cached before."""
-    row = session.exec(
-        select(InsightsSnapshotRow)
-        .where(InsightsSnapshotRow.user_id == user_id)
-        .order_by(InsightsSnapshotRow.created_at.desc())
-    ).first()
+    row = store.get(InsightsSnapshotRow, user_id)
     if row is None:
         return None
     return DashboardSnapshot.model_validate_json(row.snapshot_json)
 
 
-def _cache_snapshot(snapshot: DashboardSnapshot, session: Session) -> None:
-    session.add(
+def _cache_snapshot(snapshot: DashboardSnapshot) -> None:
+    # One doc per user (id=user_id) so the cache overwrites instead of growing.
+    store.put(
         InsightsSnapshotRow(
+            id=snapshot.user_id,
             user_id=snapshot.user_id,
             snapshot_json=snapshot.model_dump_json(),
             health_score=snapshot.health_score.overall,
         )
     )
-    session.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -228,7 +225,7 @@ def empty_dashboard_snapshot(user_id: str) -> DashboardSnapshot:
     )
 
 
-def build_dashboard_snapshot(user_id: str, session: Session) -> DashboardSnapshot:
+def build_dashboard_snapshot(user_id: str) -> DashboardSnapshot:
     """Build (and cache) a real DashboardSnapshot for `user_id` from the DB.
 
     A demo persona id with no accounts falls back to the Phase-0 fixture
@@ -236,19 +233,19 @@ def build_dashboard_snapshot(user_id: str, session: Session) -> DashboardSnapsho
     new user: they get an all-zero placeholder (`has_data=False`), never
     someone else's demo data.
     """
-    accounts = session.exec(select(AccountRow).where(AccountRow.user_id == user_id)).all()
+    accounts = store.query(AccountRow, user_id=user_id)
     if not accounts:
         if user_id in DEMO_USER_IDS:
             return demo_dashboard_snapshot(user_id)
         return empty_dashboard_snapshot(user_id)
 
-    txn_rows = session.exec(select(TransactionRow).where(TransactionRow.user_id == user_id)).all()
-    debt_rows = session.exec(select(DebtRow).where(DebtRow.user_id == user_id)).all()
+    txn_rows = store.query(TransactionRow, user_id=user_id)
+    debt_rows = store.query(DebtRow, user_id=user_id)
     # IncomeRow is queried for completeness/future use (e.g. irregular income
     # sources not visible as transactions yet); the recurring-detection path
     # below already recovers salary cadence from transaction history, which
     # is the richer signal for forecasting.
-    session.exec(select(IncomeRow).where(IncomeRow.user_id == user_id)).all()
+    store.query(IncomeRow, user_id=user_id)
 
     df = _transactions_df(list(txn_rows))
     debts = _debts_schema(list(debt_rows), user_id)
@@ -273,7 +270,7 @@ def build_dashboard_snapshot(user_id: str, session: Session) -> DashboardSnapsho
         horizon_days=_FORECAST_HORIZON_DAYS,
     )
 
-    prior = get_last_snapshot(user_id, session)
+    prior = get_last_snapshot(user_id)
     health_score = compute_health_score(
         forecast=forecast,
         dti=dti,
@@ -362,5 +359,5 @@ def build_dashboard_snapshot(user_id: str, session: Session) -> DashboardSnapsho
         generated_at=datetime.now(timezone.utc),
     )
 
-    _cache_snapshot(snapshot, session)
+    _cache_snapshot(snapshot)
     return snapshot

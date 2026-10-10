@@ -32,7 +32,7 @@ export function NetWorthTrend({ userId, days = 180 }: { userId: string; days?: n
       )}
       {data && data.points.length === 0 && <p className="text-sm text-pewter">Not enough history yet.</p>}
       {data && data.points.length > 0 && (
-        <div className="h-64">
+        <div className="h-56 sm:h-64">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={data.points} margin={{ left: 8, right: 16, top: 8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-fog)" />

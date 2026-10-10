@@ -1,16 +1,14 @@
 """Tests for 5C PLAN: goal covers, funding account auto-tracking, and required monthly calculation."""
 from datetime import date, timedelta
 from fastapi.testclient import TestClient
-from sqlmodel import Session, select
 
-from app.core.db import engine, init_db
+from app.core import store
 from app.main import app
 from app.models import AccountRow, GoalRow
 from app.ingest.seed import seed_all
 
 
 def setup_module():
-    init_db()
     seed_all()
 
 
@@ -37,13 +35,9 @@ def test_list_goals_demo_priya():
 
 def test_create_goal_with_auto_track():
     # Find Priya's savings account
-    with Session(engine) as session:
-        acc = session.exec(
-            select(AccountRow).where(AccountRow.user_id == "demo-priya", AccountRow.name.contains("Savings"))
-        ).first()
-        assert acc is not None
-        acc_id = acc.id
-        acc_balance = acc.balance
+    acc = next(a for a in store.query(AccountRow, user_id="demo-priya") if "Savings" in a.name)
+    acc_id = acc.id
+    acc_balance = acc.balance
 
     future_date = (date.today() + timedelta(days=365)).isoformat()
     payload = {

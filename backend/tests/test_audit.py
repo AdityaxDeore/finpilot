@@ -4,22 +4,17 @@ still succeed with the middleware installed."""
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
-from sqlmodel import Session, select
-
-from app.core.db import engine, init_db
+from app.core import store
 from app.main import app
 from app.models import AuditLogRow
 
-init_db()
 client = TestClient(app)
 
 
 def _latest_audit_rows(event_type: str, limit: int = 5) -> list[AuditLogRow]:
-    with Session(engine) as session:
-        rows = session.exec(
-            select(AuditLogRow).where(AuditLogRow.event_type == event_type).order_by(AuditLogRow.created_at.desc())
-        ).all()
-        return list(rows[:limit])
+    rows = store.query(AuditLogRow, event_type=event_type)
+    rows.sort(key=lambda r: r.created_at, reverse=True)
+    return rows[:limit]
 
 
 def test_auth_denial_is_audited():

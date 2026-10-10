@@ -15,15 +15,12 @@ from datetime import date, timedelta
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlmodel import Session, select
 
 from app.api.budgets_router import router as budgets_router
 from app.api.notifications_router import router as notifications_router
 from app.core.auth import resolve_user_id
-from app.core.db import engine, init_db
+from app.core import store
 from app.models import BudgetRow, TransactionRow
-
-init_db()
 
 USER_A = f"test-budget-user-a-{uuid.uuid4()}"
 USER_B = f"test-budget-user-b-{uuid.uuid4()}"
@@ -49,37 +46,28 @@ def setup_module(_module):
     last_month = TODAY.replace(day=1) - timedelta(days=15)
     two_months_ago = TODAY.replace(day=1) - timedelta(days=45)
 
-    with Session(engine) as session:
-        txns = [
-            # Prior months
-            TransactionRow(user_id=USER_A, account_id="acc1", date=two_months_ago, amount=-5000.0, merchant="Old Swiggy", category="dining"),
-            TransactionRow(user_id=USER_A, account_id="acc1", date=last_month, amount=-6000.0, merchant="Prev Swiggy", category="dining"),
-            # Current month
-            TransactionRow(user_id=USER_A, account_id="acc1", date=TODAY, amount=-3000.0, merchant="Swiggy Current", category="dining"),
-            TransactionRow(user_id=USER_A, account_id="acc1", date=TODAY, amount=-9500.0, merchant="Amazon Shopping", category="shopping"),
-            TransactionRow(user_id=USER_A, account_id="acc1", date=TODAY, amount=-6000.0, merchant="BESCOM Power", category="utilities"),
-            TransactionRow(user_id=USER_A, account_id="acc1", date=TODAY, amount=-1800.0, merchant="Apollo Pharmacy", category="healthcare"),
-            # User B transaction
-            TransactionRow(user_id=USER_B, account_id="acc2", date=TODAY, amount=-1000.0, merchant="User B Txn", category="dining"),
-        ]
-        for t in txns:
-            session.add(t)
+    txns = [
+        # Prior months
+        TransactionRow(user_id=USER_A, account_id="acc1", date=two_months_ago, amount=-5000.0, merchant="Old Swiggy", category="dining"),
+        TransactionRow(user_id=USER_A, account_id="acc1", date=last_month, amount=-6000.0, merchant="Prev Swiggy", category="dining"),
+        # Current month
+        TransactionRow(user_id=USER_A, account_id="acc1", date=TODAY, amount=-3000.0, merchant="Swiggy Current", category="dining"),
+        TransactionRow(user_id=USER_A, account_id="acc1", date=TODAY, amount=-9500.0, merchant="Amazon Shopping", category="shopping"),
+        TransactionRow(user_id=USER_A, account_id="acc1", date=TODAY, amount=-6000.0, merchant="BESCOM Power", category="utilities"),
+        TransactionRow(user_id=USER_A, account_id="acc1", date=TODAY, amount=-1800.0, merchant="Apollo Pharmacy", category="healthcare"),
+        # User B transaction
+        TransactionRow(user_id=USER_B, account_id="acc2", date=TODAY, amount=-1000.0, merchant="User B Txn", category="dining"),
+    ]
+    # User A budgets
+    b_dining = BudgetRow(user_id=USER_A, category="dining", monthly_limit=10000.0, rollover_enabled=True, rollover_cap=6000.0)
+    b_shopping = BudgetRow(user_id=USER_A, category="shopping", monthly_limit=10000.0, rollover_enabled=False)
+    b_utilities = BudgetRow(user_id=USER_A, category="utilities", monthly_limit=5000.0, rollover_enabled=False)
+    b_healthcare = BudgetRow(user_id=USER_A, category="healthcare", monthly_limit=2000.0, rollover_enabled=False)
 
-        # User A budgets
-        b_dining = BudgetRow(user_id=USER_A, category="dining", monthly_limit=10000.0, rollover_enabled=True, rollover_cap=6000.0)
-        b_shopping = BudgetRow(user_id=USER_A, category="shopping", monthly_limit=10000.0, rollover_enabled=False)
-        b_utilities = BudgetRow(user_id=USER_A, category="utilities", monthly_limit=5000.0, rollover_enabled=False)
-        b_healthcare = BudgetRow(user_id=USER_A, category="healthcare", monthly_limit=2000.0, rollover_enabled=False)
+    # User B budget
+    b_user_b = BudgetRow(user_id=USER_B, category="dining", monthly_limit=8000.0, rollover_enabled=False)
 
-        # User B budget
-        b_user_b = BudgetRow(user_id=USER_B, category="dining", monthly_limit=8000.0, rollover_enabled=False)
-
-        session.add(b_dining)
-        session.add(b_shopping)
-        session.add(b_utilities)
-        session.add(b_healthcare)
-        session.add(b_user_b)
-        session.commit()
+    store.put(*txns, b_dining, b_shopping, b_utilities, b_healthcare, b_user_b)
 
 
 # ---------------------------------------------------------------------------
@@ -186,10 +174,9 @@ def test_notifications_include_over_budget_alerts():
 
 def test_cross_user_isolation_on_budget_patch():
     # User B's budget
-    with Session(engine) as session:
-        b = session.exec(select(BudgetRow).where(BudgetRow.user_id == USER_B)).first()
-        assert b is not None
-        b_id = b.id
+    b = store.first(BudgetRow, user_id=USER_B)
+    assert b is not None
+    b_id = b.id
 
     # User A attempting to patch User B's budget must 404
     res = client.patch(

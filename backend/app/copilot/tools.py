@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from app.core.db import engine
+from app.core import store
 from app.ingest.fixtures import demo_dashboard_snapshot
 from app.schemas import ActionType
 
@@ -31,12 +31,9 @@ def _snapshot(user_id: str):
     so a broken DB never turns into a copilot crash or hallucinated answer.
     """
     try:
-        from sqlmodel import Session
-
         from app.ingest.snapshot import build_dashboard_snapshot
 
-        with Session(engine) as session:
-            return build_dashboard_snapshot(user_id, session)
+        return build_dashboard_snapshot(user_id)
     except Exception:
         try:
             return demo_dashboard_snapshot(user_id)
@@ -49,14 +46,11 @@ def _starting_balance(user_id: str) -> float:
     app.ingest.snapshot module docstring for the liquid-balance rule);
     falls back to the Phase-0 fixture constant for unknown/fixture users."""
     try:
-        from sqlmodel import Session, select
-
         from app.models import AccountRow
 
-        with Session(engine) as session:
-            accounts = session.exec(select(AccountRow).where(AccountRow.user_id == user_id)).all()
-            if accounts:
-                return float(sum(a.balance for a in accounts if a.type in ("checking", "savings")))
+        accounts = store.query(AccountRow, user_id=user_id)
+        if accounts:
+            return float(sum(a.balance for a in accounts if a.type in ("checking", "savings")))
     except Exception:
         pass
     return 42_000.0

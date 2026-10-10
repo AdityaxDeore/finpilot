@@ -7,15 +7,13 @@ from datetime import date, timedelta
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlmodel import Session, select
 
 from app.api.networth_router import router
 from app.core.auth import resolve_user_id
-from app.core.db import engine, init_db
+from app.core import store
 from app.ingest.seed import seed_all
 from app.models import AccountRow, TransactionRow
 
-init_db()
 seed_all()
 
 app = FastAPI()
@@ -23,7 +21,7 @@ app.include_router(router)
 # Auth (resolve_user_id) is exhaustively covered in test_auth.py; here we
 # only exercise the net-worth reconstruction logic, including against
 # synthetic non-demo user ids that would otherwise 401 without a real
-# Supabase token, so the dependency is overridden to trust the path param.
+# Firebase token, so the dependency is overridden to trust the path param.
 app.dependency_overrides[resolve_user_id] = lambda user_id: user_id
 client = TestClient(app)
 
@@ -75,12 +73,8 @@ _SYNTH_USER = "test-networth-synthetic-user"
 
 
 def _reset_synth_user() -> None:
-    with Session(engine) as session:
-        for row in session.exec(select(TransactionRow).where(TransactionRow.user_id == _SYNTH_USER)).all():
-            session.delete(row)
-        for row in session.exec(select(AccountRow).where(AccountRow.user_id == _SYNTH_USER)).all():
-            session.delete(row)
-        session.commit()
+    store.delete_where(TransactionRow, user_id=_SYNTH_USER)
+    store.delete_where(AccountRow, user_id=_SYNTH_USER)
 
 
 def test_synthetic_two_account_reconstruction_is_exact():
@@ -111,27 +105,20 @@ def test_synthetic_two_account_reconstruction_is_exact():
     """
     _reset_synth_user()
     today = date.today()
-    with Session(engine) as session:
-        acct_a = AccountRow(user_id=_SYNTH_USER, name="Checking", type="checking", balance=1000.0)
-        acct_b = AccountRow(user_id=_SYNTH_USER, name="Savings", type="savings", balance=500.0)
-        session.add(acct_a)
-        session.add(acct_b)
-        session.commit()
-        session.refresh(acct_a)
-
-        session.add(
-            TransactionRow(
-                user_id=_SYNTH_USER, account_id=acct_a.id, date=today, amount=200.0,
-                merchant="Deposit", category="income",
-            )
-        )
-        session.add(
-            TransactionRow(
-                user_id=_SYNTH_USER, account_id=acct_a.id, date=today - timedelta(days=1), amount=-100.0,
-                merchant="Purchase", category="shopping",
-            )
-        )
-        session.commit()
+    acct_a = AccountRow(user_id=_SYNTH_USER, name="Checking", type="checking", balance=1000.0)
+    acct_b = AccountRow(user_id=_SYNTH_USER, name="Savings", type="savings", balance=500.0)
+    store.put(
+        acct_a,
+        acct_b,
+        TransactionRow(
+            user_id=_SYNTH_USER, account_id=acct_a.id, date=today, amount=200.0,
+            merchant="Deposit", category="income",
+        ),
+        TransactionRow(
+            user_id=_SYNTH_USER, account_id=acct_a.id, date=today - timedelta(days=1), amount=-100.0,
+            merchant="Purchase", category="shopping",
+        ),
+    )
 
     r = client.get(f"/api/networth/{_SYNTH_USER}/history?days=3")
     assert r.status_code == 200

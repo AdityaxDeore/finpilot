@@ -6,10 +6,9 @@ import io
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session
 
 from app.core.auth import resolve_user_id
-from app.core.db import engine, init_db
+from app.core import store
 from app.main import app
 
 UID = "11111111-2222-3333-4444-555555555555"
@@ -17,16 +16,12 @@ UID = "11111111-2222-3333-4444-555555555555"
 
 @pytest.fixture()
 def client():
-    init_db()
     app.dependency_overrides[resolve_user_id] = lambda user_id: user_id
     yield TestClient(app)
     app.dependency_overrides.clear()
-    with Session(engine) as s:
-        from sqlmodel import delete
-        from app.models import AccountRow, EventRow, InsightsSnapshotRow, TransactionRow
-        for m in (AccountRow, TransactionRow, EventRow, InsightsSnapshotRow):
-            s.exec(delete(m).where(m.user_id == UID))
-        s.commit()
+    from app.models import AccountRow, EventRow, InsightsSnapshotRow, TransactionRow
+    for m in (AccountRow, TransactionRow, EventRow, InsightsSnapshotRow):
+        store.delete_where(m, user_id=UID)
 
 
 def test_new_user_gets_empty_snapshot_not_demo(client):

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/Button";
 import {
   signInWithGoogle,
@@ -8,8 +9,10 @@ import {
   signUpWithEmail,
   signOut,
   onAuthChange,
+  getMfaResolver,
+  finishTotpSignIn,
 } from "@/lib/firebase/auth";
-import type { User } from "firebase/auth";
+import type { MultiFactorResolver, User } from "firebase/auth";
 
 /**
  * Firebase Authentication component supporting Google OAuth and Email/Password login.
@@ -23,6 +26,8 @@ export function SignInButton() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resolver, setResolver] = useState<MultiFactorResolver | null>(null);
+  const [mfaCode, setMfaCode] = useState("");
 
   useEffect(() => {
     const unsubscribe = onAuthChange((user) => {
@@ -38,6 +43,11 @@ export function SignInButton() {
       await signInWithGoogle();
       setShowModal(false);
     } catch (err: unknown) {
+      const mfa = getMfaResolver(err);
+      if (mfa) {
+        setResolver(mfa);
+        return;
+      }
       const e = err as { message?: string };
       setError(e.message || "Failed to sign in with Google.");
     } finally {
@@ -59,8 +69,33 @@ export function SignInButton() {
       setEmail("");
       setPassword("");
     } catch (err: unknown) {
+      const mfa = getMfaResolver(err);
+      if (mfa) {
+        setResolver(mfa);
+        return;
+      }
       const e = err as { message?: string };
       setError(e.message || "Authentication failed. Please check your credentials.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleMfaCode(e: React.FormEvent) {
+    e.preventDefault();
+    if (!resolver) return;
+    setError(null);
+    setLoading(true);
+    try {
+      await finishTotpSignIn(resolver, mfaCode.trim());
+      setShowModal(false);
+      setResolver(null);
+      setMfaCode("");
+      setEmail("");
+      setPassword("");
+    } catch (err: unknown) {
+      const e = err as { message?: string };
+      setError(e.message || "Invalid code. Check your authenticator app and try again.");
     } finally {
       setLoading(false);
     }
@@ -107,13 +142,14 @@ export function SignInButton() {
         {error ? <span className="text-[10px] text-rose-400">{error}</span> : null}
       </div>
 
-      {showModal && (
+      {/* Portal: the header's backdrop-blur would otherwise become the containing block for `fixed`. */}
+      {showModal && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm rounded-xl border border-white/10 bg-zinc-900 p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-amber-400 font-semibold text-sm">Firebase Auth</span>
-                <span className="text-zinc-500 text-xs">(hackmatrix-1c5a2)</span>
+                <span className="text-zinc-500 text-xs">(hackmatrix-3764f)</span>
               </div>
               <button
                 onClick={() => setShowModal(false)}
@@ -123,6 +159,35 @@ export function SignInButton() {
               </button>
             </div>
 
+            {resolver ? (
+              <form onSubmit={handleMfaCode} className="space-y-3">
+                <label className="block text-[11px] font-medium text-zinc-400 mb-1">
+                  6-digit code from your authenticator app
+                </label>
+                <input
+                  inputMode="numeric"
+                  required
+                  value={mfaCode}
+                  onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  placeholder="123456"
+                  className="w-full rounded-lg bg-zinc-800/80 border border-white/10 px-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                />
+                {error && (
+                  <div className="rounded bg-rose-500/10 border border-rose-500/20 p-2 text-[11px] text-rose-300">
+                    {error}
+                  </div>
+                )}
+                <Button
+                  type="submit"
+                  variant="primary"
+                  className="w-full py-2 text-xs font-semibold"
+                  disabled={loading || mfaCode.length !== 6}
+                >
+                  {loading ? "Verifying..." : "Verify"}
+                </Button>
+              </form>
+            ) : (
+              <>
             <p className="text-xs text-zinc-400">
               {isSignUp
                 ? "Create a new account for your FinPilot workspace."
@@ -216,8 +281,11 @@ export function SignInButton() {
                 {isSignUp ? "Already have an account? Sign in" : "Need an account? Sign up"}
               </button>
             </div>
+              </>
+            )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

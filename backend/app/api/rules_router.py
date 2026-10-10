@@ -10,10 +10,9 @@ import json
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session, select
 
+from app.core import store
 from app.core.auth import resolve_user_id
-from app.core.db import engine
 from app.ingest.categorize import matches_pattern
 from app.models import CategorizationRuleRow, TransactionRow
 from app.schemas import (
@@ -52,12 +51,9 @@ def _row_to_rule(row: CategorizationRuleRow) -> CategorizationRule:
 def list_rules(
     user_id: str = Depends(resolve_user_id),
 ) -> CategorizationRuleList:
-    with Session(engine) as session:
-        rows = session.exec(
-            select(CategorizationRuleRow)
-            .where(CategorizationRuleRow.user_id == user_id)
-            .order_by(CategorizationRuleRow.created_at.desc())
-        ).all()
+    rows = sorted(
+        store.query(CategorizationRuleRow, user_id=user_id), key=lambda r: r.created_at, reverse=True
+    )
 
     items = [_row_to_rule(r) for r in rows]
     return CategorizationRuleList(items=items, total=len(items))
@@ -82,39 +78,33 @@ def create_rule(
         tags=tags_json,
     )
 
-    with Session(engine) as session:
-        session.add(row)
-        session.commit()
-        session.refresh(row)
+    to_put: list = [row]
 
-        if payload.apply_to_existing:
-            # Match transactions and retroactively recategorize & review them
-            txns = session.exec(
-                select(TransactionRow).where(TransactionRow.user_id == user_id)
-            ).all()
+    if payload.apply_to_existing:
+        # Match transactions and retroactively recategorize & review them
+        txns = store.query(TransactionRow, user_id=user_id)
 
-            now = datetime.now(timezone.utc)
-            for t in txns:
-                if matches_pattern(t.merchant, row.match_type, row.pattern):
-                    t.category = row.category
-                    if row.tags:
-                        existing_tags: list[str] = []
-                        if t.tags:
-                            try:
-                                p = json.loads(t.tags)
-                                if isinstance(p, list):
-                                    existing_tags = p
-                            except Exception:
-                                pass
-                        new_tags = list(dict.fromkeys(existing_tags + (payload.tags or [])))
-                        t.tags = json.dumps(new_tags)
-                    t.review_status = "reviewed"
-                    t.reviewed_at = now
-                    session.add(t)
+        now = datetime.now(timezone.utc)
+        for t in txns:
+            if matches_pattern(t.merchant, row.match_type, row.pattern):
+                t.category = row.category
+                if row.tags:
+                    existing_tags: list[str] = []
+                    if t.tags:
+                        try:
+                            p = json.loads(t.tags)
+                            if isinstance(p, list):
+                                existing_tags = p
+                        except Exception:
+                            pass
+                    new_tags = list(dict.fromkeys(existing_tags + (payload.tags or [])))
+                    t.tags = json.dumps(new_tags)
+                t.review_status = "reviewed"
+                t.reviewed_at = now
+                to_put.append(t)
 
-            session.commit()
-
-        return _row_to_rule(row)
+    store.put(*to_put)
+    return _row_to_rule(row)
 
 
 @router.delete("/api/rules/{user_id}/{rule_id}")
@@ -122,12 +112,10 @@ def delete_rule(
     rule_id: str,
     user_id: str = Depends(resolve_user_id),
 ) -> dict:
-    with Session(engine) as session:
-        row = session.get(CategorizationRuleRow, rule_id)
-        if row is None or row.user_id != user_id:
-            raise HTTPException(404, "Rule not found")
+    row = store.get(CategorizationRuleRow, rule_id)
+    if row is None or row.user_id != user_id:
+        raise HTTPException(404, "Rule not found")
 
-        session.delete(row)
-        session.commit()
+    store.delete(CategorizationRuleRow, rule_id)
 
     return {"ok": True, "deleted_id": rule_id}

@@ -9,8 +9,11 @@ import {
   signUpWithEmail,
   signOut,
   onAuthChange,
+  getMfaResolver,
+  finishTotpSignIn,
+  authErrorMessage,
 } from "@/lib/firebase/auth";
-import type { User } from "firebase/auth";
+import type { MultiFactorResolver, User } from "firebase/auth";
 import { Button } from "@/components/ui/Button";
 import { FinPilotLogo } from "@/components/FinPilotLogo";
 
@@ -23,6 +26,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [resolver, setResolver] = useState<MultiFactorResolver | null>(null);
+  const [mfaCode, setMfaCode] = useState("");
 
   useEffect(() => {
     const unsubscribe = onAuthChange((user) => {
@@ -38,8 +43,12 @@ export default function LoginPage() {
       await signInWithGoogle();
       router.push("/dashboard");
     } catch (err: unknown) {
-      const e = err as { message?: string };
-      setError(e.message || "Failed to sign in with Google.");
+      const mfa = getMfaResolver(err);
+      if (mfa) {
+        setResolver(mfa);
+        return;
+      }
+      setError(authErrorMessage(err, "Failed to sign in with Google."));
     } finally {
       setLoading(false);
     }
@@ -62,8 +71,28 @@ export default function LoginPage() {
         router.push("/dashboard");
       }, 1000);
     } catch (err: unknown) {
-      const e = err as { message?: string };
-      setError(e.message || "Authentication failed. Please verify credentials.");
+      const mfa = getMfaResolver(err);
+      if (mfa) {
+        setResolver(mfa);
+        setSuccess(null);
+        return;
+      }
+      setError(authErrorMessage(err, "Authentication failed."));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleMfaCode(e: React.FormEvent) {
+    e.preventDefault();
+    if (!resolver) return;
+    setError(null);
+    setLoading(true);
+    try {
+      await finishTotpSignIn(resolver, mfaCode.trim());
+      router.push("/dashboard");
+    } catch (err: unknown) {
+      setError(authErrorMessage(err, "Invalid code."));
     } finally {
       setLoading(false);
     }
@@ -78,7 +107,7 @@ export default function LoginPage() {
           </Link>
           <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 px-3 py-0.5 text-[11px] font-medium text-amber-600 mt-2">
             <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
-            <span>Firebase Auth • hackmatrix-1c5a2</span>
+            <span>Firebase Auth • hackmatrix-3764f</span>
           </div>
           <h1 className="font-display text-2xl font-semibold text-ink pt-2">
             {currentUser
@@ -117,6 +146,35 @@ export default function LoginPage() {
               </Button>
             </div>
           </div>
+        ) : resolver ? (
+          <form onSubmit={handleMfaCode} className="space-y-3.5">
+            <div>
+              <label className="block text-[11px] font-medium text-graphite mb-1">
+                6-digit code from your authenticator app
+              </label>
+              <input
+                inputMode="numeric"
+                required
+                value={mfaCode}
+                onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="123456"
+                className="w-full rounded-lg bg-fog border border-mist px-3 py-2 text-xs text-ink placeholder-pewter focus:outline-none focus:ring-1 focus:ring-ember"
+              />
+            </div>
+            {error && (
+              <div role="alert" className="rounded-lg bg-rose-50 border border-rose-200 p-2.5 text-[11px] text-rose-700">
+                {error}
+              </div>
+            )}
+            <Button
+              type="submit"
+              variant="primary"
+              className="w-full py-2.5 text-xs font-semibold"
+              disabled={loading || mfaCode.length !== 6}
+            >
+              {loading ? "Verifying..." : "Verify"}
+            </Button>
+          </form>
         ) : (
           <>
             <Button
@@ -183,7 +241,7 @@ export default function LoginPage() {
               </div>
 
               {error && (
-                <div className="rounded-lg bg-rose-50 border border-rose-200 p-2.5 text-[11px] text-rose-700">
+                <div role="alert" className="rounded-lg bg-rose-50 border border-rose-200 p-2.5 text-[11px] text-rose-700">
                   {error}
                 </div>
               )}

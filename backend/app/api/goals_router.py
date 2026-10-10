@@ -8,12 +8,11 @@ from __future__ import annotations
 
 from datetime import date
 from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session, select
 
 from app.analytics.goals import project_goal
 from app.analytics.savings import trailing_savings_rate
 from app.core.auth import resolve_user_id
-from app.core.db import engine
+from app.core import store
 from app.ingest.snapshot import _avg_income_expenses, _transactions_df
 from app.models import AccountRow, GoalRow, TransactionRow
 from app.schemas import Goal, GoalCreateRequest, GoalProgress, GoalUpdateRequest
@@ -40,10 +39,9 @@ def _goal_row_to_schema(row: GoalRow, linked_balance: float | None = None) -> Go
     )
 
 
-def _estimated_monthly_contribution(user_id: str, session: Session) -> float:
+def _estimated_monthly_contribution(user_id: str) -> float:
     """Trailing-3-month avg income * trailing savings rate, floored at 0."""
-    txn_rows = session.exec(select(TransactionRow).where(TransactionRow.user_id == user_id)).all()
-    df = _transactions_df(list(txn_rows))
+    df = _transactions_df(store.query(TransactionRow, user_id=user_id))
     if df.empty:
         return 0.0
     monthly_income, _ = _avg_income_expenses(df, months=_TRAILING_MONTHS)
@@ -76,53 +74,49 @@ def _to_progress(goal: Goal, monthly_contribution: float) -> GoalProgress:
 
 @router.get("/api/goals/{user_id}", response_model=list[GoalProgress])
 def list_goals(user_id: str = Depends(resolve_user_id)) -> list[GoalProgress]:
-    with Session(engine) as session:
-        rows = session.exec(select(GoalRow).where(GoalRow.user_id == user_id)).all()
-        accounts = {acc.id: acc for acc in session.exec(select(AccountRow).where(AccountRow.user_id == user_id)).all()}
-        monthly_contribution = _estimated_monthly_contribution(user_id, session)
-        result = []
-        for row in rows:
-            linked_bal = None
-            if row.funding_account_id and row.funding_account_id in accounts:
-                linked_bal = max(0.0, accounts[row.funding_account_id].balance)
-            schema = _goal_row_to_schema(row, linked_balance=linked_bal)
-            result.append(_to_progress(schema, monthly_contribution))
+    rows = store.query(GoalRow, user_id=user_id)
+    accounts = {acc.id: acc for acc in store.query(AccountRow, user_id=user_id)}
+    monthly_contribution = _estimated_monthly_contribution(user_id)
+    result = []
+    for row in rows:
+        linked_bal = None
+        if row.funding_account_id and row.funding_account_id in accounts:
+            linked_bal = max(0.0, accounts[row.funding_account_id].balance)
+        schema = _goal_row_to_schema(row, linked_balance=linked_bal)
+        result.append(_to_progress(schema, monthly_contribution))
     return result
 
 
 @router.post("/api/goals/{user_id}", response_model=GoalProgress)
 def create_goal(req: GoalCreateRequest, user_id: str = Depends(resolve_user_id)) -> GoalProgress:
-    with Session(engine) as session:
-        if req.funding_account_id:
-            acc = session.get(AccountRow, req.funding_account_id)
-            if not acc or acc.user_id != user_id:
-                raise HTTPException(400, "Funding account does not exist or does not belong to user")
+    if req.funding_account_id:
+        acc = store.get(AccountRow, req.funding_account_id)
+        if not acc or acc.user_id != user_id:
+            raise HTTPException(400, "Funding account does not exist or does not belong to user")
 
-        current_amount = req.current_amount
-        if req.auto_track and req.funding_account_id:
-            acc = session.get(AccountRow, req.funding_account_id)
-            if acc:
-                current_amount = max(0.0, acc.balance)
+    current_amount = req.current_amount
+    if req.auto_track and req.funding_account_id:
+        acc = store.get(AccountRow, req.funding_account_id)
+        if acc:
+            current_amount = max(0.0, acc.balance)
 
-        row = GoalRow(
-            user_id=user_id,
-            name=req.name,
-            target_amount=req.target_amount,
-            target_date=req.target_date,
-            current_amount=current_amount,
-            cover_key=req.cover_key or "general",
-            funding_account_id=req.funding_account_id,
-            auto_track=req.auto_track,
-        )
-        session.add(row)
-        session.commit()
-        session.refresh(row)
-        monthly_contribution = _estimated_monthly_contribution(user_id, session)
+    row = GoalRow(
+        user_id=user_id,
+        name=req.name,
+        target_amount=req.target_amount,
+        target_date=req.target_date,
+        current_amount=current_amount,
+        cover_key=req.cover_key or "general",
+        funding_account_id=req.funding_account_id,
+        auto_track=req.auto_track,
+    )
+    store.put(row)
+    monthly_contribution = _estimated_monthly_contribution(user_id)
     return _to_progress(_goal_row_to_schema(row), monthly_contribution)
 
 
-def _get_owned_goal(session: Session, user_id: str, goal_id: str) -> GoalRow:
-    row = session.get(GoalRow, goal_id)
+def _get_owned_goal(user_id: str, goal_id: str) -> GoalRow:
+    row = store.get(GoalRow, goal_id)
     if row is None or row.user_id != user_id:
         raise HTTPException(404, "Goal not found")
     return row
@@ -132,44 +126,39 @@ def _get_owned_goal(session: Session, user_id: str, goal_id: str) -> GoalRow:
 def update_goal(
     goal_id: str, req: GoalUpdateRequest, user_id: str = Depends(resolve_user_id)
 ) -> GoalProgress:
-    with Session(engine) as session:
-        row = _get_owned_goal(session, user_id, goal_id)
-        if req.funding_account_id is not None:
-            if req.funding_account_id != "":
-                acc = session.get(AccountRow, req.funding_account_id)
-                if not acc or acc.user_id != user_id:
-                    raise HTTPException(400, "Funding account does not exist or does not belong to user")
-                row.funding_account_id = req.funding_account_id
-            else:
-                row.funding_account_id = None
-        if req.name is not None:
-            row.name = req.name
-        if req.current_amount is not None:
-            row.current_amount = req.current_amount
-        if req.target_amount is not None:
-            row.target_amount = req.target_amount
-        if req.target_date is not None:
-            row.target_date = req.target_date
-        if req.cover_key is not None:
-            row.cover_key = req.cover_key
-        if req.auto_track is not None:
-            row.auto_track = req.auto_track
-            if row.auto_track and row.funding_account_id:
-                acc = session.get(AccountRow, row.funding_account_id)
-                if acc:
-                    row.current_amount = max(0.0, acc.balance)
+    row = _get_owned_goal(user_id, goal_id)
+    if req.funding_account_id is not None:
+        if req.funding_account_id != "":
+            acc = store.get(AccountRow, req.funding_account_id)
+            if not acc or acc.user_id != user_id:
+                raise HTTPException(400, "Funding account does not exist or does not belong to user")
+            row.funding_account_id = req.funding_account_id
+        else:
+            row.funding_account_id = None
+    if req.name is not None:
+        row.name = req.name
+    if req.current_amount is not None:
+        row.current_amount = req.current_amount
+    if req.target_amount is not None:
+        row.target_amount = req.target_amount
+    if req.target_date is not None:
+        row.target_date = req.target_date
+    if req.cover_key is not None:
+        row.cover_key = req.cover_key
+    if req.auto_track is not None:
+        row.auto_track = req.auto_track
+        if row.auto_track and row.funding_account_id:
+            acc = store.get(AccountRow, row.funding_account_id)
+            if acc:
+                row.current_amount = max(0.0, acc.balance)
 
-        session.add(row)
-        session.commit()
-        session.refresh(row)
-        monthly_contribution = _estimated_monthly_contribution(user_id, session)
+    store.put(row)
+    monthly_contribution = _estimated_monthly_contribution(user_id)
     return _to_progress(_goal_row_to_schema(row), monthly_contribution)
 
 
 @router.delete("/api/goals/{user_id}/{goal_id}")
 def delete_goal(goal_id: str, user_id: str = Depends(resolve_user_id)) -> dict:
-    with Session(engine) as session:
-        row = _get_owned_goal(session, user_id, goal_id)
-        session.delete(row)
-        session.commit()
+    _get_owned_goal(user_id, goal_id)
+    store.delete(GoalRow, goal_id)
     return {"deleted": True, "id": goal_id}

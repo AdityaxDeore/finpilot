@@ -65,10 +65,10 @@ export function HealthScoreCard({ score }: { score: HealthScore }) {
         <span className="text-xs text-pewter">Weighted 5-Pillar Model</span>
       </CardHeader>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center pt-2 pb-4">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-8 items-center pt-1 pb-2">
         {/* Left Column: Radial Gauge + Trend */}
         <div className="lg:col-span-4 flex flex-col items-center justify-center p-4 rounded-surface bg-fog/60 border border-black/[0.04]">
-          <div className="relative flex items-center justify-center w-44 h-44">
+          <div className="relative flex items-center justify-center w-36 h-36 lg:w-40 lg:h-40">
             <svg className="w-full h-full -rotate-90" viewBox="0 0 140 140">
               {/* Background circle */}
               <circle
@@ -133,13 +133,13 @@ export function HealthScoreCard({ score }: { score: HealthScore }) {
         </div>
 
         {/* Right Column: 5 Sub-Score Breakdown Bars */}
-        <div className="lg:col-span-8 flex flex-col gap-4">
+        <div className="lg:col-span-8 flex flex-col gap-2.5">
           <div className="flex items-center justify-between text-xs text-pewter font-medium px-1">
             <span>Health Sub-Category</span>
             <span>Weight & Score</span>
           </div>
 
-          <div className="flex flex-col gap-3">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-2">
             {score.sub_scores.map((sub, i) => {
               const subRounded = Math.round(sub.score);
               const isStrong = subRounded >= 70;
@@ -148,7 +148,7 @@ export function HealthScoreCard({ score }: { score: HealthScore }) {
               return (
                 <div
                   key={i}
-                  className="flex flex-col gap-1.5 p-3 rounded-chip border border-black/[0.04] bg-white hover:bg-fog/50 transition-colors"
+                  className="flex flex-col gap-1 px-3 py-2 rounded-chip border border-black/[0.04] bg-white hover:bg-fog/50 transition-colors"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">

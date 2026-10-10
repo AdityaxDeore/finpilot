@@ -11,11 +11,10 @@ from datetime import date, datetime, timezone
 
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session, select
 
 from app.analytics.recurring import detect_recurring
+from app.core import store
 from app.core.auth import resolve_user_id
-from app.core.db import engine
 from app.models import BudgetRow, TransactionRow
 from app.schemas import (
     Budget,
@@ -86,8 +85,7 @@ def _compute_rollover(
 
 @router.get("/budgets/{user_id}", response_model=list[Budget])
 def list_budgets(user_id: str = Depends(resolve_user_id)) -> list[Budget]:
-    with Session(engine) as session:
-        rows = session.exec(select(BudgetRow).where(BudgetRow.user_id == user_id)).all()
+    rows = store.query(BudgetRow, user_id=user_id)
     return [
         Budget(
             id=r.id,
@@ -106,38 +104,30 @@ def upsert_budget(req: BudgetCreateRequest, user_id: str = Depends(resolve_user_
     if req.monthly_limit < 0:
         raise HTTPException(400, "monthly_limit must be >= 0")
 
-    with Session(engine) as session:
-        existing = session.exec(
-            select(BudgetRow).where(BudgetRow.user_id == user_id, BudgetRow.category == req.category.value)
-        ).first()
-        if existing is not None:
-            existing.monthly_limit = req.monthly_limit
-            existing.rollover_enabled = req.rollover_enabled
-            existing.rollover_cap = req.rollover_cap
-            session.add(existing)
-            session.commit()
-            session.refresh(existing)
-            row = existing
-        else:
-            row = BudgetRow(
-                user_id=user_id,
-                category=req.category.value,
-                monthly_limit=req.monthly_limit,
-                rollover_enabled=req.rollover_enabled,
-                rollover_cap=req.rollover_cap,
-            )
-            session.add(row)
-            session.commit()
-            session.refresh(row)
-
-        return Budget(
-            id=row.id,
-            user_id=row.user_id,
-            category=row.category,
-            monthly_limit=row.monthly_limit,
-            rollover_enabled=bool(row.rollover_enabled),
-            rollover_cap=row.rollover_cap,
+    existing = store.first(BudgetRow, user_id=user_id, category=req.category.value)
+    if existing is not None:
+        existing.monthly_limit = req.monthly_limit
+        existing.rollover_enabled = req.rollover_enabled
+        existing.rollover_cap = req.rollover_cap
+        row = existing
+    else:
+        row = BudgetRow(
+            user_id=user_id,
+            category=req.category.value,
+            monthly_limit=req.monthly_limit,
+            rollover_enabled=req.rollover_enabled,
+            rollover_cap=req.rollover_cap,
         )
+    store.put(row)
+
+    return Budget(
+        id=row.id,
+        user_id=row.user_id,
+        category=row.category,
+        monthly_limit=row.monthly_limit,
+        rollover_enabled=bool(row.rollover_enabled),
+        rollover_cap=row.rollover_cap,
+    )
 
 
 @router.patch("/budgets/{user_id}/{budget_id}", response_model=Budget)
@@ -146,42 +136,37 @@ def patch_budget(
     req: BudgetUpdateRequest,
     user_id: str = Depends(resolve_user_id),
 ) -> Budget:
-    with Session(engine) as session:
-        row = session.get(BudgetRow, budget_id)
-        if row is None or row.user_id != user_id:
-            raise HTTPException(404, "Budget not found")
+    row = store.get(BudgetRow, budget_id)
+    if row is None or row.user_id != user_id:
+        raise HTTPException(404, "Budget not found")
 
-        if req.monthly_limit is not None:
-            if req.monthly_limit < 0:
-                raise HTTPException(400, "monthly_limit must be >= 0")
-            row.monthly_limit = req.monthly_limit
-        if req.rollover_enabled is not None:
-            row.rollover_enabled = req.rollover_enabled
-        if req.rollover_cap is not None:
-            row.rollover_cap = req.rollover_cap
+    if req.monthly_limit is not None:
+        if req.monthly_limit < 0:
+            raise HTTPException(400, "monthly_limit must be >= 0")
+        row.monthly_limit = req.monthly_limit
+    if req.rollover_enabled is not None:
+        row.rollover_enabled = req.rollover_enabled
+    if req.rollover_cap is not None:
+        row.rollover_cap = req.rollover_cap
 
-        session.add(row)
-        session.commit()
-        session.refresh(row)
+    store.put(row)
 
-        return Budget(
-            id=row.id,
-            user_id=row.user_id,
-            category=row.category,
-            monthly_limit=row.monthly_limit,
-            rollover_enabled=bool(row.rollover_enabled),
-            rollover_cap=row.rollover_cap,
-        )
+    return Budget(
+        id=row.id,
+        user_id=row.user_id,
+        category=row.category,
+        monthly_limit=row.monthly_limit,
+        rollover_enabled=bool(row.rollover_enabled),
+        rollover_cap=row.rollover_cap,
+    )
 
 
 @router.delete("/budgets/{user_id}/{budget_id}")
 def delete_budget(budget_id: str, user_id: str = Depends(resolve_user_id)) -> dict:
-    with Session(engine) as session:
-        row = session.get(BudgetRow, budget_id)
-        if row is None or row.user_id != user_id:
-            raise HTTPException(404, "Budget not found")
-        session.delete(row)
-        session.commit()
+    row = store.get(BudgetRow, budget_id)
+    if row is None or row.user_id != user_id:
+        raise HTTPException(404, "Budget not found")
+    store.delete(BudgetRow, budget_id)
     return {"deleted": True, "id": budget_id}
 
 
@@ -205,9 +190,8 @@ def _spent_this_month(df: pd.DataFrame, category: str, as_of: date) -> float:
 def budget_status(user_id: str = Depends(resolve_user_id)) -> list[BudgetStatus]:
     today = datetime.now(timezone.utc).date()
 
-    with Session(engine) as session:
-        budgets = session.exec(select(BudgetRow).where(BudgetRow.user_id == user_id)).all()
-        txn_rows = session.exec(select(TransactionRow).where(TransactionRow.user_id == user_id)).all()
+    budgets = store.query(BudgetRow, user_id=user_id)
+    txn_rows = store.query(TransactionRow, user_id=user_id)
 
     df = _transactions_df(list(txn_rows))
 
@@ -324,8 +308,7 @@ def safe_to_spend(user_id: str = Depends(resolve_user_id)) -> SafeToSpend:
     """
     today = datetime.now(timezone.utc).date()
 
-    with Session(engine) as session:
-        txn_rows = session.exec(select(TransactionRow).where(TransactionRow.user_id == user_id)).all()
+    txn_rows = store.query(TransactionRow, user_id=user_id)
 
     df = _transactions_df(list(txn_rows))
     recurring_all = detect_recurring(df)

@@ -20,7 +20,14 @@ import type {
 
   NetWorthHistory,
   NotificationItem,
+  PlanParams,
+  PlanResult,
+  PlanScenario,
+  PlanScenarioSummary,
+  PlanShock,
   RecomputeDiff,
+  CopilotInsight,
+  ReplanResult,
   ReviewQueueResponse,
   ReviewTransactionRequest,
   SafeToSpend,
@@ -35,7 +42,7 @@ import type {
   UpdateBudgetRequest,
   UpdateGoalRequest,
 } from "./types";
-import { createClient } from "./supabase/client";
+import { publishCopilotInsights } from "./copilotBus";
 import { DATA_CHANGED_EVENT } from "./hooks";
 import { getOfflineOnly } from "./user";
 
@@ -47,23 +54,14 @@ import { getOfflineOnly } from "./user";
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ?? (process.env.NODE_ENV === "production" ? "" : "http://127.0.0.1:8000");
 
-const AUTH_HEADER_TIMEOUT_MS = 2000;
-
-/** The backend now verifies a real Supabase session token for any user_id
- * that isn't one of the fixed demo personas (see backend/app/core/auth.py)
- * -- attach it whenever one exists. Demo-only usage (no signed-in session)
- * simply omits the header, which the backend already allows for the demo
- * personas.
- *
- * This runs before EVERY API call, including plain demo-mode traffic that
- * needs no auth at all -- so it must never be allowed to hang. supabase-js's
- * getSession() can stall indefinitely in some environments (unreachable
- * auth endpoint, a blocked/slow Web Locks API used for its cross-tab session
- * mutex), which would otherwise freeze the entire app on every page load.
- * Race it against a short timeout and fall back to unauthenticated. */
+/** Attach the Firebase ID token whenever a user is signed in. Demo-only usage
+ * (no signed-in session) omits the header, which the backend already allows
+ * for the demo personas. authStateReady() waits for Firebase to restore the
+ * persisted session so first-load requests aren't sent anonymously. */
 async function authHeader(): Promise<Record<string, string>> {
   try {
     const { auth: firebaseAuth } = await import("./firebase/config");
+    await firebaseAuth.authStateReady();
     if (firebaseAuth.currentUser) {
       const fbToken = await firebaseAuth.currentUser.getIdToken();
       if (fbToken) return { Authorization: `Bearer ${fbToken}` };
@@ -71,22 +69,7 @@ async function authHeader(): Promise<Record<string, string>> {
   } catch {
     // Firebase auth not available or not signed in
   }
-
-  try {
-    const supabase = createClient();
-    const timeout = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("auth session lookup timed out")), AUTH_HEADER_TIMEOUT_MS)
-    );
-    const {
-      data: { session },
-    } = await Promise.race([supabase.auth.getSession(), timeout]);
-    return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
-  } catch {
-    // Supabase env vars unset, no session, network unreachable, or the
-    // lookup timed out -- fall back to unauthenticated (demo-only)
-    // requests rather than blocking the app.
-    return {};
-  }
+  return {};
 }
 
 /** After a successful write, tell every mounted useAsync() to refetch. */
@@ -94,6 +77,11 @@ function notifyIfWrite(method?: string) {
   if (method && method !== "GET" && typeof window !== "undefined") {
     window.dispatchEvent(new Event(DATA_CHANGED_EVENT));
   }
+}
+
+function publishInsights(d: RecomputeDiff): RecomputeDiff {
+  if (d.insights?.length) publishCopilotInsights(d.insights);
+  return d;
 }
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -112,6 +100,13 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+function planQuery(p: PlanParams): string {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(p)) if (v !== undefined) q.set(k, String(v));
+  const s = q.toString();
+  return s ? `?${s}` : "";
+}
+
 export const api = {
   health: () => apiFetch<{ status: string }>("/api/health"),
   dashboard: (userId: string) => apiFetch<DashboardSnapshot>(`/api/dashboard/${userId}`),
@@ -127,7 +122,9 @@ export const api = {
   simulate: (userId: string, req: SimulationRequest) =>
     apiFetch<SimulationResult>(`/api/simulate/${userId}`, { method: "POST", body: JSON.stringify(req) }),
   addEvent: (userId: string, payload: Record<string, unknown>) =>
-    apiFetch<RecomputeDiff>(`/api/events/${userId}`, { method: "POST", body: JSON.stringify(payload) }),
+    apiFetch<RecomputeDiff>(`/api/events/${userId}`, { method: "POST", body: JSON.stringify(payload) }).then(publishInsights),
+  copilotInsights: (userId: string, since?: string) =>
+    apiFetch<CopilotInsight[]>(`/api/copilot/insights/${userId}?limit=20${since ? `&since=${encodeURIComponent(since)}` : ""}`),
 
   // Transactions
   transactions: (userId: string, filters: TransactionFilters = {}) => {
@@ -195,8 +192,17 @@ export const api = {
     });
     if (!res.ok) throw new Error(`API upload failed: ${res.status} ${await res.text()}`);
     notifyIfWrite("POST");
-    return res.json() as Promise<RecomputeDiff>;
+    return publishInsights((await res.json()) as RecomputeDiff);
   },
+
+  // Financial plan (constrained action planner + monthly probabilistic forecast)
+  plan: (userId: string, p: PlanParams = {}) =>
+    apiFetch<PlanResult>(`/api/plan/${userId}${planQuery(p)}`),
+  replan: (userId: string, p: PlanParams, shock: PlanShock) =>
+    apiFetch<ReplanResult>(`/api/plan/${userId}/replan`, { method: "POST", body: JSON.stringify({ ...p, shock }) }),
+  // Public (synthetic data) -- no user id.
+  planScenarios: () => apiFetch<PlanScenarioSummary[]>("/api/planning/scenarios"),
+  planScenario: (name: string) => apiFetch<PlanScenario>(`/api/planning/scenarios/${name}`),
 
   // Notifications
   notifications: (userId: string) => apiFetch<NotificationItem[]>(`/api/notifications/${userId}`),

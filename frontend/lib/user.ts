@@ -5,7 +5,7 @@
  * (demo-priya, demo-arjun, demo-meera -- see backend/app/ingest/personas.py)
  * and every client-side call defaults to demo-priya. Stored in localStorage
  * purely as a per-viewer convenience (never read by the server) -- swapped
- * for the real Supabase user id once accounts map to backend user records.
+ * for the real Firebase user id once accounts map to backend user records.
  */
 const STORAGE_KEY = "finpilot:user_id";
 export const DEFAULT_USER_ID = "demo-priya";
@@ -26,7 +26,7 @@ export const DEMO_PERSONAS: DemoPersona[] = [
   { id: "demo-meera", label: "Meera" },
 ];
 
-/** The signed-in Supabase user's id, mirrored into localStorage by
+/** The signed-in Firebase user's id, mirrored into localStorage by
  * setAuthUserId() so getUserId() stays synchronous. When present it wins
  * over the demo persona: a signed-in user only ever sees their own data. */
 const AUTH_USER_KEY = "finpilot:auth_user_id";
@@ -48,7 +48,7 @@ export function getUserId(): string {
   }
 }
 
-/** Called from the Supabase auth listener (components/SignInButton.tsx) with
+/** Called from the Firebase auth listener (components/SignInButton.tsx) with
  * the signed-in user's id, or null on sign-out. */
 export function setAuthUserId(id: string | null) {
   if (typeof window === "undefined") return;

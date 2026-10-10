@@ -9,14 +9,14 @@ import json
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, UploadFile
-from sqlmodel import Session, select
 
 from app.analytics.recurring import normalize_merchant
 from app.copilot.engine import answer as copilot_answer
-from app.core.auth import DEMO_USER_IDS, resolve_user_id, verify_supabase_token
+from app.core.auth import DEMO_USER_IDS, resolve_user_id
 from app.core.config import get_settings
-from app.core.db import engine
+from app.core import store
 from app.core.ratelimit import chat_limiter, upload_limiter
+from app.copilot.watcher import watch
 from app.forecast.alerts import maybe_send_gap_alert
 from app.ingest.categorize import categorize
 from app.ingest.snapshot import build_dashboard_snapshot, get_last_snapshot
@@ -54,22 +54,22 @@ _FREQUENCY_INTERVAL_DAYS = {
 }
 
 
-def _starting_balance_for_user(user_id: str, session: Session) -> float:
+def _starting_balance_for_user(user_id: str) -> float:
     """Real starting balance: sum of the user's checking+savings account
     balances (see app.ingest.snapshot module docstring for the rationale).
     Recomputed here directly from Account rows (rather than stashed on
     DashboardSnapshot, which has no dedicated field for it) so this stays a
     single source of truth shared with build_dashboard_snapshot."""
-    accounts = session.exec(select(AccountRow).where(AccountRow.user_id == user_id)).all()
+    accounts = store.query(AccountRow, user_id=user_id)
     if not accounts:
         return 42_000.0  # fixture-fallback users have no Account rows
     return float(sum(a.balance for a in accounts if a.type in _LIQUID_ACCOUNT_TYPES))
 
 
-def _forecast_inputs_from_snapshot(snap: DashboardSnapshot, user_id: str, session: Session) -> ForecastInputs:
+def _forecast_inputs_from_snapshot(snap: DashboardSnapshot, user_id: str) -> ForecastInputs:
     """Build simulate.engine.ForecastInputs from a DashboardSnapshot plus a
     real starting balance looked up from the DB."""
-    starting_balance = _starting_balance_for_user(user_id, session)
+    starting_balance = _starting_balance_for_user(user_id)
     return ForecastInputs(
         starting_balance=starting_balance,
         recurring=snap.recurring_obligations,
@@ -87,27 +87,13 @@ def health_check() -> dict:
 
 @router.get("/dashboard/{user_id}", response_model=DashboardSnapshot)
 def get_dashboard(user_id: str = Depends(resolve_user_id)) -> DashboardSnapshot:
-    with Session(engine) as session:
-        return build_dashboard_snapshot(user_id, session)
+    return build_dashboard_snapshot(user_id)
 
 
-def _resolve_body_user_id(req: ChatRequest, authorization: str | None = Header(default=None)) -> str:
+async def _resolve_body_user_id(req: ChatRequest, authorization: str | None = Header(default=None)) -> str:
     """Same trust rule as `resolve_user_id`, but for endpoints (like /chat)
     where user_id arrives in the JSON body rather than the URL path."""
-    if authorization:
-        scheme, _, token = authorization.partition(" ")
-        if scheme.lower() != "bearer" or not token:
-            raise HTTPException(401, "Authorization header must be 'Bearer <token>'")
-        claims = verify_supabase_token(token)
-        verified_user_id = claims.get("sub")
-        if req.user_id in DEMO_USER_IDS:
-            return req.user_id
-        if verified_user_id != req.user_id:
-            raise HTTPException(403, "Token does not authorize access to this user_id")
-        return verified_user_id
-    if req.user_id in DEMO_USER_IDS:
-        return req.user_id
-    raise HTTPException(401, "Authentication required for non-demo users")
+    return await resolve_user_id(req.user_id, authorization)
 
 
 @router.post("/chat", response_model=AnswerContract)
@@ -120,9 +106,8 @@ def chat(req: ChatRequest, user_id: str = Depends(_resolve_body_user_id)) -> Ans
 
 @router.post("/simulate/{user_id}", response_model=SimulationResult)
 def run_simulation(req: SimulationRequest, user_id: str = Depends(resolve_user_id)) -> SimulationResult:
-    with Session(engine) as session:
-        snap = build_dashboard_snapshot(user_id, session)
-        inputs = _forecast_inputs_from_snapshot(snap, user_id, session)
+    snap = build_dashboard_snapshot(user_id)
+    inputs = _forecast_inputs_from_snapshot(snap, user_id)
     try:
         return simulate(
             req.action,
@@ -160,23 +145,27 @@ async def upload_transactions(file: UploadFile, user_id: str = Depends(resolve_u
     if len(rows) > _MAX_UPLOAD_ROWS:
         raise HTTPException(413, f"Too many transactions in one upload (max {_MAX_UPLOAD_ROWS})")
 
-    with Session(engine) as session:
-        before = get_last_snapshot(user_id, session) or build_dashboard_snapshot(user_id, session)
+    before = get_last_snapshot(user_id) or build_dashboard_snapshot(user_id)
 
-        # A real user with no account yet gets one backing the synthetic id,
-        # so the snapshot leaves the empty placeholder state.
-        has_account = session.exec(select(AccountRow).where(AccountRow.user_id == user_id)).first()
-        if not has_account and user_id not in DEMO_USER_IDS:
-            session.add(AccountRow(id=account_id, user_id=user_id, name="Uploaded statement", type="checking", balance=0))
+    # A real user with no account yet gets one backing the synthetic id,
+    # so the snapshot leaves the empty placeholder state.
+    has_account = store.first(AccountRow, user_id=user_id)
+    new_rows = list(rows)
+    if not has_account and user_id not in DEMO_USER_IDS:
+        new_rows.insert(0, AccountRow(id=account_id, user_id=user_id, name="Uploaded statement", type="checking", balance=0))
+    store.put(*new_rows)  # shortcut: batches of 500 are not atomic across batches; a mid-upload failure leaves a partial upload
 
-        for row in rows:
-            session.add(row)
-        session.commit()
+    after = build_dashboard_snapshot(user_id)
 
-        after = build_dashboard_snapshot(user_id, session)
-
-    return _build_recompute_diff(trigger="csv_upload", before=before, after=after,
+    diff = _build_recompute_diff(trigger="csv_upload", before=before, after=after,
                                   extra_narrative=f"Ingested {len(rows)} transactions from {file.filename or 'uploaded file'}.")
+    diff.insights = watch(user_id, list(rows), new_gap=_new_gap(before, after))
+    return diff
+
+
+def _new_gap(before: DashboardSnapshot, after: DashboardSnapshot) -> bool:
+    b, a = before.forecast.first_gap_date, after.forecast.first_gap_date
+    return a is not None and (b is None or a < b)
 
 
 def _build_recompute_diff(*, trigger: str, before: DashboardSnapshot, after: DashboardSnapshot,
@@ -236,18 +225,15 @@ def add_event(payload: dict, user_id: str = Depends(resolve_user_id)) -> Recompu
        checking account, or a synthetic "acc-events-{user_id}")}
     """
     kind = payload.get("kind", "transaction")
+    new_txns: list[TransactionRow] = []
 
-    def _default_checking_account(session: Session, account_id: str | None) -> str:
+    def _default_checking_account(account_id: str | None) -> str:
         if account_id:
             return account_id
-        checking = session.exec(
-            select(AccountRow).where(AccountRow.user_id == user_id, AccountRow.type == "checking")
-        ).first()
+        checking = store.first(AccountRow, user_id=user_id, type="checking")
         if checking:
             return checking.id
-        savings = session.exec(
-            select(AccountRow).where(AccountRow.user_id == user_id, AccountRow.type == "savings")
-        ).first()
+        savings = store.first(AccountRow, user_id=user_id, type="savings")
         if savings and user_id not in DEMO_USER_IDS:
             return savings.id
         if user_id in DEMO_USER_IDS:
@@ -256,104 +242,104 @@ def add_event(payload: dict, user_id: str = Depends(resolve_user_id)) -> Recompu
         # create a default one so the snapshot stops being the empty
         # placeholder (it keys off the user having >= 1 AccountRow).
         default = AccountRow(user_id=user_id, name="Main account", type="checking", balance=0)
-        session.add(default)
-        session.flush()
+        store.put(default)
         return default.id
 
-    with Session(engine) as session:
-        before = get_last_snapshot(user_id, session) or build_dashboard_snapshot(user_id, session)
+    before = get_last_snapshot(user_id) or build_dashboard_snapshot(user_id)
 
-        if kind == "transaction":
-            amount = payload.get("amount")
-            if amount is None:
-                raise HTTPException(400, "transaction event requires 'amount'")
-            merchant = payload.get("merchant", "Manual entry")
-            category = payload.get("category")
-            if category:
-                category_value = category
-            else:
-                category_value = categorize(merchant, float(amount)).value
-            txn_date_str = payload.get("date")
-            txn_date = (
-                datetime.strptime(txn_date_str, "%Y-%m-%d").date()
-                if txn_date_str
-                else datetime.now(timezone.utc).date()
+    if kind == "transaction":
+        amount = payload.get("amount")
+        if amount is None:
+            raise HTTPException(400, "transaction event requires 'amount'")
+        merchant = payload.get("merchant", "Manual entry")
+        category = payload.get("category")
+        if category:
+            category_value = category
+        else:
+            category_value = categorize(merchant, float(amount)).value
+        txn_date_str = payload.get("date")
+        txn_date = (
+            datetime.strptime(txn_date_str, "%Y-%m-%d").date()
+            if txn_date_str
+            else datetime.now(timezone.utc).date()
+        )
+        account_id = _default_checking_account(payload.get("account_id"))
+
+        new_txns.append(
+            TransactionRow(
+                user_id=user_id,
+                account_id=account_id,
+                date=txn_date,
+                amount=float(amount),
+                merchant=merchant,
+                category=category_value,
+                description=payload.get("description"),
+                is_recurring=bool(payload.get("is_recurring", False)),
+                recurring_group_id=payload.get("recurring_group_id"),
             )
-            account_id = _default_checking_account(session, payload.get("account_id"))
+        )
+        store.put(*new_txns)
+    elif kind == "recurring":
+        # The frontend's "New recurring obligation" form (Timeline page)
+        # posts {merchant, amount, frequency, next_expected_date} -- this
+        # branch was previously missing entirely, so every submission
+        # 400'd. detect_recurring() (app/analytics/recurring.py) only
+        # surfaces a merchant once it has >= 3 historical occurrences, so
+        # a single future-dated row would be invisible to it; backdate 3
+        # occurrences at the chosen cadence instead, which makes the new
+        # obligation show up on the very next dashboard fetch exactly
+        # like every other recurring obligation.
+        amount = payload.get("amount")
+        if amount is None:
+            raise HTTPException(400, "recurring event requires 'amount'")
+        merchant = payload.get("merchant", "Manual entry")
+        frequency = payload.get("frequency", "monthly")
+        interval_days = _FREQUENCY_INTERVAL_DAYS.get(frequency, 30)
+        anchor_str = payload.get("next_expected_date")
+        anchor = (
+            datetime.strptime(anchor_str, "%Y-%m-%d").date()
+            if anchor_str
+            else datetime.now(timezone.utc).date()
+        )
+        # A recurring "obligation" is a commitment (rent, EMI,
+        # subscription, ...) -- always an outflow, regardless of the sign
+        # the caller passed in.
+        signed_amount = -abs(float(amount))
+        category = payload.get("category")
+        category_value = category if category else categorize(merchant, signed_amount).value
+        account_id = _default_checking_account(payload.get("account_id"))
 
-            session.add(
+        # Use the same normalization detect_recurring() applies so a
+        # group id assigned here matches what recurring-detection would
+        # independently compute for the same merchant (previously this
+        # used a naive lower/replace that diverged from
+        # app.analytics.recurring.normalize_merchant, e.g. dropping
+        # trailing numeric IDs differently).
+        group_id = f"rg-{normalize_merchant(merchant).replace(' ', '-')}"
+        for i in range(3, 0, -1):
+            store.put(
                 TransactionRow(
                     user_id=user_id,
                     account_id=account_id,
-                    date=txn_date,
-                    amount=float(amount),
+                    date=anchor - timedelta(days=interval_days * i),
+                    amount=signed_amount,
                     merchant=merchant,
                     category=category_value,
                     description=payload.get("description"),
-                    is_recurring=bool(payload.get("is_recurring", False)),
-                    recurring_group_id=payload.get("recurring_group_id"),
+                    is_recurring=True,
+                    recurring_group_id=group_id,
                 )
             )
-        elif kind == "recurring":
-            # The frontend's "New recurring obligation" form (Timeline page)
-            # posts {merchant, amount, frequency, next_expected_date} -- this
-            # branch was previously missing entirely, so every submission
-            # 400'd. detect_recurring() (app/analytics/recurring.py) only
-            # surfaces a merchant once it has >= 3 historical occurrences, so
-            # a single future-dated row would be invisible to it; backdate 3
-            # occurrences at the chosen cadence instead, which makes the new
-            # obligation show up on the very next dashboard fetch exactly
-            # like every other recurring obligation.
-            amount = payload.get("amount")
-            if amount is None:
-                raise HTTPException(400, "recurring event requires 'amount'")
-            merchant = payload.get("merchant", "Manual entry")
-            frequency = payload.get("frequency", "monthly")
-            interval_days = _FREQUENCY_INTERVAL_DAYS.get(frequency, 30)
-            anchor_str = payload.get("next_expected_date")
-            anchor = (
-                datetime.strptime(anchor_str, "%Y-%m-%d").date()
-                if anchor_str
-                else datetime.now(timezone.utc).date()
-            )
-            # A recurring "obligation" is a commitment (rent, EMI,
-            # subscription, ...) -- always an outflow, regardless of the sign
-            # the caller passed in.
-            signed_amount = -abs(float(amount))
-            category = payload.get("category")
-            category_value = category if category else categorize(merchant, signed_amount).value
-            account_id = _default_checking_account(session, payload.get("account_id"))
+    else:
+        raise HTTPException(400, f"Unsupported event kind: {kind!r}")
 
-            # Use the same normalization detect_recurring() applies so a
-            # group id assigned here matches what recurring-detection would
-            # independently compute for the same merchant (previously this
-            # used a naive lower/replace that diverged from
-            # app.analytics.recurring.normalize_merchant, e.g. dropping
-            # trailing numeric IDs differently).
-            group_id = f"rg-{normalize_merchant(merchant).replace(' ', '-')}"
-            for i in range(3, 0, -1):
-                session.add(
-                    TransactionRow(
-                        user_id=user_id,
-                        account_id=account_id,
-                        date=anchor - timedelta(days=interval_days * i),
-                        amount=signed_amount,
-                        merchant=merchant,
-                        category=category_value,
-                        description=payload.get("description"),
-                        is_recurring=True,
-                        recurring_group_id=group_id,
-                    )
-                )
-        else:
-            raise HTTPException(400, f"Unsupported event kind: {kind!r}")
+    store.put(EventRow(user_id=user_id, kind=kind, payload_json=json.dumps(payload, default=str)))
 
-        session.add(EventRow(user_id=user_id, kind=kind, payload_json=json.dumps(payload, default=str)))
-        session.commit()
+    after = build_dashboard_snapshot(user_id)
 
-        after = build_dashboard_snapshot(user_id, session)
-
-    return _build_recompute_diff(trigger=kind, before=before, after=after)
+    diff = _build_recompute_diff(trigger=kind, before=before, after=after)
+    diff.insights = watch(user_id, new_txns, new_gap=_new_gap(before, after))
+    return diff
 
 
 @router.post("/alerts/gap/{user_id}")
@@ -369,7 +355,6 @@ def send_gap_alert(payload: dict, user_id: str = Depends(resolve_user_id)) -> di
     if not user_email:
         raise HTTPException(400, "payload must include 'email'")
 
-    with Session(engine) as session:
-        snap = build_dashboard_snapshot(user_id, session)
+    snap = build_dashboard_snapshot(user_id)
     sent = maybe_send_gap_alert(user_email, snap.forecast)
     return {"sent": sent}

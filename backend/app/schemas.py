@@ -319,6 +319,21 @@ class CreateAccountRequest(BaseModel):
     interest_rate_apr: Optional[float] = None
 
 
+class CopilotAction(BaseModel):
+    label: str
+    href: str
+
+
+class CopilotInsight(BaseModel):
+    id: str
+    created_at: datetime
+    txn_id: Optional[str] = None
+    severity: Literal["info", "positive", "warning", "critical"]
+    title: str = Field(max_length=60)
+    body: str
+    action: Optional[CopilotAction] = None
+
+
 class RecomputeDiff(BaseModel):
     """Returned after a new event/transaction is added, so the UI can
     animate exactly what changed and why."""
@@ -331,6 +346,7 @@ class RecomputeDiff(BaseModel):
     new_recommendations: list[Recommendation] = Field(default_factory=list)
     removed_recommendation_actions: list[ActionType] = Field(default_factory=list)
     narrative: str
+    insights: list[CopilotInsight] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

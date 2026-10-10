@@ -8,7 +8,7 @@ subscription" scenario (no unseeded randomness).
 """
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -23,7 +23,7 @@ from app.schemas import (
 )
 from app.simulate.engine import ForecastInputs, simulate
 
-TODAY = date.today()
+TODAY = datetime.now(timezone.utc).date()  # app code uses UTC dates
 
 
 # ---------------------------------------------------------------------------

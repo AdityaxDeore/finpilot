@@ -38,10 +38,9 @@ from collections import defaultdict
 from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, Query
-from sqlmodel import Session, select
 
 from app.core.auth import resolve_user_id
-from app.core.db import engine
+from app.core import store
 from app.models import AccountRow, TransactionRow
 from app.schemas import Account, CreateAccountRequest, NetWorthHistory, NetWorthPoint
 
@@ -102,16 +101,14 @@ def net_worth_history(
     days: int = Query(default=_DEFAULT_DAYS, ge=1, le=_MAX_DAYS),
 ) -> NetWorthHistory:
     today = date.today()
-    with Session(engine) as session:
-        accounts = session.exec(select(AccountRow).where(AccountRow.user_id == user_id)).all()
-        current = float(sum(a.balance for a in accounts))
-        if not accounts:
-            return NetWorthHistory(points=[], current=0.0)
+    accounts = store.query(AccountRow, user_id=user_id)
+    current = float(sum(a.balance for a in accounts))
+    if not accounts:
+        return NetWorthHistory(points=[], current=0.0)
 
-        txn_rows = session.exec(select(TransactionRow).where(TransactionRow.user_id == user_id)).all()
-        txns_by_account: dict[str, list[TransactionRow]] = defaultdict(list)
-        for t in txn_rows:
-            txns_by_account[t.account_id].append(t)
+    txns_by_account: dict[str, list[TransactionRow]] = defaultdict(list)
+    for t in store.query(TransactionRow, user_id=user_id):
+        txns_by_account[t.account_id].append(t)
 
     totals: dict[date, float] = defaultdict(float)
     counts: dict[date, int] = defaultdict(int)
@@ -131,9 +128,7 @@ def net_worth_history(
 
 @router.get("/api/accounts/{user_id}", response_model=list[Account])
 def list_accounts(user_id: str = Depends(resolve_user_id)) -> list[Account]:
-    with Session(engine) as session:
-        accounts = session.exec(select(AccountRow).where(AccountRow.user_id == user_id)).all()
-    return [_account_row_to_schema(a) for a in accounts]
+    return [_account_row_to_schema(a) for a in store.query(AccountRow, user_id=user_id)]
 
 
 @router.post("/api/accounts/{user_id}", response_model=Account, status_code=201)
@@ -146,8 +141,5 @@ def create_account(req: CreateAccountRequest, user_id: str = Depends(resolve_use
         credit_limit=req.credit_limit,
         interest_rate_apr=req.interest_rate_apr,
     )
-    with Session(engine) as session:
-        session.add(row)
-        session.commit()
-        session.refresh(row)
+    store.put(row)
     return _account_row_to_schema(row)

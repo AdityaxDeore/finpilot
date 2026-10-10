@@ -7,22 +7,20 @@ from datetime import date, timedelta
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlmodel import Session, select
 
 from app.api.notifications_router import router
 from app.core.auth import resolve_user_id
-from app.core.db import engine, init_db
+from app.core import store
 from app.ingest.seed import seed_all
 from app.models import AccountRow, TransactionRow
 
-init_db()
 seed_all()
 
 app = FastAPI()
 app.include_router(router)
 # Auth (resolve_user_id) is exhaustively covered in test_auth.py; here we
 # only exercise the notifications feed, including against synthetic
-# non-demo user ids that would otherwise 401 without a real Supabase token,
+# non-demo user ids that would otherwise 401 without a real Firebase token,
 # so the dependency is overridden to trust the path param.
 app.dependency_overrides[resolve_user_id] = lambda user_id: user_id
 client = TestClient(app)
@@ -58,14 +56,9 @@ def test_response_well_formed_for_persona_with_no_urgent_items():
     no anomalies, no recurring bills, no forecast gap -- the feed should be
     empty (or near-empty) but a well-formed 200, not an error."""
     user_id = "test-notifications-no-urgent-items"
-    with Session(engine) as session:
-        for row in session.exec(select(TransactionRow).where(TransactionRow.user_id == user_id)).all():
-            session.delete(row)
-        for row in session.exec(select(AccountRow).where(AccountRow.user_id == user_id)).all():
-            session.delete(row)
-        session.commit()
-        session.add(AccountRow(user_id=user_id, name="Checking", type="checking", balance=50000.0))
-        session.commit()
+    store.delete_where(TransactionRow, user_id=user_id)
+    store.delete_where(AccountRow, user_id=user_id)
+    store.put(AccountRow(user_id=user_id, name="Checking", type="checking", balance=50000.0))
 
     r = client.get(f"/api/notifications/{user_id}")
     assert r.status_code == 200
@@ -78,10 +71,7 @@ def test_response_well_formed_for_persona_with_no_urgent_items():
     assert not any(i["type"] == "anomaly" for i in items)
     assert not any(i["type"] == "upcoming_bill" for i in items)
 
-    with Session(engine) as session:
-        for row in session.exec(select(AccountRow).where(AccountRow.user_id == user_id)).all():
-            session.delete(row)
-        session.commit()
+    store.delete_where(AccountRow, user_id=user_id)
 
 
 def test_never_raises_for_unknown_user_id():

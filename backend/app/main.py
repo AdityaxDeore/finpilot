@@ -5,27 +5,28 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.concurrency import run_in_threadpool
 
 from app.api.budgets_router import router as budgets_router
+from app.api.copilot_feed_router import router as copilot_feed_router
 from app.api.goals_router import router as goals_router
 from app.api.household_router import router as household_router
 from app.api.networth_router import router as networth_router
 from app.api.notifications_router import router as notifications_router
+from app.api.plan_router import router as plan_router
 from app.api.routes import router
 from app.api.rules_router import router as rules_router
 from app.api.tax_router import router as tax_router
 from app.api.transactions_router import router as transactions_router
 from app.core.audit import log_audit_event
-from app.core.db import init_db
 
 _MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    init_db()
     if os.getenv("VERCEL"):
-        # Fresh ephemeral sqlite on every cold start -- restore the demo personas.
+        # Firestore may be empty on a fresh deploy -- seed the demo personas if missing.
         from app.ingest.seed import seed_if_empty
 
         seed_if_empty()
@@ -54,6 +55,8 @@ app.add_middleware(
 app.include_router(router, prefix="/api")
 app.include_router(transactions_router, prefix="/api")
 app.include_router(budgets_router, prefix="/api")
+app.include_router(plan_router, prefix="/api")
+app.include_router(copilot_feed_router, prefix="/api")
 # These already embed "/api/..." in each route's own path decorator
 # (unlike routes.py/transactions_router/budgets_router, which rely on the
 # prefix="/api" above) -- no prefix here, or paths would double up.
@@ -86,7 +89,7 @@ async def audit_log_middleware(request: Request, call_next):
         # user_id is always the 3rd segment for these resources (even when
         # further sub-path segments follow, e.g. /api/budgets/{user_id}/status
         # or /api/transactions/{user_id}/{transaction_id}).
-        if parts[1] in {"transactions", "budgets", "goals", "tax", "rules", "household"}:
+        if parts[1] in {"transactions", "budgets", "goals", "tax", "rules", "household", "plan"}:
             return parts[2]
 
         # For these, user_id is the LAST segment (/api/dashboard/{user_id},
@@ -96,11 +99,15 @@ async def audit_log_middleware(request: Request, call_next):
         # /api/networth/{user_id}/history
         if parts[1] == "networth":
             return parts[2]
+        # /api/copilot/insights/{user_id}
+        if parts[1] == "copilot":
+            return parts[-1]
         return None
 
     try:
         if status in (401, 403, 429):
-            log_audit_event(
+            await run_in_threadpool(
+                log_audit_event,
                 user_id=_guess_user_id(),
                 event_type="rate_limited" if status == 429 else "auth_denied",
                 method=method,
@@ -109,7 +116,8 @@ async def audit_log_middleware(request: Request, call_next):
                 client_ip=request.client.host if request.client else None,
             )
         elif method in _MUTATING_METHODS and 200 <= status < 300 and path.startswith("/api/"):
-            log_audit_event(
+            await run_in_threadpool(
+                log_audit_event,
                 user_id=_guess_user_id(),
                 event_type="mutation",
                 method=method,

@@ -4,14 +4,9 @@ simulate/, copilot/) added by the background agents.
 """
 from fastapi.testclient import TestClient
 
-from app.core.db import init_db
+from app.core import auth as auth_module
 from app.main import app
 
-# Ensure tables exist even if this module's TestClient never triggers
-# FastAPI's lifespan (plain `TestClient(app)` without `with` doesn't run
-# startup events) -- needed now that /api/dashboard queries the DB for real
-# instead of only ever returning a static fixture. init_db() is idempotent.
-init_db()
 client = TestClient(app)
 
 
@@ -40,3 +35,18 @@ def test_chat_stub_returns_answer_contract() -> None:
     assert r.status_code == 200
     body = r.json()
     assert "facts" in body and "predictions" in body and "recommendations" in body
+
+
+def test_chat_accepts_firebase_token_for_non_demo_user(monkeypatch) -> None:
+    monkeypatch.setattr(auth_module.google_id_token, "verify_firebase_token", lambda *a, **k: {"sub": "user-A"})
+    r = client.post(
+        "/api/chat",
+        json={"message": "How am I doing?", "user_id": "user-A", "force_offline": True},
+        headers={"Authorization": "Bearer abc.def.ghi"},
+    )
+    assert r.status_code == 200
+
+
+def test_chat_rejects_non_demo_user_without_token() -> None:
+    r = client.post("/api/chat", json={"message": "hi", "user_id": "user-A"})
+    assert r.status_code == 401

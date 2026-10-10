@@ -267,6 +267,15 @@ PERSONA_CONFIGS: dict[str, PersonaConfig] = {
 # ---------------------------------------------------------------------------
 
 
+# Declared plan inputs for the /plan page (reserve + savings/debt goal in INR);
+# api/plan_router.py uses them as defaults when a demo user passes none.
+PLAN_PROFILES: dict[str, dict[str, float | int]] = {
+    "demo-priya": {"reserve": 40_000, "goal_amount": 60_000, "goal_month": 6},
+    "demo-arjun": {"reserve": 300_000, "goal_amount": 400_000, "goal_month": 6},
+    "demo-meera": {"reserve": 5_000, "goal_amount": 30_000, "goal_month": 6},
+}
+
+
 def _month_anchors(months: int = MONTHS_OF_HISTORY) -> list[date]:
     """First-of-month anchors for the last `months` months, oldest first."""
     anchors = []

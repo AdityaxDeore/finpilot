@@ -36,11 +36,11 @@ export default function DashboardPage() {
 
   if (loading && !data) {
     return (
-      <div className="flex flex-col gap-8 animate-pulse">
+      <div className="flex flex-col gap-5 animate-pulse">
         <div className="h-60 rounded-card elevation-card p-6">
           <HealthScoreSkeleton />
         </div>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <Card key={i}>
               <StatTileSkeleton />
@@ -50,7 +50,7 @@ export default function DashboardPage() {
         <Card>
           <ForecastChartSkeleton />
         </Card>
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 items-start">
           <Card>
             <ListItemSkeleton rows={3} />
           </Card>
@@ -94,7 +94,7 @@ export default function DashboardPage() {
           title="Welcome to FinPilot — let's set up your finances"
           body="Nothing here is demo data. Add an account, log a transaction, or import a bank statement and your dashboard, forecast and insights will build from your own numbers."
         />
-        <Card className="p-6 sm:p-7">
+        <Card className="p-4 sm:p-5">
           <CardHeader>
             <CardTitle>Add your first data</CardTitle>
           </CardHeader>
@@ -109,7 +109,7 @@ export default function DashboardPage() {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35 }}
-      className="flex flex-col gap-8 pb-12 min-w-0 max-w-full"
+      className="flex flex-col gap-5 pb-4 min-w-0 max-w-full"
     >
       {/* Top Banner: Financial Overview Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-black/[0.04]">
@@ -165,7 +165,7 @@ export default function DashboardPage() {
       </div>
 
       {!isDemo && showAdd && (
-        <Card className="p-6 sm:p-7">
+        <Card className="p-4 sm:p-5">
           <CardHeader>
             <CardTitle>Add data</CardTitle>
           </CardHeader>
@@ -177,15 +177,15 @@ export default function DashboardPage() {
       <HealthScoreCard score={data.health_score} />
 
       {/* KPI Stat Tiles Bento Bar */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <Card hoverable className="p-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Card hoverable className="p-4">
           <StatTile
             label="Net Worth"
             value={formatCurrency(data.net_worth)}
             sub="Liquid + Invested Assets"
           />
         </Card>
-        <Card hoverable className="p-5">
+        <Card hoverable className="p-4">
           <StatTile
             label="Monthly Inflow"
             value={formatCurrency(data.monthly_income)}
@@ -193,14 +193,14 @@ export default function DashboardPage() {
             sub="Verified Payroll"
           />
         </Card>
-        <Card hoverable className="p-5">
+        <Card hoverable className="p-4">
           <StatTile
             label="Monthly Outflow"
             value={formatCurrency(data.monthly_expenses)}
             sub="Obligations & Living"
           />
         </Card>
-        <Card hoverable className="p-5">
+        <Card hoverable className="p-4">
           <StatTile
             label="Savings Rate"
             value={formatPercent(data.savings_rate)}
@@ -215,7 +215,8 @@ export default function DashboardPage() {
       </div>
 
       {/* Cash-Flow Forecast Section */}
-      <Card className="p-6 sm:p-7">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2 min-w-0">
+      <Card className="p-4 sm:p-5 min-w-0">
         <CardHeader>
           <div className="flex items-center gap-2">
             <CardTitle>90-Day Cash-Flow Trajectory</CardTitle>
@@ -228,24 +229,25 @@ export default function DashboardPage() {
       </Card>
 
       {/* Net Worth Trend Section */}
-      <Card className="p-6 sm:p-7">
+      <Card className="p-4 sm:p-5 min-w-0">
         <CardHeader>
           <CardTitle>Net Worth Over Time</CardTitle>
         </CardHeader>
         <NetWorthTrend userId={userId} />
       </Card>
+      </div>
 
       {/* Account Balances Cards */}
       <AccountCards userId={userId} />
 
       {/* Two-Column Grid: Recurring Commitments & Debts */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 items-start">
         <RecurringList obligations={data.recurring_obligations} />
         <DebtsList debts={data.debts} />
       </div>
 
       {/* Three-Lane Insights Panel */}
-      <Card className="p-6 sm:p-8">
+      <Card className="p-4 sm:p-5">
         <CardHeader>
           <div className="flex items-center gap-2.5">
             <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-ember text-white font-bold text-xs shadow-sm">

@@ -18,21 +18,6 @@ load_dotenv(_REPO_ROOT / "backend" / ".env", override=False)
 
 
 class Settings:
-    # Supabase
-    supabase_url: str = os.getenv("NEXT_PUBLIC_SUPABASE_URL", "")
-    supabase_anon_key: str = os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "")
-    supabase_service_role_key: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
-    supabase_project_ref: str = os.getenv("SUPABASE_PROJECT_REF", "")
-
-    # Database (direct Postgres connection, falls back to local sqlite for offline dev/tests)
-    # On Vercel the deployment filesystem is read-only except /tmp, so the
-    # sqlite fallback lives there (per-instance and ephemeral -- set
-    # DATABASE_URL to a real Postgres for data that must persist).
-    database_url: str = (
-        os.getenv("DATABASE_URL")
-        or ("sqlite:////tmp/finpilot.db" if os.getenv("VERCEL") else "sqlite:///./finpilot_dev.db")
-    )
-
     # Gemini
     gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
     gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
@@ -47,7 +32,9 @@ class Settings:
     demo_mode: bool = os.getenv("FINPILOT_DEMO_MODE", "true").lower() == "true"
 
     # Firebase
-    firebase_project_id: str = os.getenv("FIREBASE_PROJECT_ID") or os.getenv("NEXT_PUBLIC_FIREBASE_PROJECT_ID", "hackmatrix-1c5a2")
+    firebase_project_id: str = os.getenv("FIREBASE_PROJECT_ID") or os.getenv("NEXT_PUBLIC_FIREBASE_PROJECT_ID", "hackmatrix-3764f")
+    # Firestore project may differ (e.g. demo-* with the emulator) from the Auth project that signs ID tokens.
+    firestore_project_id: str = os.getenv("FIRESTORE_PROJECT_ID") or firebase_project_id
 
     @property
     def has_firebase(self) -> bool:
@@ -56,10 +43,6 @@ class Settings:
     @property
     def has_gemini(self) -> bool:
         return bool(self.gemini_api_key)
-
-    @property
-    def has_supabase(self) -> bool:
-        return bool(self.supabase_url and self.supabase_service_role_key)
 
     @property
     def has_resend(self) -> bool:

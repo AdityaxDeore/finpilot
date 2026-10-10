@@ -31,11 +31,10 @@ import hashlib
 from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends
-from sqlmodel import Session, select
 
 from app.analytics.anomalies import detect_anomalies
 from app.core.auth import resolve_user_id
-from app.core.db import engine
+from app.core import store
 from app.ingest.snapshot import _transactions_df, build_dashboard_snapshot
 from app.models import TransactionRow
 from app.schemas import NotificationItem
@@ -60,9 +59,8 @@ def get_notifications(user_id: str = Depends(resolve_user_id)) -> list[Notificat
     today = date.today()
 
     try:
-        with Session(engine) as session:
-            snapshot = build_dashboard_snapshot(user_id, session)
-            txn_rows = session.exec(select(TransactionRow).where(TransactionRow.user_id == user_id)).all()
+        snapshot = build_dashboard_snapshot(user_id)
+        txn_rows = store.query(TransactionRow, user_id=user_id)
     except Exception:
         # Defensive: never let a notifications-feed failure break the page
         # that renders it. An empty feed is always a valid response.

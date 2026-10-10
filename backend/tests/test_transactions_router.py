@@ -14,14 +14,11 @@ from datetime import date, timedelta
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlmodel import Session
 
 from app.api.transactions_router import router as transactions_router
 from app.core.auth import resolve_user_id
-from app.core.db import engine, init_db
+from app.core import store
 from app.models import TransactionRow
-
-init_db()
 
 USER_A = f"test-ledger-user-a-{uuid.uuid4()}"
 USER_B = f"test-ledger-user-b-{uuid.uuid4()}"
@@ -34,14 +31,11 @@ client = TestClient(app)
 
 def _seed(user_id: str, rows: list[dict]) -> list[str]:
     ids = []
-    with Session(engine) as session:
-        for r in rows:
-            defaults = {"account_id": "acc-test", "is_recurring": False, "description": None}
-            row = TransactionRow(user_id=user_id, **{**defaults, **r})
-            session.add(row)
-            session.commit()
-            session.refresh(row)
-            ids.append(row.id)
+    for r in rows:
+        defaults = {"account_id": "acc-test", "is_recurring": False, "description": None}
+        row = TransactionRow(user_id=user_id, **{**defaults, **r})
+        store.put(row)
+        ids.append(row.id)
     return ids
 
 

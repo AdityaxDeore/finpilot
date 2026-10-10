@@ -150,7 +150,18 @@ export interface DashboardSnapshot {
   has_data: boolean;
 }
 
+export interface CopilotInsight {
+  id: string;
+  created_at: string;
+  txn_id: string | null;
+  severity: "info" | "positive" | "warning" | "critical";
+  title: string;
+  body: string;
+  action: { label: string; href: string } | null;
+}
+
 export interface RecomputeDiff {
+  insights?: CopilotInsight[];
   trigger: string;
   health_score_before: number;
   health_score_after: number;
@@ -536,3 +547,133 @@ export interface HouseholdSummary {
 }
 
 
+
+// --- Financial plan (constrained planner + probabilistic monthly forecast) ---
+export interface PlanQuantiles { p10: number; p50: number; p90: number }
+export interface ForecastMethod {
+  name: string;
+  horizon_months: number;
+  n_paths: number;
+  seed: number;
+  window_months: number;
+  pi_level: number;
+  description: string;
+}
+export interface PeriodForecast {
+  period: number;
+  month: string;
+  income: PlanQuantiles;
+  essential: PlanQuantiles;
+  discretionary: PlanQuantiles;
+  debt_min: number;
+  net: PlanQuantiles;
+}
+export interface PlanGoal { kind: string; amount: number; by_period: number }
+export interface PlanConstraints {
+  min_reserve: number;
+  max_discretionary_cut: number;
+  goal: PlanGoal | null;
+  risk_tolerance: number;
+}
+export interface PeriodPlan {
+  period: number;
+  month: string;
+  income: number;
+  essential: number;
+  discretionary: number;
+  discretionary_cut: number;
+  debt_min: number;
+  extra_debt: number;
+  savings_contrib: number;
+  cash_end: number;
+  cash_p10: number;
+  cash_p50: number;
+  cash_p90: number;
+  debt_balance: number;
+  reserve_ok: boolean;
+}
+export interface SequenceResult {
+  id: string;
+  label: string;
+  description: string;
+  periods: PeriodPlan[];
+  shortfall_risk: number;
+  p_negative: number;
+  goal_met_p50: boolean;
+  goal_progress: number;
+  interest_saved: number;
+  objective: number;
+}
+export interface PlanConflict { constraint: string; required: number; available: number; message: string }
+export interface PlanRelaxation {
+  kind: string;
+  from_value: number;
+  to_value: number;
+  message: string;
+  feasible: boolean;
+}
+export interface PlanResult {
+  method: ForecastMethod;
+  constraints: PlanConstraints;
+  starting_cash: number;
+  forecast: PeriodForecast[];
+  sequences: SequenceResult[];
+  feasible: boolean;
+  conflicts: PlanConflict[];
+  relaxations: PlanRelaxation[];
+  recommended_id: string | null;
+  p50_only_best_id: string | null;
+  uncertainty_changed_choice: boolean;
+  rationale: string;
+  risk_adjusted: SequenceResult | null;
+}
+export interface PlanShock {
+  kind: "income_change" | "essential_expense";
+  from_period: number;
+  pct?: number;
+  amount?: number;
+}
+export interface ReplanResult {
+  shock: PlanShock;
+  before: PlanResult;
+  after: PlanResult;
+  changed_periods: number[];
+}
+export interface PlanParams {
+  reserve?: number;
+  goal_amount?: number;
+  goal_month?: number;
+  tolerance?: number;
+  cut?: number;
+  horizon?: number;
+}
+export interface BacktestRow {
+  model: "bootstrap" | "hist_avg" | "recurring";
+  stream: string;
+  mae: number;
+  coverage: number;
+  mean_width: number;
+}
+export interface PlanTimeline {
+  train: [number, number];
+  validation: [number, number];
+  test: [number, number];
+  chosen_window: number;
+}
+export interface PlanOutcomeRow {
+  period: number;
+  planned_cash: number;
+  realized_cash: number;
+  reserve_breached: boolean;
+}
+export interface PlanScenario {
+  name: string;
+  title: string;
+  assumptions: Record<string, unknown>;
+  timeline: PlanTimeline;
+  plan: PlanResult;
+  replan?: ReplanResult;
+  outcome: PlanOutcomeRow[];
+  backtest: BacktestRow[];
+}
+export interface PlanScenarioSummary { name: string; title: string }

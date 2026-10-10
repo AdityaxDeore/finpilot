@@ -73,7 +73,7 @@ export function MobileBottomNav() {
     <nav
       role="navigation"
       aria-label="Mobile Navigation"
-      className="fixed bottom-0 inset-x-0 z-40 md:hidden bg-paper/92 backdrop-blur-xl border-t border-mist/80 shadow-[0_-4px_24px_rgba(0,0,0,0.06)] pb-[max(env(safe-area-inset-bottom,0px),10px)] pt-1 px-2.5"
+      className="fixed bottom-0 inset-x-0 z-40 lg:hidden bg-paper/92 backdrop-blur-xl border-t border-mist/80 shadow-[0_-4px_24px_rgba(0,0,0,0.06)] pb-[max(env(safe-area-inset-bottom,0px),10px)] pt-1 px-2.5"
     >
       <div className="flex items-center justify-between max-w-md mx-auto relative">
         {MOBILE_TABS.map((tab) => {
@@ -86,7 +86,7 @@ export function MobileBottomNav() {
               href={tab.href}
               aria-current={isActive ? "page" : undefined}
               className={cn(
-                "relative flex flex-1 flex-col items-center justify-center py-1.5 px-0.5 min-h-[50px] min-w-0 select-none touch-manipulation transition-colors rounded-xl",
+                "relative flex flex-1 flex-col items-center justify-center py-1.5 px-0.5 min-h-[52px] min-w-0 select-none touch-manipulation transition-colors rounded-xl",
                 isActive ? "text-ink" : "text-pewter hover:text-carbon"
               )}
             >
