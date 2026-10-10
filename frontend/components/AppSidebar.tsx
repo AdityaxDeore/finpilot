@@ -17,6 +17,10 @@ import {
   History,
   FileText,
   ShieldCheck,
+  ScanSearch,
+  Network,
+  Database,
+  FilePlus2,
   Link2,
   type LucideIcon,
 } from "lucide-react";
@@ -51,6 +55,7 @@ export const NAV_GROUPS: { label: string; tone: string; links: NavLink[] }[] = [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/connect", label: "Connectors", icon: Link2 },
       { href: "/transactions", label: "Transactions", icon: ReceiptText },
+      { href: "/invoices", label: "Invoices", icon: FilePlus2 },
       { href: "/budgets", label: "Budgets", icon: Wallet },
       { href: "/goals", label: "Goals", icon: Target },
       { href: "/household", label: "Household", icon: Users },
@@ -73,7 +78,16 @@ export const NAV_GROUPS: { label: string; tone: string; links: NavLink[] }[] = [
     tone: "text-[#3b6bff]",
     links: [
       { href: "/statement", label: "Statement", icon: FileText },
+    ],
+  },
+  {
+    label: "Security",
+    tone: "text-[#d6336c]",
+    links: [
       { href: "/security", label: "Security", icon: ShieldCheck },
+      { href: "/evidence-room", label: "Evidence Room", icon: ScanSearch },
+      { href: "/twin", label: "Twin Simulator", icon: Network },
+      { href: "/my-data", label: "My Data", icon: Database },
     ],
   },
 ];

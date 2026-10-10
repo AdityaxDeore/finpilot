@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { ShieldCheckIcon } from "@animateicons/react/lucide";
+import { LoopIcon } from "@/components/ui/LoopIcon";
 import QRCode from "qrcode";
 import type { TotpSecret } from "firebase/auth";
 import { auth } from "@/lib/firebase/config";
@@ -101,7 +103,12 @@ export default function SecurityPage() {
   return (
     <div className="flex flex-col gap-8">
       <div>
-        <h1 className="font-display text-3xl text-ink">Security</h1>
+        <h1 className="flex items-center gap-3 font-display text-3xl text-ink">
+          <span className="flex size-11 items-center justify-center rounded-full bg-lime">
+            <LoopIcon icon={ShieldCheckIcon} size={24} every={2200} />
+          </span>
+          Security
+        </h1>
         <p className="mt-1 text-sm text-graphite">
           Add a second factor so your financial data is protected even if your password or Google session is
           ever compromised.
