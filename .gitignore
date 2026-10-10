@@ -58,3 +58,4 @@ antigravity_pack.zip
 
 # local CLIP model cache
 backend/.model_cache/
+backend/.translation_cache.json
