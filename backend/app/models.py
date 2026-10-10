@@ -242,3 +242,15 @@ class InvestigationRow(SQLModel, table=True):
     risk_score: int = 0
     report: str = "{}"  # JSON-serialized report dict
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), index=True)
+
+
+class DocumentRow(SQLModel, table=True):
+    """User-uploaded text document, chunked + embedded by app.rag."""
+
+    __tablename__ = "documents"
+
+    id: str = Field(default_factory=_uuid, primary_key=True)
+    user_id: str = Field(index=True)
+    name: str
+    text: str  # full extracted text, capped at 200_000 chars
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

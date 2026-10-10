@@ -51,3 +51,6 @@ antigravity_pack.zip
 
 # firebase service-account keys
 *firebase-adminsdk*.json
+
+# rag embedding cache
+.cache/
