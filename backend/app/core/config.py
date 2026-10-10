@@ -24,6 +24,8 @@ class Settings:
     # general (non-finance) conversation: a fast model, optionally on its own key
     nvidia_chat_api_key: str = os.getenv("NVIDIA_CHAT_API_KEY") or os.getenv("NVIDIA_API_KEY", "")
     nvidia_chat_model: str = os.getenv("NVIDIA_CHAT_MODEL", "nvidia/nemotron-3.5-lightning-30b-a3b")
+    nvidia_embed_model: str = os.getenv("NVIDIA_EMBED_MODEL", "nvidia/nemotron-3-embed-1b")  # 2048-dim; verified live
+    firecrawl_api_key: str = os.getenv("FIRECRAWL_API_KEY", "")
 
     # Nugen (second opinion in the copilot; optional)
     nugen_api_key: str = os.getenv("NUGEN_API_KEY", "")
@@ -45,6 +47,10 @@ class Settings:
     @property
     def has_firebase(self) -> bool:
         return bool(self.firebase_project_id)
+
+    @property
+    def has_firecrawl(self) -> bool:
+        return bool(self.firecrawl_api_key)
 
     @property
     def has_nvidia(self) -> bool:

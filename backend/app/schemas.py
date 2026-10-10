@@ -244,6 +244,22 @@ class DataGap(BaseModel):
     what_would_help: str
 
 
+class NextStep(BaseModel):
+    """One concrete thing the user should do next, in priority order."""
+
+    title: str  # imperative, e.g. "Cancel the duplicate Netflix charge"
+    why: str  # one sentence tying it to the user's own data
+    when: Optional[str] = None  # e.g. "this week", "before 15 Dec 2026"
+    link: Optional[str] = None  # in-app route ("/budgets") or an official https URL
+
+
+class Source(BaseModel):
+    """A web page the answer used. Only set when live web search ran."""
+
+    title: str
+    url: str
+
+
 class AnswerContract(BaseModel):
     """The shape every /chat, /recommendations and dashboard-insight response
     conforms to. Frontend renders three lanes (Observed / Predicted /
@@ -258,6 +274,8 @@ class AnswerContract(BaseModel):
     nugen_narrative: Optional[str] = None  # second opinion from Nugen, when configured and reachable
     nugen_confidence: Optional[float] = None  # 0-100, only on Nugen-aligned models
     source: Optional[str] = None  # which engine wrote this answer, shown in the UI
+    next_steps: list[NextStep] = Field(default_factory=list)  # prioritised "what to do next", 1-4 items
+    sources: list[Source] = Field(default_factory=list)  # web pages used (empty when no web search ran)
 
 
 # ---------------------------------------------------------------------------
