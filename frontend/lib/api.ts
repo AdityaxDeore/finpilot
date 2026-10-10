@@ -116,6 +116,20 @@ function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return value;
 }
 
+/** Plain server message for a 4xx (e.g. "That OTP is not correct"); the full status line for anything else. */
+async function errorMessage(path: string, res: Response): Promise<string> {
+  const text = await res.text();
+  if (res.status < 500) {
+    try {
+      const detail = (JSON.parse(text) as { detail?: unknown }).detail;
+      if (typeof detail === "string" && detail) return detail;
+    } catch {
+      // not JSON: fall through
+    }
+  }
+  return `API ${path} failed: ${res.status} ${text}`;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const auth = await authHeader();
   const res = await fetch(`${API_URL}${path}`, {
@@ -123,7 +137,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers: { "Content-Type": "application/json", ...auth, ...init?.headers },
   });
   if (!res.ok) {
-    throw new Error(`API ${path} failed: ${res.status} ${await res.text()}`);
+    throw new Error(await errorMessage(path, res));
   }
   notifyIfWrite(init?.method);
   // DELETE endpoints (e.g. budgets/goals) return 204 with no body -- res.json()
@@ -210,6 +224,13 @@ export const api = {
 
   // Connectors: linking a source is what fills the app with data
   connectors: (userId: string) => apiFetch<Connector[]>(`/api/connectors/${userId}`),
+  /** Account Aggregator: ask consent, approve with the OTP, then import the bank data. */
+  aaConsent: (userId: string, mobile: string, profile: ConnectProfile) =>
+    apiFetch<{ handle: string; demo_otp: string }>(`/api/aa/${userId}/consent`, { method: "POST", body: JSON.stringify({ mobile, profile }) }),
+  aaApprove: (userId: string, handle: string, otp: string) =>
+    apiFetch<{ consent_id: string }>(`/api/aa/${userId}/consent/approve`, { method: "POST", body: JSON.stringify({ handle, otp }) }),
+  aaImport: (userId: string, consentId: string) =>
+    apiFetch<{ accounts: number; transactions: number }>(`/api/aa/${userId}/import`, { method: "POST", body: JSON.stringify({ consent_id: consentId }) }),
   connectConnector: (userId: string, connector: string, profile: ConnectProfile, url = "") =>
     apiFetch<{ connected: boolean; accounts: number; transactions: number }>(
       `/api/connectors/${userId}/${connector}/connect`,

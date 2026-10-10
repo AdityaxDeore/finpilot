@@ -33,7 +33,7 @@ router = APIRouter(prefix="/api/connectors", tags=["connectors"])
 
 # id -> (name, description, live?)
 CATALOG: dict[str, tuple[str, str, bool]] = {
-    "google_pay": ("Google Pay", "UPI payments, merchants and wallet activity", True),
+    "google_pay": ("Google Pay", "Your UPI payments, linked through your bank accounts with Account Aggregator", True),
     "bank": ("Bank accounts", "Balances, salary credits, loans and cards", True),
     "google_sheets": ("Google Sheets", "A live expense sheet: edit it and the app updates", True),
     "invoices": ("Gmail & Drive invoices", "Bills and invoices parsed automatically", True),
