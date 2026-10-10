@@ -29,7 +29,7 @@ export function CurrencySelector() {
         onClick={() => setOpen(!open)}
         className={cn(
           "flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border border-mist bg-paper/80 backdrop-blur-md text-xs font-semibold text-ink shadow-[0_1px_3px_rgba(0,0,0,0.03)] hover:border-black/20 transition-all cursor-pointer",
-          open && "border-ember ring-1 ring-ember/30"
+          open && "border-navy ring-1 ring-navy/30"
         )}
         aria-label="Select currency"
         aria-expanded={open}

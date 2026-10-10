@@ -37,6 +37,12 @@
   --color-ember-glow: rgba(255, 107, 26, 0.22);
   --color-ember-soft: rgba(255, 107, 26, 0.12);
 
+  /* Navy Blue button accent */
+  --color-navy: #172554;
+  --color-navy-dark: #0f172a;
+  --color-navy-light: #1e3a8a;
+  --color-navy-glow: rgba(23, 37, 84, 0.22);
+
   /* Colourful accents: green / sky / sun + soft tints for card fills */
   --color-leaf: #0fb67a;
   --color-sky: #3b6bff;
@@ -72,6 +78,8 @@
   /* Semantic Aliases */
   --background: #eceee4;
   --foreground: var(--color-ink);
+  --surface: #ffffff;
+  --surface-subtle: #f8f9fa;
   --surface-muted: var(--color-fog);
   --text-secondary: var(--color-graphite);
   --text-tertiary: var(--color-pewter);
@@ -103,7 +111,7 @@
   --primary-foreground: var(--color-ink);
   --secondary: var(--color-fog);
   --secondary-foreground: var(--color-ink);
-  --muted: var(--color-fog);
+  --muted: #64748b;
   --muted-foreground: var(--color-pewter);
   --destructive: var(--badge-rose);
   --border: var(--color-mist);
@@ -152,6 +160,9 @@
   --color-ember: var(--color-ember);
   --color-ember-dark: var(--color-ember-dark);
   --color-ember-light: var(--color-ember-light);
+  --color-navy: var(--color-navy);
+  --color-navy-dark: var(--color-navy-dark);
+  --color-navy-light: var(--color-navy-light);
   --color-surface-muted: var(--surface-muted);
   --color-border-hairline: var(--border-hairline);
   --color-text-secondary: var(--text-secondary);

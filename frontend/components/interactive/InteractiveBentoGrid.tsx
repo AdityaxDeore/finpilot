@@ -346,7 +346,7 @@ export function InteractiveBentoGrid() {
                   className={cn(
                     "rounded-full px-2.5 py-1 text-xs font-medium transition-all duration-200",
                     activeCategory === cat
-                      ? "bg-ember text-white shadow-sm"
+                      ? "bg-[#172554] text-white shadow-sm hover:bg-[#1e3a8a]"
                       : "bg-[var(--surface-subtle)] text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[var(--border)]"
                   )}
                 >
@@ -466,8 +466,8 @@ export function InteractiveBentoGrid() {
                       aria-checked={rule.active}
                       onClick={() => toggleRule(rule.id)}
                       className={cn(
-                        "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-ember focus:ring-offset-2",
-                        rule.active ? "bg-ember" : "bg-[var(--border)]"
+                        "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#172554] focus:ring-offset-2",
+                        rule.active ? "bg-[#172554]" : "bg-[var(--border)]"
                       )}
                     >
                       <motion.span

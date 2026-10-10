@@ -489,7 +489,7 @@ export default function BudgetsPage() {
                 variant="primary"
                 onClick={handleCreate}
                 disabled={creating}
-                className="w-full h-10 text-xs font-semibold bg-ember hover:bg-ember/90 text-white"
+                className="w-full h-10 text-xs font-semibold bg-[#172554] hover:bg-[#1e3a8a] text-white"
               >
                 <Plus className="h-3.5 w-3.5" />
                 <span>{creating ? "Adding..." : "Add Envelope"}</span>

@@ -382,7 +382,7 @@ export function CommandPalette() {
                                 <div
                                   className={`flex h-7 w-7 items-center justify-center rounded-lg border transition-colors shrink-0 ${
                                     isSelected
-                                      ? "bg-ember text-white border-ember shadow-xs"
+                                      ? "bg-[#172554] text-white border-[#172554] shadow-xs"
                                       : "bg-paper text-pewter border-mist"
                                   }`}
                                 >
@@ -417,7 +417,7 @@ export function CommandPalette() {
                                     {item.shortcut}
                                   </span>
                                 )}
-                                {isSelected && <ArrowRight className="h-3.5 w-3.5 text-ember" />}
+                                {isSelected && <ArrowRight className="h-3.5 w-3.5 text-[#172554]" />}
                               </div>
                             </button>
                           );

@@ -57,7 +57,7 @@ export function NotificationBell({ userId, large = false }: { userId: string; la
           large ? "h-11 w-11" : "h-9 w-9",
           "relative inline-flex items-center justify-center rounded-chip border transition-all duration-150 cursor-pointer select-none",
           open
-            ? "border-ember/40 bg-orange-50/50 text-ember-dark shadow-xs"
+            ? "border-navy/40 bg-navy/5 text-navy shadow-xs"
             : "border-mist text-graphite hover:bg-fog hover:text-ink hover:border-black/[0.15]"
         )}
       >
