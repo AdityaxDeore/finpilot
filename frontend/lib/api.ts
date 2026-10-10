@@ -17,6 +17,8 @@ import type {
   CreateInviteRequest,
   DashboardSnapshot,
   DocumentInfo,
+  OcrPreview,
+  OcrTxn,
   Goal,
   GoalProgress,
   FinancialSecurity,
@@ -328,6 +330,16 @@ export const api = {
     if (!res.ok) throw new Error(`Upload failed: ${res.status} ${await res.text()}`);
     return res.json();
   },
+  // Statement / passbook photo -> OCR -> personal data removed -> preview; nothing is saved until importOcr
+  extractStatement: async (userId: string, file: File): Promise<OcrPreview> => {
+    const body = new FormData();
+    body.append("file", file);
+    const res = await fetch(`${API_URL}/api/ocr/extract/${userId}`, { method: "POST", headers: await authHeader(), body });
+    if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail ?? `Upload failed: ${res.status}`);
+    return res.json();
+  },
+  importOcr: (userId: string, transactions: OcrTxn[]) =>
+    apiFetch<{ imported: number; skipped_repeats: number }>(`/api/ocr/import/${userId}`, { method: "POST", body: JSON.stringify({ transactions }) }).finally(clearApiCache),
   deleteDocument: (userId: string, id: string) =>
     apiFetch<unknown>(`/api/documents/${userId}/${id}`, { method: "DELETE" }),
 
