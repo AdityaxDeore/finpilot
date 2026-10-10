@@ -49,6 +49,11 @@ export interface NavLink {
 
 export const NAV_GROUPS: { label: string; tone: string; links: NavLink[] }[] = [
   {
+    label: "Copilot",
+    tone: "text-[#e0540a]",
+    links: [{ href: "/copilot", label: "FinPilot Copilot", icon: Sparkles }],
+  },
+  {
     label: "Track",
     tone: "text-[#0fb67a]",
     links: [
@@ -65,7 +70,6 @@ export const NAV_GROUPS: { label: string; tone: string; links: NavLink[] }[] = [
     label: "Intelligence",
     tone: "text-[#e0540a]",
     links: [
-      { href: "/copilot", label: "Copilot", icon: Sparkles },
       { href: "/simulate", label: "Simulate", icon: FlaskConical },
       { href: "/plan", label: "Plan", icon: Route },
       { href: "/scenarios", label: "Compare", icon: GitCompare },
