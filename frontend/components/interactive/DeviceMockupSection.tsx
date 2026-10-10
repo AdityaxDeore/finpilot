@@ -87,7 +87,7 @@ export function DeviceMockupSection({
           className="relative w-[92%] sm:w-[80%] md:w-[720px] aspect-[16/10] rounded-[20px] border-[10px] sm:border-[14px] border-[#181a20] bg-white shadow-[0_25px_60px_-15px_rgba(15,23,42,0.18)] overflow-hidden flex flex-col shrink-0"
         >
           {/* Laptop Camera dot */}
-          <div className="absolute top-1.5 left-1/2 -translate-x-1/2 h-1.5 w-1.5 rounded-full bg-black/60 z-30" />
+          <div className="absolute top-1.5 left-1/2 -translate-x-1/2 h-1.5 w-1.5 rounded-full bg-sage-deep z-30" />
 
           {/* Laptop Screen Content (FinPilot Command Center Mockup) */}
           <div className="flex-1 bg-white flex flex-col text-left overflow-hidden">
@@ -171,7 +171,7 @@ export function DeviceMockupSection({
           className="absolute -right-2 sm:right-6 md:right-12 bottom-0 sm:bottom-4 w-[170px] sm:w-[220px] aspect-[9/18.5] rounded-[36px] sm:rounded-[42px] border-[8px] sm:border-[10px] border-[#181a20] bg-white shadow-[0_30px_70px_rgba(0,0,0,0.28)] overflow-hidden flex flex-col z-20"
         >
           {/* Phone Dynamic Island / Notch */}
-          <div className="absolute top-2 left-1/2 -translate-x-1/2 h-3.5 w-20 rounded-full bg-black z-30" />
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 h-3.5 w-20 rounded-full bg-sage-deep z-30" />
 
           {/* Phone Screen UI Content */}
           <div className="flex-1 bg-white p-3 pt-7 flex flex-col justify-between text-left">

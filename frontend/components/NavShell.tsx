@@ -1,9 +1,9 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { Search } from "lucide-react";
+import { Eye, EyeOff, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/NotificationBell";
 import { CurrencySelector } from "@/components/ui/CurrencySelector";
@@ -87,6 +87,8 @@ function PersonaSwitcher() {
 export function NavShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const userId = useUserId();
+  const isDashboard = pathname?.startsWith("/dashboard") ?? false;
+  const [hidden, setHidden] = useState(false);
   const current = NAV_GROUPS.flatMap((g) => g.links).find((l) => pathname?.startsWith(l.href));
 
   return (
@@ -106,22 +108,34 @@ export function NavShell({ children }: { children: ReactNode }) {
             <Breadcrumb className="min-w-0">
               <BreadcrumbList>
                 <BreadcrumbItem>
-                  <BreadcrumbPage className="truncate font-display text-2xl font-semibold text-ink">{current?.label ?? "FinPilot"}</BreadcrumbPage>
+                  <BreadcrumbPage className={cn("truncate font-display font-semibold text-ink", isDashboard ? "text-3xl sm:text-4xl" : "text-2xl")}>{current?.label ?? "FinPilot"}</BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>
 
             <div className="ml-auto flex shrink-0 items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
+              <button
+                type="button"
                 onClick={() => window.dispatchEvent(new CustomEvent("finpilot:open-command-palette"))}
-                className="gap-2 text-muted-foreground"
-                title="Open Command Palette (Ctrl+K)"
-                aria-label="Open Command Palette"
+                className="hidden h-9 w-64 items-center gap-2 rounded-xl bg-white px-3 text-sm text-muted-foreground shadow-sm md:flex"
+                title="Search (Ctrl+K)"
+                aria-label="Open search"
               >
                 <Search className="size-4" />
-                <kbd className="hidden rounded border bg-muted px-1.5 text-[10px] font-semibold sm:inline-flex">⌘K</kbd>
+                <span>Search...</span>
+                <kbd className="ml-auto rounded border bg-muted px-1.5 text-[10px] font-semibold">⌘ K</kbd>
+              </button>
+              <Button variant="outline" size="icon" className="md:hidden" onClick={() => window.dispatchEvent(new CustomEvent("finpilot:open-command-palette"))} aria-label="Open search">
+                <Search className="size-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setHidden((h) => { document.documentElement.classList.toggle("hide-amounts", !h); return !h; })}
+                aria-label={hidden ? "Show amounts" : "Hide amounts"}
+                title={hidden ? "Show amounts" : "Hide amounts"}
+              >
+                {hidden ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
               </Button>
               <div className="hidden sm:block">
                 <CurrencySelector />
@@ -129,7 +143,7 @@ export function NavShell({ children }: { children: ReactNode }) {
               <div className="hidden xl:block">
                 <PersonaSwitcher />
               </div>
-              <NotificationBell userId={userId} />
+              <NotificationBell userId={userId} large={isDashboard} />
             </div>
           </header>
 

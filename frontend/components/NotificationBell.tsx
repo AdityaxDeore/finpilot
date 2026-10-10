@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
  * category/severity dots (Ember/graphite/steel), local "Mark all as read" capability,
  * and contextual actionable simulation links.
  */
-export function NotificationBell({ userId }: { userId: string }) {
+export function NotificationBell({ userId, large = false }: { userId: string; large?: boolean }) {
   const [open, setOpen] = useState(false);
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
   const containerRef = useRef<HTMLDivElement>(null);
@@ -54,13 +54,14 @@ export function NotificationBell({ userId }: { userId: string }) {
         aria-label="Notifications"
         aria-expanded={open}
         className={cn(
-          "relative inline-flex h-9 w-9 items-center justify-center rounded-chip border transition-all duration-150 cursor-pointer select-none",
+          large ? "h-11 w-11" : "h-9 w-9",
+          "relative inline-flex items-center justify-center rounded-chip border transition-all duration-150 cursor-pointer select-none",
           open
             ? "border-ember/40 bg-orange-50/50 text-ember-dark shadow-xs"
             : "border-mist text-graphite hover:bg-fog hover:text-ink hover:border-black/[0.15]"
         )}
       >
-        <Bell className="h-4 w-4" />
+        <Bell className={large ? "h-5 w-5" : "h-4 w-4"} />
         {unreadCount > 0 && (
           <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-ember px-1 text-[10px] font-bold text-white shadow-[0_0_8px_rgba(255,89,0,0.5)] animate-in fade-in">
             {badgeLabel}

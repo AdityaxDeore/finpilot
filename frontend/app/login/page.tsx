@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Eye, EyeOff, LineChart, Link2, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff } from "lucide-react";
 import {
   signInWithGoogle,
   signInWithEmail,
@@ -18,12 +18,6 @@ import type { MultiFactorResolver, User } from "firebase/auth";
 import { Button } from "@/components/shadcn/button";
 import { Input } from "@/components/shadcn/input";
 import { FinPilotLogo } from "@/components/FinPilotLogo";
-
-const PERKS = [
-  { icon: Link2, text: "Link Google Pay once. No typing, ever.", tone: "bg-lime text-ink" },
-  { icon: LineChart, text: "Live dashboard, forecasts and spend insights", tone: "bg-white text-ink" },
-  { icon: ShieldCheck, text: "Read-only access. You stay in control.", tone: "bg-white/60" },
-];
 
 function GoogleIcon() {
   return (
@@ -121,9 +115,7 @@ export default function LoginPage() {
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
       {/* Brand panel */}
-      <div className="relative hidden overflow-hidden bg-sage p-10 text-ink lg:flex lg:flex-col lg:justify-between">
-        <div className="pointer-events-none absolute -right-24 -top-24 size-96 rounded-full bg-lime/30 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-32 -left-20 size-96 rounded-full bg-lime/15 blur-3xl" />
+      <div className="relative hidden overflow-hidden bg-sage p-10 text-ink lg:flex lg:flex-col lg:justify-start lg:gap-8">
         <Link
           href="/"
           aria-label="Back to home"
@@ -136,18 +128,19 @@ export default function LoginPage() {
             Your money, on <span className="text-[#5f7f0c]">autopilot</span>.
           </h2>
           <p className="mt-3 text-ink/70">FinPilot connects to your accounts and does the rest.</p>
-          <ul className="mt-8 grid gap-4">
-            {PERKS.map(({ icon: Icon, text, tone }) => (
-              <li key={text} className="flex items-center gap-3 rounded-2xl bg-white/55 p-3.5 backdrop-blur-sm">
-                <span className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${tone}`}>
-                  <Icon className="size-5" />
-                </span>
-                <span className="text-sm">{text}</span>
-              </li>
-            ))}
-          </ul>
         </div>
-        <p className="relative text-xs text-ink/50">Demo build. Sample data only.</p>
+        <div className="relative min-h-0 flex-1 overflow-hidden rounded-3xl">
+          <video
+            className="pointer-events-none size-full object-cover"
+            src="/media/moov.mp4"
+            autoPlay
+            loop
+            muted
+            playsInline
+            aria-hidden
+          />
+        </div>
+        <p className="relative text-xs text-ink/60">Demo build. Sample data only.</p>
       </div>
 
       {/* Form panel */}
