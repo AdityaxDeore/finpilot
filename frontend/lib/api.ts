@@ -17,6 +17,8 @@ import type {
   DocumentInfo,
   Goal,
   GoalProgress,
+  FinancialSecurity,
+  FinancialSecurityBrief,
   Household,
   HouseholdInvite,
   HouseholdSummary,
@@ -230,6 +232,8 @@ export const api = {
       lines.filter(Boolean).forEach((l) => onEvent(JSON.parse(l)));
     }
   },
+  financialSecurity: (userId: string) => apiFetch<FinancialSecurity>(`/api/security/${userId}/financial`),
+  financialSecurityBrief: (userId: string) => apiFetch<FinancialSecurityBrief>(`/api/security/${userId}/financial/brief`),
   securityReport: (userId: string) => apiFetch<SecurityReport | null>(`/api/security/${userId}/report`),
   plantThreats: (userId: string) => apiFetch<{ planted: number }>(`/api/security/${userId}/demo-threats`, { method: "POST" }),
   clearThreats: (userId: string) => apiFetch<{ removed: number }>(`/api/security/${userId}/demo-threats`, { method: "DELETE" }),

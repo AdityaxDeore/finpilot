@@ -726,6 +726,29 @@ export interface Connector {
 export type ConnectProfile = "priya" | "arjun" | "meera";
 
 // Security suite
+export interface FinancialSecurity {
+  generated_at: string;
+  score: number;
+  grade: string;
+  risk_level: "low" | "medium" | "high";
+  transactions_checked: number;
+  flagged_transactions: number;
+  amount_at_risk: number;
+  findings_total: number;
+  severity_counts: Record<"high" | "medium" | "low", number>;
+  pillars: { key: string; label: string; hint: string; findings: number; amount_at_risk: number; score: number }[];
+  accounts: { name: string; type: string; balance: number; transactions: number; flagged: number; flagged_amount: number }[];
+  top_findings: Pick<SecurityFinding, "agent" | "severity" | "title" | "detail" | "merchant" | "amount">[];
+}
+
+export interface FinancialSecurityBrief {
+  headline: string;
+  summary: string;
+  risks: string[];
+  actions: string[];
+  source: "finpilot" | "rules";
+}
+
 export interface SecurityFinding {
   agent: string;
   severity: "high" | "medium" | "low";

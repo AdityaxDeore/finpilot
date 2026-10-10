@@ -153,3 +153,20 @@ def export_all(request: Request, user_id: str = Depends(resolve_user_id)) -> JSO
         **{c.connector: _dataset(c.connector) for c in linked if c.connector in DATASET_FILES},
     }
     return JSONResponse(out, headers={"Content-Disposition": 'attachment; filename="finpilot-all-data.json"'})
+
+
+@router.get("/{user_id}/financial")
+def financial(request: Request, user_id: str = Depends(resolve_user_id)) -> dict:
+    """Security score and breakdown of the user's own financial data (no AI)."""
+    _log(request, user_id, "Financial security read your transactions and accounts")
+    from app.security import financial as fin
+
+    return fin.build(user_id)
+
+
+@router.get("/{user_id}/financial/brief")
+def financial_brief(user_id: str = Depends(resolve_user_id)) -> dict:
+    """Copilot's written analysis of the same facts (AI, rules fallback)."""
+    from app.security import financial as fin
+
+    return fin.brief(fin.build(user_id))

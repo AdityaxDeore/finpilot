@@ -17,6 +17,7 @@ import {
   History,
   FileText,
   ShieldCheck,
+  ShieldAlert,
   ScanSearch,
   Network,
   Database,
@@ -70,6 +71,7 @@ export const NAV_GROUPS: { label: string; tone: string; links: NavLink[] }[] = [
     label: "Intelligence",
     tone: "text-[#e0540a]",
     links: [
+      { href: "/financial-security", label: "Financial Security", icon: ShieldAlert },
       { href: "/simulate", label: "Simulate", icon: FlaskConical },
       { href: "/plan", label: "Plan", icon: Route },
       { href: "/scenarios", label: "Compare", icon: GitCompare },
