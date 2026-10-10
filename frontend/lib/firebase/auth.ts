@@ -14,7 +14,7 @@ import {
   type User,
 } from "firebase/auth";
 import { auth } from "./config";
-import { setAuthUserId } from "@/lib/user";
+import { endDemo, setAuthUserId } from "@/lib/user";
 
 const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: "select_account" });
@@ -106,6 +106,7 @@ export async function unenrollFactor(uid: string): Promise<void> {
  */
 export async function signOut(): Promise<void> {
   await firebaseSignOut(auth);
+  endDemo();
   setAuthUserId(null);
 }
 

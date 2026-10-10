@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { AnswerContractView } from "@/components/AnswerContractView";
-import { setUserId } from "@/lib/user";
+import { setUserId, startDemo } from "@/lib/user";
 import type { AnswerContract } from "@/lib/types";
 import { FloatingOverlapCard } from "@/components/interactive/FloatingOverlapCard";
 import { CashFlowChips } from "@/components/interactive/CashFlowChips";
@@ -132,7 +132,7 @@ export default function Home() {
           {/* CTA Group */}
           <Reveal delay={0.15} className="w-full">
             <div className="mt-10 flex flex-col sm:flex-row flex-wrap items-center justify-center gap-3.5 w-full">
-              <Link href="/dashboard" className="w-full sm:w-auto">
+              <Link href="/dashboard" onClick={startDemo} className="w-full sm:w-auto">
                 <Button variant="primary" size="lg" className="w-full sm:w-auto px-8 py-3.5 text-base">
                   Explore Live Demo
                   <svg className="w-4 h-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>

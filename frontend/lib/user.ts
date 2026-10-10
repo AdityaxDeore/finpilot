@@ -74,6 +74,35 @@ export function setAuthUserId(id: string | null) {
   window.dispatchEvent(new CustomEvent(USER_ID_CHANGE_EVENT));
 }
 
+/** Demo mode lets a visitor into the app without signing in, on the seeded demo persona (Priya).
+ * Signing in or out ends it. The backend accepts demo ids without a token. */
+const DEMO_MODE_KEY = "finpilot:demo_mode";
+
+export function isDemoMode(): boolean {
+  try {
+    return typeof window !== "undefined" && window.localStorage.getItem(DEMO_MODE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function startDemo() {
+  try {
+    window.localStorage.setItem(DEMO_MODE_KEY, "1");
+  } catch {
+    // blocked storage: the demo just won't persist across a reload
+  }
+  setUserId(DEMO_PERSONAS[0].id);
+}
+
+export function endDemo() {
+  try {
+    window.localStorage.removeItem(DEMO_MODE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 export function setUserId(id: string) {
   if (typeof window === "undefined") return;
   try {
