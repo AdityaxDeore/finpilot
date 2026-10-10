@@ -170,12 +170,7 @@ def test_categorize_known_merchants():
     assert correct >= 10, f"only {correct}/{len(_KNOWN_MERCHANTS)} known merchants categorized correctly"
 
 
-def test_categorize_unknown_merchant_falls_back_to_other_without_gemini():
-    # This test only asserts the no-Gemini fallback path; if a real Gemini
-    # key happens to be configured in this environment we skip the strict
-    # assertion since the embedding fallback may legitimately resolve it.
-    if get_settings().has_gemini:
-        return
+def test_categorize_unknown_merchant_falls_back_to_other():
     result = categorize("Xyzzy Quux Unknown Merchant 12345", -100)
     assert result == TxnCategory.other
 

@@ -101,7 +101,15 @@ def chat(req: ChatRequest, user_id: str = Depends(_resolve_body_user_id)) -> Ans
     if not req.message.strip():
         raise HTTPException(400, "message must not be empty")
     chat_limiter.check(user_id)
-    return copilot_answer(user_id, req.message, force_offline=req.force_offline)
+    return copilot_answer(user_id, req.message, force_offline=req.force_offline, model=req.model, history=req.history[-10:])
+
+
+@router.get("/schemes")
+def schemes_feed() -> dict:
+    """Upcoming money deadlines + always-open schemes, plus friendly chat nudges."""
+    from app.copilot import schemes
+
+    return {**schemes.upcoming(), "nudges": schemes.nudges()}
 
 
 @router.post("/simulate/{user_id}", response_model=SimulationResult)

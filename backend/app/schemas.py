@@ -257,6 +257,7 @@ class AnswerContract(BaseModel):
     narrative: str = ""  # short natural-language summary tying it together
     nugen_narrative: Optional[str] = None  # second opinion from Nugen, when configured and reachable
     nugen_confidence: Optional[float] = None  # 0-100, only on Nugen-aligned models
+    source: Optional[str] = None  # which engine wrote this answer, shown in the UI
 
 
 # ---------------------------------------------------------------------------
@@ -356,6 +357,11 @@ class RecomputeDiff(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class HistoryTurn(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(max_length=4000)
+
+
 class ChatRequest(BaseModel):
     message: str
     conversation_id: Optional[str] = None
@@ -363,8 +369,11 @@ class ChatRequest(BaseModel):
     # callers that don't send it keep working unchanged.
     user_id: str = "demo-priya"
     # Privacy preference (Security page toggle): when true, never call the
-    # Gemini API for this message, regardless of whether a key is configured.
+    # AI service for this message, regardless of whether a key is configured.
     force_offline: bool = False
+    # FinPilot engine preference: auto | deep | fast | alt (brand names, never the vendor model)
+    model: str = "auto"
+    history: list[HistoryTurn] = Field(default_factory=list)  # earlier turns of this chat, oldest first
 
 
 ChatRole = Literal["user", "assistant"]

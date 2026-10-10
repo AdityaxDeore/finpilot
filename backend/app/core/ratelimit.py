@@ -5,7 +5,7 @@ sliding-window counter. It resets on restart and does not share state across
 multiple backend instances. That's an acceptable tradeoff for this app's
 current scale; a production deployment with >1 backend process should swap
 this for a shared store (e.g. Redis) keyed the same way. It still meaningfully
-protects against the two costliest abuse paths today: hammering the Gemini
+protects against the two costliest abuse paths today: hammering the AI
 API through /chat, and DoS-ing the CSV parser through /upload.
 """
 from __future__ import annotations

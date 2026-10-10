@@ -1,7 +1,7 @@
 """Evidence Room: eight agents that examine a user's real ledger.
 
 Seven are deterministic checks over TransactionRow data (every finding links the
-transactions behind it). The eighth, Verdict Writer, asks Gemini (Nugen as backup)
+transactions behind it). The eighth, Verdict Writer, asks the NVIDIA model (Nugen as backup)
 to explain the findings; if both fail the real findings are kept and the write-up
 is marked unavailable. Nothing here invents numbers.
 """
@@ -19,7 +19,7 @@ from pydantic import BaseModel
 
 from app.analytics.anomalies import detect_anomalies
 from app.analytics.recurring import detect_recurring, find_redundant_subscriptions, normalize_merchant
-from app.copilot import nugen
+from app.copilot import nugen, nvidia
 from app.core import store
 from app.core.config import get_settings
 from app.models import AccountRow, InvestigationRow, TransactionRow
@@ -189,24 +189,15 @@ _VERDICT_SYSTEM = (
 
 
 def write_verdict(findings: list[dict], score: int) -> tuple[dict | None, str | None, str | None]:
-    """(verdict, source, error). Gemini first, Nugen as backup, otherwise (None, None, reason)."""
+    """(verdict, source, error). NVIDIA first, Nugen as backup, otherwise (None, None, reason)."""
     s = get_settings()
     brief = json.dumps({"risk_score": score, "findings": [{k: f[k] for k in ("agent", "severity", "title", "detail", "amount")} for f in findings[:25]]}, default=str)
     errors = []
-    if s.has_gemini:
+    if s.has_nvidia:
         try:
-            from google import genai
-            from google.genai import types
-
-            client = genai.Client(api_key=s.gemini_api_key, http_options=types.HttpOptions(timeout=60_000))
-            resp = client.models.generate_content(
-                model=s.gemini_model, contents=brief,
-                config=types.GenerateContentConfig(system_instruction=_VERDICT_SYSTEM, response_mime_type="application/json", response_schema=_Verdict),
-            )
-            parsed = resp.parsed
-            return (parsed.model_dump() if isinstance(parsed, _Verdict) else json.loads(resp.text)), "gemini", None
+            return _Verdict.model_validate(nvidia.complete_json(_VERDICT_SYSTEM, brief)).model_dump(), "finpilot", None
         except Exception as exc:  # noqa: BLE001
-            errors.append(f"Gemini: {'quota reached' if '429' in str(exc) else 'unavailable'}")
+            errors.append(f"AI: {'busy' if '429' in str(exc) else 'unavailable'}")
     text = nugen.complete(_VERDICT_SYSTEM, brief, 700)
     if text:
         try:

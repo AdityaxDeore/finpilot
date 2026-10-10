@@ -2,8 +2,8 @@
 
 Docs: https://docs.nugen.in/api-reference/inference/generate-chat-completions
 Nugen gets a compact, pre-fetched bundle of the user's real numbers (the same tools
-Gemini calls) and answers in prose. Never raises: any failure returns (None, None)
-so the chat keeps working with Gemini / the offline router alone.
+NVIDIA calls) and answers in prose. Never raises: any failure returns (None, None)
+so the chat keeps working with the NVIDIA model / the offline router alone.
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from typing import Optional
 
 import httpx
 
-from app.copilot import tools
+from app.copilot import schemes, tools
 from app.core.config import get_settings
 from app.schemas import ChatMessage
 
@@ -35,6 +35,7 @@ def _context(user_id: str) -> dict:
         "debt": tools.get_debt(user_id),
         "invoices": tools.get_invoices(user_id),
         "investments": tools.get_investments(user_id),
+        "schemes_and_deadlines": schemes.upcoming(),
     }
 
 
@@ -60,7 +61,7 @@ def second_opinion(user_id: str, message: str, history: Optional[list[ChatMessag
 
 
 def complete(system: str, user: str, max_tokens: int = 700) -> Optional[str]:
-    """One-shot Nugen completion; None on any failure (used as the Gemini backup)."""
+    """One-shot Nugen completion; None on any failure (used as the backup)."""
     s = get_settings()
     if not s.has_nugen:
         return None

@@ -1,4 +1,4 @@
-"""Tests for app.copilot.* -- all run with NO Gemini key present (has_gemini
+"""Tests for app.copilot.* -- all run with NO AI key present (has_nvidia
 patched to False) so they pass in CI/graders without any secret configured.
 """
 from __future__ import annotations
@@ -14,16 +14,15 @@ from app.schemas import AnswerContract
 @pytest.fixture(autouse=True)
 def force_offline(monkeypatch):
     """Force every test in this module through the offline path, regardless
-    of whether a real GEMINI_API_KEY happens to be present in the environment
+    of whether a real NVIDIA_API_KEY happens to be present in the environment
     (e.g. from the repo's .env.local during local dev)."""
 
     class _FakeSettings:
-        has_gemini = False
+        has_nvidia = False
         has_nugen = False
-        has_xai = False
-        gemini_api_key = ""
-        gemini_model = "gemini-flash-latest"
-
+        has_nvidia = False
+        nvidia_chat_api_key = ""
+        
     monkeypatch.setattr("app.copilot.engine.get_settings", lambda: _FakeSettings())
     yield
 
@@ -149,11 +148,11 @@ def test_offline_router_never_raises_on_bad_user():
 
 
 # ---------------------------------------------------------------------------
-# engine.answer() end to end (offline path, since has_gemini is patched False)
+# engine.answer() end to end (offline path, since has_nvidia is patched False)
 # ---------------------------------------------------------------------------
 
 
-def test_answer_falls_back_to_offline_when_no_gemini_key():
+def test_answer_falls_back_to_offline_when_no_ai_key():
     result = answer("demo-priya", "How am I doing financially?")
     assert isinstance(result, AnswerContract)
     assert result.narrative.strip()
@@ -167,24 +166,23 @@ def test_answer_never_raises_on_empty_ish_message():
     assert isinstance(result, AnswerContract)
 
 
-def test_answer_force_offline_skips_gemini_even_when_configured(monkeypatch):
+def test_answer_force_offline_skips_ai_even_when_configured(monkeypatch):
     """Privacy toggle (Security page): force_offline=True must short-circuit
-    to the offline router even when a Gemini key IS configured -- never call
+    to the offline router even when an AI key IS configured -- never call
     out to a third-party LLM when the user has opted out."""
 
-    class _FakeSettingsWithGemini:
-        has_gemini = True
+    class _FakeSettingsWithAI:
         has_nugen = False
-        has_xai = False
-        gemini_api_key = "fake-key-should-never-be-used"
-        gemini_model = "gemini-flash-latest"
+        has_nvidia = True
+        nvidia_chat_api_key = "fake-key-should-never-be-used"
 
-    monkeypatch.setattr("app.copilot.engine.get_settings", lambda: _FakeSettingsWithGemini())
+    monkeypatch.setattr("app.copilot.engine.get_settings", lambda: _FakeSettingsWithAI())
 
     def _fail_if_called(*args, **kwargs):
-        raise AssertionError("Gemini path was called despite force_offline=True")
+        raise AssertionError("AI path was called despite force_offline=True")
 
-    monkeypatch.setattr("app.copilot.engine._gemini_answer", _fail_if_called)
+    monkeypatch.setattr("app.copilot.engine._nvidia_answer", _fail_if_called)
+    monkeypatch.setattr("app.copilot.engine._general_answer", _fail_if_called)
 
     result = answer("demo-priya", "How am I doing financially?", force_offline=True)
     assert isinstance(result, AnswerContract)

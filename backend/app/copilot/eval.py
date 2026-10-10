@@ -1,7 +1,7 @@
 """Small eval set for the copilot (`python -m app.copilot.eval` from backend/).
 
 Runs `app.copilot.engine.answer()` against ~25 natural-language questions
-spanning every intent, whether or not a Gemini key is configured (if one is
+spanning every intent, whether or not an AI key is configured (if one is
 present, this exercises the real online path; if not, it exercises the
 offline router -- either way every question must produce a valid
 AnswerContract). Prints a pass/fail table and a summary line.

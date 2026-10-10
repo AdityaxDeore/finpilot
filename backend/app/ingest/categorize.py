@@ -4,19 +4,12 @@ Primary path: fast rules/dictionary matching on merchant name (substring /
 regex) covering common Indian merchants, plus a couple of generic amount
 heuristics (e.g. EMI-shaped merchant names).
 
-Fallback path (only used when `get_settings().has_gemini` is true): embed the
-merchant name with the configured Gemini embedding model and compare via
-cosine similarity against a small in-process cache of seed-example
-embeddings. Degrades to `TxnCategory.other` on any error, timeout, or missing
-key -- this function must never raise.
+Anything the rules do not recognise becomes `TxnCategory.other`. This function must never raise.
 """
 from __future__ import annotations
 
-import math
 import re
-import threading
 
-from app.core.config import get_settings
 from app.schemas import TxnCategory
 
 # ---------------------------------------------------------------------------
@@ -97,111 +90,6 @@ def _amount_heuristic(merchant: str, amount: float) -> TxnCategory | None:
 
 
 # ---------------------------------------------------------------------------
-# Gemini-embedding fallback (optional, in-process cache)
-# ---------------------------------------------------------------------------
-
-# Small seed set: example merchant strings mapped to their category. Used to
-# build a one-time reference embedding matrix; unseen merchants are matched
-# to the nearest seed by cosine similarity.
-_SEED_EXAMPLES: dict[str, TxnCategory] = {
-    "Swiggy Instamart": TxnCategory.dining,
-    "Zomato order": TxnCategory.dining,
-    "BigBasket grocery order": TxnCategory.groceries,
-    "Uber trip": TxnCategory.transport,
-    "Indian Oil petrol pump": TxnCategory.transport,
-    "Netflix subscription": TxnCategory.subscriptions,
-    "Electricity board bill payment": TxnCategory.utilities,
-    "Amazon.in shopping order": TxnCategory.shopping,
-    "Apollo Pharmacy medicine order": TxnCategory.healthcare,
-    "PVR Cinemas ticket": TxnCategory.entertainment,
-    "Zerodha Coin SIP": TxnCategory.investment_sip,
-    "HDFC home loan EMI": TxnCategory.emi_loan,
-    "Monthly house rent": TxnCategory.rent_housing,
-    "Credit card bill payment": TxnCategory.credit_card_payment,
-    "NEFT fund transfer": TxnCategory.transfer,
-    "Late payment fee": TxnCategory.fees_interest,
-    "Salary credit": TxnCategory.income,
-}
-
-_SIMILARITY_THRESHOLD = 0.72
-
-_embedding_cache: dict[str, list[float]] = {}
-_seed_matrix_ready = False
-_cache_lock = threading.Lock()
-
-
-def _cosine(a: list[float], b: list[float]) -> float:
-    dot = sum(x * y for x, y in zip(a, b))
-    na = math.sqrt(sum(x * x for x in a))
-    nb = math.sqrt(sum(y * y for y in b))
-    if na == 0 or nb == 0:
-        return 0.0
-    return dot / (na * nb)
-
-
-def _get_gemini_client():
-    from google import genai  # imported lazily so tests without the package/key never hit this
-
-    settings = get_settings()
-    return genai.Client(api_key=settings.gemini_api_key)
-
-
-def _embed(text: str) -> list[float] | None:
-    """Embed one string via Gemini; returns None on any failure."""
-    try:
-        settings = get_settings()
-        client = _get_gemini_client()
-        resp = client.models.embed_content(model=settings.gemini_embed_model, contents=text)
-        if resp.embeddings:
-            return list(resp.embeddings[0].values)
-    except Exception:
-        return None
-    return None
-
-
-def _ensure_seed_matrix() -> None:
-    global _seed_matrix_ready
-    if _seed_matrix_ready:
-        return
-    with _cache_lock:
-        if _seed_matrix_ready:
-            return
-        for example in _SEED_EXAMPLES:
-            if example not in _embedding_cache:
-                vec = _embed(example)
-                if vec is not None:
-                    _embedding_cache[example] = vec
-        _seed_matrix_ready = True
-
-
-def _gemini_fallback(merchant: str) -> TxnCategory:
-    try:
-        _ensure_seed_matrix()
-        if not _embedding_cache:
-            return TxnCategory.other
-        vec = _embedding_cache.get(merchant) or _embed(merchant)
-        if vec is None:
-            return TxnCategory.other
-        _embedding_cache[merchant] = vec
-
-        best_category: TxnCategory | None = None
-        best_score = -1.0
-        for example, category in _SEED_EXAMPLES.items():
-            example_vec = _embedding_cache.get(example)
-            if example_vec is None:
-                continue
-            score = _cosine(vec, example_vec)
-            if score > best_score:
-                best_score = score
-                best_category = category
-        if best_category is not None and best_score >= _SIMILARITY_THRESHOLD:
-            return best_category
-    except Exception:
-        pass
-    return TxnCategory.other
-
-
-# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -221,9 +109,5 @@ def categorize(merchant: str, amount: float = 0.0) -> TxnCategory:
     matched = _amount_heuristic(merchant, amount)
     if matched is not None:
         return matched
-
-    settings = get_settings()
-    if settings.has_gemini:
-        return _gemini_fallback(merchant)
 
     return TxnCategory.other

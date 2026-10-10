@@ -1,6 +1,6 @@
 """Zero-dependency, zero-API-key rule-based router.
 
-This is what keeps FinPilot demoable when Gemini is down/rate-limited/unkeyed:
+This is what keeps FinPilot demoable when the AI is down/rate-limited/unkeyed:
 a small keyword/intent classifier that still builds a real AnswerContract out
 of the same tool functions used by the online engine (app.copilot.tools) --
 it is not canned text, it reflects real snapshot data every time.

@@ -1,41 +1,16 @@
-"""Gemini function-calling copilot engine.
+"""Copilot engine: NVIDIA-hosted models only.
 
-`answer(user_id, message, history=None) -> AnswerContract` is the single
-entry point used by /api/chat.
-
-Design notes (see final report for the exact installed google-genai==0.3.0
-SDK behaviour this was written against):
-
-  - `google.genai.types.GenerateContentConfig.tools` accepts a list of plain
-    Python callables directly (`ToolListUnion = list[Union[Tool, Callable]]`).
-    Passing our tool functions there makes the SDK itself perform automatic
-    function calling: it introspects each callable's signature/docstring to
-    build the FunctionDeclaration, executes it when Gemini requests a call,
-    feeds the result back, and repeats -- capped by
-    `AutomaticFunctionCallingConfig.maximum_remote_calls`. We rely on this
-    instead of hand-rolling the round-trip loop.
-  - The Gemini API does not reliably support `tools` + `response_schema` in
-    the same call, so this is a two-phase request:
-      Phase 1: free-form call with tools enabled -> grounded natural-language
-               answer + a full record of every tool call/result made.
-      Phase 2: a second, tool-free call that asks the model to compress
-               phase 1's grounded findings into strict AnswerContract JSON,
-               using `response_schema=AnswerContract`
-               (`GenerateContentResponse.parsed` is then already a validated
-               `AnswerContract` instance -- the SDK calls
-               `AnswerContract.model_validate_json` internally).
-  - Any exception anywhere in this module (network, quota, schema
-    validation, SDK surprises) falls through to the offline router so
-    `/api/chat` never 500s.
+`answer(user_id, message, history, force_offline, model) -> AnswerContract` is the single entry point used by
+/api/chat. Money questions go to the deep model with the user's real numbers; small talk goes to the fast chat model.
+Identity questions are answered locally. Offline mode uses the rule-based router and sends nothing anywhere.
 """
 import json
+import re
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
-from pydantic import ValidationError
-
-from app.copilot import grok, nugen, offline_router, tools
+from app.copilot import nugen, nvidia, offline_router
 from app.core.config import get_settings
 from pydantic import BaseModel, Field
 
@@ -51,13 +26,11 @@ from app.schemas import (
 
 logger = logging.getLogger(__name__)
 
-MAX_TOOL_ROUND_TRIPS = 6
 
 
-# Gemini's Developer API rejects schemas containing free-form dicts (`additionalProperties`),
-# and Recommendation.action_params is one. This mirror of AnswerContract omits it; the result
-# is re-validated into the real AnswerContract below.
-class _GeminiRecommendation(BaseModel):
+# Mirror of AnswerContract without the free-form `action_params` dict, so the schema we show the model stays simple.
+# The result is re-validated into the real AnswerContract.
+class _RecommendationSchema(BaseModel):
     action: ActionType
     text: str
     rationale: str
@@ -65,36 +38,13 @@ class _GeminiRecommendation(BaseModel):
     confidence: float = Field(ge=0, le=1)
 
 
-class _GeminiAnswer(BaseModel):
+class _AnswerSchema(BaseModel):
     query: Optional[str] = None
     facts: list[Fact] = Field(default_factory=list)
     predictions: list[Prediction] = Field(default_factory=list)
-    recommendations: list[_GeminiRecommendation] = Field(default_factory=list)
+    recommendations: list[_RecommendationSchema] = Field(default_factory=list)
     data_gaps: list[DataGap] = Field(default_factory=list)
     narrative: str = ""
-
-_SYSTEM_PROMPT_TOOLS = """You are FinPilot's financial copilot for an Indian retail user.
-
-You have tools to look up the user's real financial data (summary, recurring
-obligations, debts, forecast, spending breakdown, invoices, investments) and to simulate the impact of actions
-(simulate_action / check_affordability). ALWAYS call the relevant tool(s)
-before stating any number. Never invent or guess a number.
-
-Rules:
-- Every concrete figure you state (₹ amounts, percentages, dates) must come
-  directly from a tool result.
-- Statements about the future, or inferred patterns, are predictions, not
-  facts -- flag your own confidence in them.
-- If you recommend an action, you must call simulate_action or
-  check_affordability to get its real impact before recommending it.
-- If a tool reports an error or a data gap, say so plainly instead of
-  guessing.
-
-First, gather what you need using the tools. Then give a concise,
-plain-language answer to the user's question, explicitly separating what you
-observed (facts), what you're predicting, and what you'd recommend (with its
-simulated impact). Keep it tight -- a few sentences plus any recommendations.
-"""
 
 _SYSTEM_PROMPT_STRUCTURE = """You convert a financial copilot's grounded findings into strict JSON matching
 the AnswerContract schema.
@@ -118,77 +68,6 @@ Return ONLY the JSON object, nothing else.
 """
 
 
-def _bound_tool_functions(user_id: str) -> list:
-    """Build LLM-facing tool wrappers closed over `user_id` so Gemini never
-    has to (and can't) supply/guess a user_id itself. Each wrapper keeps the
-    original function's name/docstring for schema generation but drops the
-    user_id parameter from the signature Gemini sees."""
-
-    def get_summary() -> dict:
-        """Net worth, income, expenses, savings rate, and health score for the current user."""
-        return tools.get_summary(user_id)
-
-    def query_transactions(category: str, merchant: str, days: int) -> dict:
-        """Look up illustrative recent transactions for the current user,
-        over the last `days` days (pass 30 if the user didn't specify).
-        `category` and `merchant` are required by this schema -- pass an
-        empty string "" for either to mean "no filter" (do NOT omit them)."""
-        return tools.query_transactions(user_id, category=category, merchant=merchant, days=days)
-
-    def get_recurring() -> dict:
-        """List the current user's recurring obligations (rent, EMI, subscriptions, SIPs)."""
-        return tools.get_recurring(user_id)
-
-    def get_debt() -> dict:
-        """List the current user's debts and debt-to-income ratio."""
-        return tools.get_debt(user_id)
-
-    def get_forecast(horizon_days: int) -> dict:
-        """Get the current user's cash-flow forecast for the next
-        `horizon_days` days. Pass 90 if the user didn't specify a horizon."""
-        return tools.get_forecast(user_id, horizon_days=horizon_days)
-
-    def simulate_action(action: str, action_params: dict) -> dict:
-        """Simulate the impact of a financial action (e.g. prepay_debt,
-        cancel_subscription, increase_sip, affordability_check) for the
-        current user. Returns a real ImpactEstimate-shaped result. Pass {}
-        for action_params if the action needs no extra parameters."""
-        return tools.simulate_action(user_id, action=action, action_params=action_params or {})
-
-    def check_affordability(amount: float, description: str) -> dict:
-        """Check whether the current user can afford a purchase of `amount`
-        rupees, with a simulated cash-flow impact. Pass "" for description
-        if none is known."""
-        return tools.check_affordability(user_id, amount=amount, description=description)
-
-    def get_spending_breakdown(days: int) -> dict:
-        """Spend by category, top merchants and monthly totals for the current
-        user over the last `days` days (pass 90 if unspecified). Use this for
-        any "where does my money go" question."""
-        return tools.get_spending_breakdown(user_id, days=days)
-
-    def get_invoices() -> dict:
-        """Bills and invoices from the user's Gmail/Drive: paid, due, total due."""
-        return tools.get_invoices(user_id)
-
-    def get_investments() -> dict:
-        """The user's mutual fund and stock holdings: invested, value, gain, monthly SIPs."""
-        return tools.get_investments(user_id)
-
-    return [
-        get_summary,
-        query_transactions,
-        get_recurring,
-        get_debt,
-        get_forecast,
-        simulate_action,
-        check_affordability,
-        get_spending_breakdown,
-        get_invoices,
-        get_investments,
-    ]
-
-
 def _history_to_text(history: Optional[list[ChatMessage]]) -> str:
     if not history:
         return ""
@@ -198,102 +77,55 @@ def _history_to_text(history: Optional[list[ChatMessage]]) -> str:
     return "\n".join(lines)
 
 
-def _extract_grounded_findings(response) -> str:
-    """Serialize the automatic-function-calling transcript (tool calls +
-    results) plus the model's final text into a plain-text block for phase 2."""
-    parts_text: list[str] = []
-    history = getattr(response, "automatic_function_calling_history", None) or []
-    for content in history:
-        role = getattr(content, "role", "?")
-        for part in getattr(content, "parts", None) or []:
-            fc = getattr(part, "function_call", None)
-            fr = getattr(part, "function_response", None)
-            if fc is not None:
-                parts_text.append(f"[{role}] called {fc.name}({json.dumps(fc.args)})")
-            elif fr is not None:
-                parts_text.append(f"[{role}] {fr.name} returned: {json.dumps(fr.response)}")
-            elif getattr(part, "text", None):
-                parts_text.append(f"[{role}] {part.text}")
-    final_text = response.text or ""
-    parts_text.append(f"[final model answer] {final_text}")
-    return "\n".join(parts_text)
+
+_IDENTITY = re.compile(
+    r"who are you|what are you|your name|which (ai |llm |language )?model|what (ai |llm |language )?model|are you (chat ?gpt|gpt|gemini|grok|claude|llama|nemotron|nvidia|an? ai|a bot|a robot)|"
+    r"who (made|built|created|trained|developed) you|(which|what) company|powered by|underlying model|\bllm\b",
+    re.I,
+)
+_IDENTITY_REPLY = (
+    "I'm FinPilot, your personal finance copilot. I look at your own money data, explain it in plain words, "
+    "and keep you posted on deadlines and schemes. Ask me anything about your money."
+)
+
+_FINANCE = re.compile(
+    r"₹|scheme|yojana|deadline|due date|ppf|nps|elss|80c|itr|advance tax|gold bond|rupee|rs|spend|spent|expens|income|salary|earn|debt|loan|emi|sip|subscri|saving|budget|forecast|invoice|bill|invest|mutual|stock|"
+    r"transaction|cash|afford|balance|net worth|tax|goal|credit|card|rent|insurance|health score|emergency fund|cancel|prepay|my (money|account|finance)",
+    re.I,
+)
+
+_GENERAL_SYSTEM = (
+    "You are FinPilot's friendly assistant inside a personal-finance app. Chat naturally and be concise. "
+    "You have NO access to the user's accounts in this reply, so never state their balances or spending. "
+    "If they want numbers about their money, invite them to ask a specific money question."
+    + " Your name is FinPilot. If asked who or what you are, or which model, company or technology is behind you, say only that you are FinPilot, a personal finance copilot; never name any AI model, vendor or provider."
+)
 
 
-def _gemini_answer(user_id: str, message: str, history: Optional[list[ChatMessage]]) -> AnswerContract:
-    from google import genai
-    from google.genai import types
-
-    settings = get_settings()
-    client = genai.Client(api_key=settings.gemini_api_key, http_options=types.HttpOptions(timeout=60_000))
-    bound_tools = _bound_tool_functions(user_id)
-
-    convo_prefix = _history_to_text(history)
-    phase1_contents = (f"Conversation so far:\n{convo_prefix}\n\n" if convo_prefix else "") + (
-        f"User question: {message}"
-    )
-
-    phase1_config = types.GenerateContentConfig(
-        system_instruction=_SYSTEM_PROMPT_TOOLS,
-        tools=bound_tools,
-        automatic_function_calling=types.AutomaticFunctionCallingConfig(
-            maximum_remote_calls=MAX_TOOL_ROUND_TRIPS
-        ),
-    )
-    response1 = client.models.generate_content(
-        model=settings.gemini_model,
-        contents=phase1_contents,
-        config=phase1_config,
-    )
-    grounded_findings = _extract_grounded_findings(response1)
-
-    phase2_prompt = (
-        f"User question: {message}\n\n"
-        f"Grounded findings from tool calls and the model's draft answer:\n{grounded_findings}\n\n"
-        "Now produce the strict AnswerContract JSON."
-    )
-    phase2_config = types.GenerateContentConfig(
-        system_instruction=_SYSTEM_PROMPT_STRUCTURE,
-        response_mime_type="application/json",
-        response_schema=_GeminiAnswer,
-    )
-
-    last_error: Optional[Exception] = None
-    for attempt in range(2):  # try once, retry once on validation failure
-        try:
-            response2 = client.models.generate_content(
-                model=settings.gemini_model,
-                contents=phase2_prompt
-                + ("" if attempt == 0 else "\n\nYour previous JSON failed schema validation. Fix it and return ONLY valid JSON."),
-                config=phase2_config,
-            )
-            parsed = response2.parsed
-            if isinstance(parsed, _GeminiAnswer):
-                parsed = parsed.model_dump(mode="json")
-            elif not isinstance(parsed, dict):
-                parsed = json.loads(response2.text)
-            result = AnswerContract.model_validate(parsed)
-            if not result.query:
-                result.query = message
-            return result
-        except ValidationError as exc:
-            last_error = exc
-            continue
-        except Exception as exc:
-            last_error = exc
-            break
-
-    raise RuntimeError(f"Gemini structured-output phase failed: {last_error}")
+def _is_general(message: str) -> bool:
+    """Small talk and non-money questions go to the fast chat model; money questions get grounded data."""
+    return not _FINANCE.search(message)
 
 
-def _grok_answer(user_id: str, message: str, history: Optional[list[ChatMessage]]) -> AnswerContract:
-    """One Grok call over the real, pre-fetched numbers (no recommendations: those need a simulation)."""
+def _general_answer(message: str, history: Optional[list[ChatMessage]], user_id: Optional[str] = None) -> AnswerContract:
+    """Fast chat model. With `user_id` it also gets the user's real numbers to answer money questions."""
+    turns = [(m.role, m.content) for m in (history or []) if m.role in ("user", "assistant")]
+    system = _GENERAL_SYSTEM + (("\n\nDATA (answer only from this, quote amounts exactly):\n" + json.dumps(nugen._context(user_id), default=str)) if user_id else "")
+    return AnswerContract(query=message, narrative=nvidia.chat(message, turns, system), source="FinPilot")
+
+
+def _nvidia_answer(user_id: str, message: str, history: Optional[list[ChatMessage]]) -> AnswerContract:
+    """One NVIDIA call over the real, pre-fetched numbers (no recommendations: those need a simulation)."""
     convo = _history_to_text(history)
     user = (
         (f"Conversation so far:\n{convo}\n\n" if convo else "")
         + f"User question: {message}\n\nGrounded findings (real data, JSON):\n{json.dumps(nugen._context(user_id), default=str)}\n\n"
-        "Produce the strict AnswerContract JSON. Leave `recommendations` empty."
+        "Produce the strict AnswerContract JSON. Leave `recommendations` empty. Use EXACTLY this JSON schema:\n"
+        f"{json.dumps(_AnswerSchema.model_json_schema())}\n"
+        'Example fact: {"text": "Monthly income is ₹94,431", "value": 94431, "source_txn_ids": []}. '
+        "`text` is a full sentence and `value` is a plain number or null. Write `narrative` as 2 to 4 friendly plain sentences."
     )
-    result = AnswerContract.model_validate(grok.complete_json(_SYSTEM_PROMPT_STRUCTURE, user))
+    result = AnswerContract.model_validate(_AnswerSchema.model_validate(nvidia.complete_json(_SYSTEM_PROMPT_STRUCTURE, user)).model_dump(mode="json"))
     if not result.query:
         result.query = message
     return result
@@ -304,43 +136,49 @@ def answer(
     message: str,
     history: Optional[list[ChatMessage]] = None,
     force_offline: bool = False,
+    model: str = "auto",
 ) -> AnswerContract:
-    """Answer a user's financial question.
+    """Answer a user's question. Never raises.
 
-    Uses Gemini when a key is configured (an AI failure is reported as an error
-    message, never replaced by a canned answer). The rule-based router is used
-    only in offline mode or when no AI key is configured. This
-    function is designed to never raise.
-
-    `force_offline`: user-controlled privacy preference (see the Security
-    page's "offline mode" toggle) -- when set, financial data never leaves
-    this process for a third-party LLM call, regardless of whether a Gemini
-    key is configured.
+    `model`: auto = money questions get the deep, number-checking engine and everything else the fast chat engine
+    (each tries the other if it fails); deep = always the deep engine; fast = always the fast engine (given your data
+    for money questions). An AI failure is reported honestly, never replaced by a canned answer. The rule-based
+    router answers only in offline mode (`force_offline`: data never leaves this process) or when no key is set.
     """
     settings = get_settings()
-    # Nugen runs alongside Gemini; never when the user asked for data to stay on this machine.
-    pool = ThreadPoolExecutor(max_workers=1)
-    second = pool.submit(nugen.second_opinion, user_id, message, history) if settings.has_nugen and not force_offline else None
-    result = None
-    if settings.has_xai and not force_offline:  # Grok first, Gemini is the fallback
-        try:
-            result = _grok_answer(user_id, message, history)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Grok copilot engine failed, falling back to Gemini: %s", exc)
-    if result is None and settings.has_gemini and not force_offline:
-        try:
-            result = _gemini_answer(user_id, message, history)
-        except Exception as exc:  # noqa: BLE001 - deliberate broad boundary
-            # No canned answer when AI is configured: say plainly that it failed.
-            logger.warning("Gemini copilot engine failed: %s", exc)
-            why = "its quota is used up" if "429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc) else "it did not respond in time"
-            result = AnswerContract(
-                query=message,
-                narrative=f"The AI assistant couldn't answer right now because {why}. Please try again in a minute.",
-                data_gaps=[DataGap(text="Gemini was unavailable.", what_would_help="Retry shortly, or turn on offline mode in Security for basic rule-based answers.")],
-            )
-    if result is None:  # offline mode, or no AI key configured at all
+    if _IDENTITY.search(message):
+        return AnswerContract(query=message, narrative=_IDENTITY_REPLY, source="FinPilot")
+    if force_offline or not (settings.has_nvidia or settings.nvidia_chat_api_key):
         result = offline_router.route(user_id, message)
+        result.source = "FinPilot rules"
+        return result
+
+    # a short follow-up ("and last month?") inherits the topic of the previous user turn
+    prior = next((m.content for m in reversed(history or []) if m.role == "user"), "")
+    money = not _is_general(message) or (len(message) < 40 and not _is_general(prior))
+    deep = lambda: _nvidia_answer(user_id, message, history)  # noqa: E731
+    fast = lambda: _general_answer(message, history, user_id if money else None)  # noqa: E731
+    steps = [fast, deep] if model == "fast" or (model == "auto" and not money) else [deep, fast]
+
+    # Nugen's second opinion runs alongside money questions only
+    pool = ThreadPoolExecutor(max_workers=1)
+    second = pool.submit(nugen.second_opinion, user_id, message, history) if money and settings.has_nugen else None
+    result, last = None, None
+    for step in steps:
+        try:
+            result = step()
+            result.source = "FinPilot"
+            break
+        except Exception as exc:  # noqa: BLE001 - deliberate broad boundary
+            last = exc
+            logger.warning("Copilot engine step failed: %s", exc)
+    if result is None:
+        why = "it is busy right now" if "429" in str(last) else "it did not respond in time"
+        result = AnswerContract(
+            query=message,
+            narrative=f"I couldn't answer right now because {why}. Please try again in a minute.",
+            data_gaps=[DataGap(text="The AI engine was unavailable.", what_would_help="Retry shortly, or turn on 'Keep my data on this device' for basic rule-based answers.")],
+        )
     if second is not None:
         result.nugen_narrative, result.nugen_confidence = second.result()
     pool.shutdown(wait=False)

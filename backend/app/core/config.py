@@ -18,14 +18,12 @@ load_dotenv(_REPO_ROOT / "backend" / ".env", override=False)
 
 
 class Settings:
-    # xAI Grok (first choice for the copilot; Gemini is the fallback)
-    xai_api_key: str = os.getenv("XAI_API_KEY", "")
-    xai_model: str = os.getenv("XAI_MODEL", "grok-4")
-
-    # Gemini
-    gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
-    gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
-    gemini_embed_model: str = os.getenv("GEMINI_EMBED_MODEL", "gemini-embedding-001")
+    # NVIDIA NIM hosted chat (the copilot's AI)
+    nvidia_api_key: str = os.getenv("NVIDIA_API_KEY", "")
+    nvidia_model: str = os.getenv("NVIDIA_MODEL", "nvidia/nemotron-3-super-120b-a12b")
+    # general (non-finance) conversation: a fast model, optionally on its own key
+    nvidia_chat_api_key: str = os.getenv("NVIDIA_CHAT_API_KEY") or os.getenv("NVIDIA_API_KEY", "")
+    nvidia_chat_model: str = os.getenv("NVIDIA_CHAT_MODEL", "nvidia/nemotron-3.5-lightning-30b-a3b")
 
     # Nugen (second opinion in the copilot; optional)
     nugen_api_key: str = os.getenv("NUGEN_API_KEY", "")
@@ -49,12 +47,8 @@ class Settings:
         return bool(self.firebase_project_id)
 
     @property
-    def has_xai(self) -> bool:
-        return bool(self.xai_api_key)
-
-    @property
-    def has_gemini(self) -> bool:
-        return bool(self.gemini_api_key)
+    def has_nvidia(self) -> bool:
+        return bool(self.nvidia_api_key)
 
     @property
     def has_nugen(self) -> bool:

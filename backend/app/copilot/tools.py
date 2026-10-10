@@ -1,4 +1,4 @@
-"""Tool functions callable by the Gemini function-calling loop (app.copilot.engine)
+"""Tool functions callable by the function-calling loop (app.copilot.engine)
 and by the offline rule-based router (app.copilot.offline_router).
 
 Every function here:
@@ -397,7 +397,7 @@ def simulate_action(user_id: str, action: str, action_params: dict = {}) -> dict
         )
         # Flatten to the same top-level shape _stub_simulation returns
         # (health_score_before/after, impact, confidence, forecast_before/after)
-        # so callers -- the Gemini tool loop and check_affordability below --
+        # so callers -- the tool loop and check_affordability below --
         # see one consistent shape regardless of which path answered.
         result_dict = _jsonable(result)
         return {"source": "app.simulate.engine", **result_dict}
