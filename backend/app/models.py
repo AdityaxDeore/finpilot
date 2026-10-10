@@ -254,3 +254,16 @@ class DocumentRow(SQLModel, table=True):
     name: str
     text: str  # full extracted text, capped at 200_000 chars
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class ProfileRow(SQLModel, table=True):
+    """What a user told us in the onboarding questionnaire (one row per user)."""
+
+    __tablename__ = "profiles"
+
+    id: str = Field(primary_key=True)  # = user_id
+    user_id: str = Field(index=True)
+    level: str = "skipped"  # basic | standard | deep | skipped
+    answers: str = "{}"  # JSON-serialized {question_id: answer}
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+

@@ -19,6 +19,9 @@ import type {
   GoalProgress,
   FinancialSecurity,
   FinancialSecurityBrief,
+  Profile,
+  ProfileLevel,
+  ProfileQuestion,
   Household,
   HouseholdInvite,
   HouseholdSummary,
@@ -251,6 +254,10 @@ export const api = {
       lines.filter(Boolean).forEach((l) => onEvent(JSON.parse(l)));
     }
   },
+  profileQuestions: () => apiFetch<Record<ProfileLevel, ProfileQuestion[]>>("/api/profile/questions"),
+  profile: (userId: string) => apiFetch<Profile>(`/api/profile/${userId}`),
+  saveProfile: (userId: string, level: ProfileLevel | "skipped", answers: Record<string, string> = {}) =>
+    apiFetch<Profile>(`/api/profile/${userId}`, { method: "PUT", body: JSON.stringify({ level, answers }) }),
   financialSecurity: (userId: string) => apiFetch<FinancialSecurity>(`/api/security/${userId}/financial`),
   financialSecurityBrief: (userId: string) => apiFetch<FinancialSecurityBrief>(`/api/security/${userId}/financial/brief`),
   securityReport: (userId: string) => apiFetch<SecurityReport | null>(`/api/security/${userId}/report`),

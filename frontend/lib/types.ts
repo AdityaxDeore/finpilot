@@ -726,6 +726,10 @@ export interface Connector {
 export type ConnectProfile = "priya" | "arjun" | "meera";
 
 // Security suite
+export type ProfileLevel = "basic" | "standard" | "deep";
+export interface ProfileQuestion { id: string; label: string; type: "text" | "number" | "choice"; options: string[]; hint: string }
+export interface Profile { completed: boolean; level: ProfileLevel | "skipped" | null; answers: Record<string, string> }
+
 export interface FinancialSecurity {
   generated_at: string;
   score: number;

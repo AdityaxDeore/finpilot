@@ -23,6 +23,7 @@ import {
   Database,
   FilePlus2,
   Link2,
+  UserRound,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -94,6 +95,7 @@ export const NAV_GROUPS: { label: string; tone: string; links: NavLink[] }[] = [
       { href: "/evidence-room", label: "Evidence Room", icon: ScanSearch },
       { href: "/twin", label: "Twin Simulator", icon: Network },
       { href: "/my-data", label: "My Data", icon: Database },
+      { href: "/profile", label: "Profile", icon: UserRound },
     ],
   },
 ];
