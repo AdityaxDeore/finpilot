@@ -43,7 +43,7 @@ class Settings:
     demo_mode: bool = os.getenv("FINPILOT_DEMO_MODE", "true").lower() == "true"
 
     # Firebase
-    firebase_project_id: str = os.getenv("FIREBASE_PROJECT_ID") or os.getenv("NEXT_PUBLIC_FIREBASE_PROJECT_ID", "hackmatrix-3764f")
+    firebase_project_id: str = os.getenv("FIREBASE_PROJECT_ID") or os.getenv("NEXT_PUBLIC_FIREBASE_PROJECT_ID", "hackmatrix-1c5a2")
     # Firestore project may differ (e.g. demo-* with the emulator) from the Auth project that signs ID tokens.
     firestore_project_id: str = os.getenv("FIRESTORE_PROJECT_ID") or firebase_project_id
 

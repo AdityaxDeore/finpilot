@@ -147,7 +147,7 @@ export function AnswerContractView({ answer }: { answer: AnswerContract }) {
                     </Chip>
                     <Link
                       href="/simulate"
-                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-ember hover:underline"
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-navy hover:underline"
                     >
                       Simulate Decision →
                     </Link>

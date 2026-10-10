@@ -24,5 +24,6 @@ export function AuthGate({ children }: { children: ReactNode }) {
       </div>
     );
   }
+  // Our OnboardingGate (in the app layout) is the sign-in questionnaire; ProfileQuestionnaire is left unmounted.
   return <>{children}</>;
 }

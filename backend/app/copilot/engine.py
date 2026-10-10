@@ -194,7 +194,8 @@ def _prefetch(user_id: str, message: str, history: Optional[list[ChatMessage]]):
     rf = pool.submit(rag.retrieve, user_id, query, 8)
     wf = pool.submit(gather, message, turns) if gather else None
     pool.shutdown(wait=False)
-    deadline = time.monotonic() + 40  # one shared budget: both run in parallel, so neither waits twice
+    budget = 8 if os.getenv("VERCEL") else 20
+    deadline = time.monotonic() + budget
     try:
         chunks = rf.result(timeout=max(1, deadline - time.monotonic()))
     except Exception as exc:  # noqa: BLE001

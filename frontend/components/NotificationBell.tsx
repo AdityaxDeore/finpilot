@@ -97,7 +97,7 @@ export function NotificationBell({ userId, large = false }: { userId: string; la
                 <button
                   type="button"
                   onClick={handleMarkAllAsRead}
-                  className="inline-flex items-center gap-1 text-[11px] font-medium text-graphite hover:text-ember transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1 text-[11px] font-medium text-graphite hover:text-navy transition-colors cursor-pointer"
                 >
                   <CheckCheck className="h-3 w-3" />
                   <span>Mark all as read</span>
