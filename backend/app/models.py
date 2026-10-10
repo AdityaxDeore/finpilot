@@ -254,3 +254,29 @@ class DocumentRow(SQLModel, table=True):
     name: str
     text: str  # full extracted text, capped at 200_000 chars
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class ProfileRow(SQLModel, table=True):
+    """What a user told us in the onboarding questionnaire (one row per user)."""
+
+    __tablename__ = "profiles"
+
+    id: str = Field(primary_key=True)  # = user_id
+    user_id: str = Field(index=True)
+    level: str = "skipped"  # basic | standard | deep | skipped
+    answers: str = "{}"  # JSON-serialized {question_id: answer}
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class PriceMemoryRow(SQLModel, table=True):
+    """One saved quick expense: what it was, what it cost, and the photo embedding used to recognise it again."""
+
+    __tablename__ = "price_memory"
+
+    id: str = Field(default_factory=_uuid, primary_key=True)
+    user_id: str = Field(index=True)
+    item: str = Field(index=True)
+    price: float
+    category: str = "other"
+    embedding: str | None = None  # JSON-serialized list of floats (CLIP image vector)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

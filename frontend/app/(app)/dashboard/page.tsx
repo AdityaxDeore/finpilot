@@ -22,6 +22,10 @@ import { CashSummaryCard } from "@/components/dashboard/CashSummaryCard";
 import { SpendByCategoryBars } from "@/components/dashboard/SpendByCategoryBars";
 import { MoneySummary } from "@/components/dashboard/MoneySummary";
 import { InvestGuide } from "@/components/dashboard/InvestGuide";
+import { SimpleHome } from "@/components/dashboard/SimpleHome";
+import { useSimpleMode } from "@/lib/simple";
+import { useT } from "@/lib/i18n";
+import { RoleSpotlight } from "@/components/dashboard/RoleSpotlight";
 import { PromoCard } from "@/components/dashboard/PromoCard";
 import { CategoryDonut, IncomeVsSpend, SpendingShifts, TopMerchants } from "@/components/dashboard/SpendCharts";
 import { EvilHoverTraceBarChart } from "@/components/shadcn/hover-trace-bar-chart";
@@ -56,6 +60,9 @@ function Placeholder({ title, body }: { title: string; body: string }) {
 
 export default function DashboardPage() {
   const userId = useUserId();
+  const { t } = useT();
+  const [simple, setSimple] = useSimpleMode(userId);
+  const profile = useAsync(useCallback(() => api.profile(userId), [userId]), [userId]);
   const fetchDashboard = useCallback(() => api.dashboard(userId), [userId]);
   const { data, error, loading, reload } = useAsync(fetchDashboard, [userId]);
   // Pull recent transactions (200/page max) to power the charts and sparklines.
@@ -125,6 +132,9 @@ export default function DashboardPage() {
   if (!data) return null;
 
   const connected = data.has_data;
+  if (simple) {
+    return <SimpleHome name={profile.data?.answers.name} income={data.monthly_income} spent={data.monthly_expenses} connected={connected} onFullView={() => setSimple(false)} />;
+  }
   const months = spend.months;
   const topCategory = spend.categories[0]?.label;
 
@@ -139,7 +149,7 @@ export default function DashboardPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-black/[0.04]">
         <div>
           <h1 className="font-display text-2xl sm:text-3xl font-medium text-ink">
-            Your money, at a glance
+            {t("dash.title")}
           </h1>
           <p className="text-xs sm:text-sm text-graphite mt-0.5">
             Where you stand, where it is going, and what to do next. Fully automatic.
@@ -147,6 +157,9 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setSimple(true)}>
+            {t("dash.simple_view")}
+          </Button>
           <Button variant="ghost" size="sm" onClick={reload}>
             <RefreshCw />
             Refresh
@@ -189,6 +202,8 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      <RoleSpotlight userId={userId} savedThisMonth={spend.months.at(-1)?.savings ?? 0} />
 
       {/* Row 1: four equal summary cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">

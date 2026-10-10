@@ -57,7 +57,7 @@ export function DocumentsPanel({ userId }: { userId: string }) {
         <button type="button" disabled={busy} onClick={() => input.current?.click()} className="cursor-pointer rounded-lg bg-lime px-2.5 py-1 text-xs font-semibold text-ink hover:bg-lime/70 disabled:opacity-50">
           Choose file
         </button>
-        <input ref={input} type="file" multiple accept=".txt,.md,.csv,.json" className="hidden" onChange={(e) => { upload(e.target.files); e.target.value = ""; }} />
+        <input ref={input} type="file" multiple accept=".txt,.md,.csv,.json,.png,.jpg,.jpeg,.webp" className="hidden" onChange={(e) => { upload(e.target.files); e.target.value = ""; }} />
       </div>
       {error && <p className="mt-2 text-xs text-rose-700">{error}</p>}
       {docs.data && docs.data.length > 0 && (

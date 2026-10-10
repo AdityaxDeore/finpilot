@@ -6,7 +6,6 @@ import { ShieldCheckIcon } from "@animateicons/react/lucide";
 import { onAuthChange } from "@/lib/firebase/auth";
 import { isDemoMode } from "@/lib/user";
 import { LoadingMark } from "@/components/ui/LoopIcon";
-import { ProfileQuestionnaire } from "@/components/ProfileQuestionnaire";
 
 /** Renders nothing of the app (no shell, no data fetches) until a Firebase user is signed in; otherwise sends the visitor to /login. */
 export function AuthGate({ children }: { children: ReactNode }) {
@@ -25,10 +24,6 @@ export function AuthGate({ children }: { children: ReactNode }) {
       </div>
     );
   }
-  return (
-    <>
-      {children}
-      <ProfileQuestionnaire />
-    </>
-  );
+  // Our OnboardingGate (in the app layout) is the sign-in questionnaire; ProfileQuestionnaire is left unmounted.
+  return <>{children}</>;
 }

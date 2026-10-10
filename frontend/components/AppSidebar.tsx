@@ -1,5 +1,6 @@
 "use client";
 
+import { useT } from "@/lib/i18n";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -23,6 +24,7 @@ import {
   Database,
   FilePlus2,
   Link2,
+  UserRound,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -94,11 +96,13 @@ export const NAV_GROUPS: { label: string; tone: string; links: NavLink[] }[] = [
       { href: "/evidence-room", label: "Evidence Room", icon: ScanSearch },
       { href: "/twin", label: "Twin Simulator", icon: Network },
       { href: "/my-data", label: "My Data", icon: Database },
+      { href: "/profile", label: "Profile", icon: UserRound },
     ],
   },
 ];
 
 export function AppSidebar({ footer }: { footer?: ReactNode }) {
+  const { t } = useT();
   const pathname = usePathname();
   const { setOpenMobile, state } = useSidebar();
 
@@ -123,21 +127,21 @@ export function AppSidebar({ footer }: { footer?: ReactNode }) {
       <SidebarContent>
         {NAV_GROUPS.map((group) => (
           <SidebarGroup key={group.label}>
-            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+            <SidebarGroupLabel>{t(`nav.${group.label}`, group.label)}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {group.links.map(({ href, label, icon: Icon }) => {
                   const active = !!pathname?.startsWith(href);
                   return (
                     <SidebarMenuItem key={href}>
-                      <SidebarMenuButton asChild isActive={active} tooltip={label}>
+                      <SidebarMenuButton asChild isActive={active} tooltip={t(`nav.${label}`, label)}>
                         <Link
                           href={href}
                           aria-current={active ? "page" : undefined}
                           onClick={() => setOpenMobile(false)}
                         >
                           <Icon className={active ? "text-ink" : group.tone} />
-                          <span>{label}</span>
+                          <span>{t(`nav.${label}`, label)}</span>
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>

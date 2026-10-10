@@ -1,16 +1,20 @@
 "use client";
 
+import { onOpenAssistant } from "@/lib/copilotBus";
+import { getSimpleNow } from "@/lib/i18n";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { Maximize2, MessageCircle, RotateCcw, Sparkles, X } from "lucide-react";
+import { Maximize2, MessageCircle, Mic, RotateCcw, Sparkles, Square, X } from "lucide-react";
 import { PromptInputBox } from "@/components/copilot/PromptInputBox";
 import { hostOf } from "@/components/copilot/AnswerView";
 import { api } from "@/lib/api";
 import type { NextStep, SourceLink } from "@/lib/types";
 import { useUserId } from "@/lib/hooks";
 import { getOfflineOnly } from "@/lib/user";
+import { formatCurrency, formatDate } from "@/lib/format";
+import { isRecentTransactionQuestion, pageToOpen, scrollCommand, scrollToSelector, speak, stopSpeaking, useVoiceInput } from "@/lib/voice";
 
 const STARTERS = ["How am I doing financially?", "What deadlines are coming up?", "Where did I spend the most?", "Which govt schemes suit me?"];
 
@@ -35,33 +39,92 @@ interface Msg {
 /** Floating FinPilot chat in the bottom-right corner. Quick questions; the full Copilot page keeps saved chats. */
 export function ChatPopup() {
   const pathname = usePathname();
+  const router = useRouter();
   const userId = useUserId();
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [loading, setLoading] = useState(false);
+  const [caption, setCaption] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [msgs, loading, open]);
 
+  const say = (status: string) => setCaption(status);
+
+  const voice = useVoiceInput((text) => {
+    setCaption(`Heard: "${text}"`);
+    void send(text, true);
+  }, (problem) => setCaption(problem));
+
+  // the spoken answer also shows as a short caption by the mic, then fades
+  useEffect(() => {
+    if (!caption) return;
+    const t = setTimeout(() => setCaption(""), 9000);
+    return () => clearTimeout(t);
+  }, [caption]);
+
+  useEffect(
+    () =>
+      onOpenAssistant(() => {
+        setOpen(true);
+        stopSpeaking();
+        if (voice.supported && !voice.listening) voice.start();
+      }),
+    [voice],
+  );
+
   if (pathname.startsWith("/copilot")) return null;
 
-  async function send(text?: string) {
+  /** Answers locally for "open X" and "my latest transaction"; everything else goes to the Copilot. */
+  async function answer(message: string, history: { role: "user" | "assistant"; content: string }[]): Promise<Msg> {
+    const scrolled = scrollCommand(message);
+    if (scrolled) return { role: "assistant", text: scrolled };
+    if (isRecentTransactionQuestion(message)) {
+      say("Looking up your latest transaction...");
+      const t = (await api.transactions(userId, { page_size: 1 })).items[0];
+      say("Opening the Transactions page...");
+      router.push("/transactions", { scroll: false }); // so Next does not jump back to the top after we scroll
+      void scrollToSelector("/transactions", "table tbody tr").then((ok) => ok && say("Scrolled to your latest transaction."));
+      if (!t) return { role: "assistant", text: "You have no transactions yet. Opening your transactions page." };
+      const verb = t.amount < 0 ? "spent" : "received";
+      return {
+        role: "assistant",
+        text: `Your most recent transaction: you ${verb} ${formatCurrency(Math.abs(t.amount))} ${t.amount < 0 ? "at" : "from"} ${t.merchant} on ${formatDate(t.date)}. I have opened your transactions.`,
+      };
+    }
+    const page = pageToOpen(message);
+    if (page) {
+      say(`Opening ${page.label}...`);
+      router.push(page.path, { scroll: !page.target });
+      if (page.target) void scrollToSelector(page.path, page.target);
+      return { role: "assistant", text: `Opening ${page.label}.` };
+    }
+    say("Thinking about your question...");
+    const a = await api.chat(message, userId, "auto", history);
+    return { role: "assistant", text: a.narrative || "I could not find an answer to that.", steps: a.next_steps, sources: a.sources };
+  }
+
+  async function send(text?: string, spoken = false) {
     const message = (text ?? input).trim();
     if (!message || loading) return;
     const history = msgs.slice(-8).map((m) => ({ role: m.role, content: m.text }));
     setMsgs((m) => [...m, { role: "user", text: message }]);
     setInput("");
     setLoading(true);
+    let reply: Msg;
     try {
-      const a = await api.chat(message, userId, "auto", history);
-      setMsgs((m) => [...m, { role: "assistant", text: a.narrative || "I could not find an answer to that.", steps: a.next_steps, sources: a.sources }]);
+      reply = await answer(message, history);
     } catch {
-      setMsgs((m) => [...m, { role: "assistant", text: "Sorry, I couldn't answer right now. Please try again in a minute." }]);
-    } finally {
-      setLoading(false);
+      reply = { role: "assistant", text: "Sorry, I couldn't answer right now. Please try again in a minute." };
+    }
+    setMsgs((m) => [...m, reply]);
+    setLoading(false);
+    if (spoken || getSimpleNow()) {
+      speak(reply.text); // asked by voice (or simple view) -> answered by voice
+      setCaption(reply.text.replace(/\*\*/g, ""));
     }
   }
 
@@ -150,12 +213,51 @@ export function ChatPopup() {
             </div>
 
             <div className="bg-white p-2.5">
-              <PromptInputBox value={input} onChange={setInput} onSend={() => send()} isLoading={loading} placeholder="Ask FinPilot..." />
+              <PromptInputBox
+                value={input}
+                onChange={setInput}
+                onSend={() => send()}
+                isLoading={loading}
+                placeholder="Ask FinPilot..."
+                footer={
+                  voice.supported && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (voice.listening) return voice.stop();
+                        stopSpeaking();
+                        voice.start();
+                      }}
+                      aria-label={voice.listening ? "Stop listening" : "Ask by voice"}
+                      className={`flex items-center gap-1.5 rounded-full px-2 py-1 ${voice.listening ? "animate-pulse bg-lime text-ink" : "hover:bg-fog"}`}
+                    >
+                      <Mic className="size-3.5" /> {voice.listening ? "Listening…" : "Speak"}
+                    </button>
+                  )
+                }
+              />
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
+      {caption && !open && (
+        <p className="max-w-[min(300px,calc(100vw-6rem))] rounded-2xl bg-ink px-3.5 py-2 text-sm leading-snug text-white shadow-lg">{caption}</p>
+      )}
+      <button
+          onClick={() => {
+            if (voice.listening) return voice.stop();
+            if (!voice.supported) return setCaption("Voice input needs Chrome, Edge or Safari. Open FinPilot there to talk to it.");
+            stopSpeaking();
+            setCaption("");
+            voice.start();
+          }}
+          aria-label={voice.listening ? "Stop listening" : "Speak to FinPilot"}
+          title={voice.listening ? "Listening… tap to stop" : "Speak to FinPilot"}
+          className={`grid size-12 place-items-center rounded-full border border-black/[0.08] shadow-lg transition-transform hover:scale-105 ${voice.listening ? "animate-pulse bg-ink text-lime" : "bg-white text-ink"}`}
+        >
+          {voice.listening ? <Square className="size-4 fill-current" /> : <Mic className="size-5" />}
+        </button>
       <button
         onClick={() => setOpen((o) => !o)}
         aria-label={open ? "Close FinPilot chat" : "Open FinPilot chat"}
