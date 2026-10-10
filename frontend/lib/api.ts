@@ -165,6 +165,8 @@ export const api = {
   /** English UI text -> Hindi/Marathi (server caches; used only for text nobody hand-translated). */
   translateTexts: (lang: string, texts: string[]) =>
     apiFetch<{ translations: Record<string, string> }>("/api/translate", { method: "POST", body: JSON.stringify({ lang, texts }) }),
+  web: (kind: "search" | "extract" | "crawl" | "map", body: Record<string, string>) =>
+    apiFetch<{ answer?: string; results?: Record<string, unknown>[]; failed_results?: unknown[]; base_url?: string }>(`/api/web/${kind}`, { method: "POST", body: JSON.stringify(body) }),
   dashboard: (userId: string) => apiFetch<DashboardSnapshot>(`/api/dashboard/${userId}`),
   // user_id must be threaded through explicitly -- ChatRequest defaults to
   // "demo-priya" server-side, so omitting it here would silently ignore

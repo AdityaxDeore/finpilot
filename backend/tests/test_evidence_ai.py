@@ -33,3 +33,13 @@ def test_model_failure_keeps_rule_findings(monkeypatch):
     monkeypatch.setattr(ai_agents, "_post", boom)
     out, extra = ai_agents.review("fraud_hunter", [_f()], [])
     assert len(out) == 1 and "ai" not in out[0] and extra["ai"] == "error"
+
+
+def test_agents_corroborate_each_other_and_ai_doubt_lowers_score():
+    from app.security import agents
+    a = {**_f(), "agent": "fraud_hunter", "severity": "medium", "merchant": "Swiggy"}
+    b = {**_f(), "agent": "duplicate_detector", "severity": "medium", "merchant": "swiggy"}
+    solo = {**_f(), "agent": "pattern_analyst", "severity": "medium", "merchant": "Other"}
+    agents.cross_check([a, b, solo])
+    assert a["severity"] == "high" and a["corroborated_by"] == ["duplicate_detector"] and "corroborated_by" not in solo and solo["severity"] == "medium"
+    assert agents.risk_score([{**solo, "ai": {"verdict": "doubt"}}]) < agents.risk_score([solo])

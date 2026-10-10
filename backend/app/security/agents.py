@@ -163,8 +163,28 @@ CHECKS = {"data_guardian": data_guardian, "duplicate_detector": duplicate_detect
 _WEIGHT = {"high": 20, "medium": 8, "low": 3}
 
 
+def cross_check(findings: list[dict]) -> None:
+    """Agents' hand-off: two agents flagging the same merchant corroborate each other, so the finding is escalated."""
+    by_merchant = defaultdict(list)
+    for f in findings:
+        if f["merchant"]:
+            by_merchant[f["merchant"].lower()].append(f)
+    for group in by_merchant.values():
+        agents_here = {f["agent"] for f in group}
+        if len(agents_here) < 2:
+            continue
+        for f in group:
+            f["corroborated_by"] = sorted(agents_here - {f["agent"]})
+            if f["severity"] == "medium":
+                f["severity"] = "high"
+
+
 def risk_score(findings: list[dict]) -> int:
-    return min(100, sum(_WEIGHT[f["severity"]] for f in findings))
+    """Severity weights; corroborated findings count 1.25x, ones the reviewing AI doubts count half."""
+    total = 0.0
+    for f in findings:
+        total += _WEIGHT[f["severity"]] * (1.25 if f.get("corroborated_by") else 1) * (0.5 if f.get("ai", {}).get("verdict") == "doubt" else 1)
+    return min(100, round(total))
 
 
 def risk_level(score: int) -> str:
@@ -192,7 +212,7 @@ _VERDICT_SYSTEM = (
 def write_verdict(findings: list[dict], score: int) -> tuple[dict | None, str | None, str | None]:
     """(verdict, source, error). NVIDIA first, Nugen as backup, otherwise (None, None, reason)."""
     s = get_settings()
-    brief = json.dumps({"risk_score": score, "findings": [{k: f[k] for k in ("agent", "severity", "title", "detail", "amount")} for f in findings[:25]]}, default=str)
+    brief = json.dumps({"risk_score": score, "findings": [{k: f[k] for k in ("agent", "severity", "title", "detail", "amount", "corroborated_by", "ai") if k in f} for f in findings[:25]]}, default=str)
     errors = []
     if s.has_nvidia:
         try:
@@ -217,6 +237,7 @@ def investigate(user_id: str, pace: float = 0.35):
         yield {"type": "agent", "agent": key, "status": "running"}
         t0 = time.time()
         if key == "risk_scorer":
+            cross_check(all_findings)
             score = risk_score(all_findings)
             res, extra = [], {"score": score}
         elif key == "verdict_writer":
@@ -225,7 +246,7 @@ def investigate(user_id: str, pace: float = 0.35):
         else:
             res, extra = CHECKS[key](rows, accounts), {}
             if key in ai_agents.MODELS:
-                res, extra = ai_agents.review(key, res, rows)
+                res, extra = ai_agents.review(key, res, rows, all_findings)
             all_findings += res
         time.sleep(pace)
         summaries[key] = {"agent": key, "name": name, "findings": len(res), "ms": int((time.time() - t0) * 1000), **extra}

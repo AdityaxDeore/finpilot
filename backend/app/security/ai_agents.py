@@ -20,7 +20,7 @@ MODELS = {  # one model per agent; verdict_writer keeps the copilot model (setti
     "pattern_analyst": os.getenv("EVIDENCE_PATTERN_MODEL", "openai/gpt-oss-20b"),
 }
 _SYSTEM = ("You double-check findings from a personal-finance fraud checker. For each finding decide if it looks genuinely suspicious "
-           '("confirm") or probably harmless ("doubt"). Use only the given facts. Reply JSON only: {"r":[{"i":<index>,"v":"confirm"|"doubt","n":"<=14 words"}]}')
+           '("confirm") or probably harmless ("doubt"). You also get what the other agents found so far ("others"); a finding that matches another agent finding on the same merchant is more likely real. Use only the given facts. Reply JSON only: {"r":[{"i":<index>,"v":"confirm"|"doubt","n":"<=14 words"}]}')
 
 
 def _key() -> str:
@@ -40,7 +40,7 @@ def _safety(model: str, text: str) -> bool:
     return "unsafe" in out.lower().split("safety categories")[0]
 
 
-def review(agent: str, findings: list[dict], rows) -> tuple[list[dict], dict]:
+def review(agent: str, findings: list[dict], rows, board: list[dict] = ()) -> tuple[list[dict], dict]:
     """(findings with an `ai` note, extra summary fields). Never raises."""
     model = MODELS[agent]
     extra = {"model": model, "ai": "off"}
@@ -61,7 +61,7 @@ def review(agent: str, findings: list[dict], rows) -> tuple[list[dict], dict]:
                                  "ai": {"model": model, "verdict": "confirm", "note": "flagged unsafe"}})
         elif findings:
             brief = [{"i": i, "title": f["title"], "detail": f["detail"][:160], "amount": f["amount"]} for i, f in enumerate(findings[:12])]
-            content = _post(model, [{"role": "system", "content": _SYSTEM}, {"role": "user", "content": json.dumps(brief, ensure_ascii=False)}], 700,
+            content = _post(model, [{"role": "system", "content": _SYSTEM}, {"role": "user", "content": json.dumps({"findings": brief, "others": [[f["agent"], f["title"][:60]] for f in board[:10]]}, ensure_ascii=False)}], 700,
                             {"response_format": {"type": "json_object"}, "chat_template_kwargs": {"enable_thinking": False}})  # thinking mode is too slow for a review
             for item in json.loads(content[content.index("{"):content.rindex("}") + 1])["r"]:
                 if 0 <= item["i"] < len(findings) and item["v"] in ("confirm", "doubt"):

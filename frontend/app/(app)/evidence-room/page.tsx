@@ -182,6 +182,7 @@ function Finding({ f, label, i }: { f: SecurityFinding; label: string; i: number
       </div>
       <p className="mt-2 text-sm font-semibold text-ink">{f.title}</p>
       <p className="mt-0.5 text-xs text-graphite">{f.detail}</p>
+      {f.corroborated_by && <p className="mt-1.5 text-[11px] font-semibold text-rose-700">Also flagged by {f.corroborated_by.map((id) => AGENTS.find((a) => a.id === id)?.name ?? id).join(", ")}</p>}
       {f.ai && (
         <p className="mt-1.5 text-[11px] text-graphite">
           <span className={cn("font-semibold", f.ai.verdict === "confirm" ? "text-rose-700" : "text-leaf")}>AI {f.ai.verdict === "confirm" ? "agrees" : "doubts it"}</span>

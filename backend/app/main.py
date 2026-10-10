@@ -24,6 +24,7 @@ from app.api.security_router import router as security_router
 from app.api.expenses_router import router as expenses_router
 from app.api.ocr_router import router as ocr_router
 from app.api.translate_router import router as translate_router
+from app.api.web_router import router as web_router
 from app.api.webhooks_router import router as webhooks_router
 from app.api.tax_router import router as tax_router
 from app.api.transactions_router import router as transactions_router
@@ -82,6 +83,7 @@ app.include_router(goals_router)
 app.include_router(documents_router)
 app.include_router(ocr_router)
 app.include_router(translate_router)
+app.include_router(web_router)
 app.include_router(household_router)
 app.include_router(networth_router)
 app.include_router(notifications_router)

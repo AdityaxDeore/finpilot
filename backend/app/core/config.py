@@ -31,6 +31,7 @@ class Settings:
     gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")  # preferred for photo recognition when set
     gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
     nvidia_embed_model: str = os.getenv("NVIDIA_EMBED_MODEL", "nvidia/nemotron-3-embed-1b")  # 2048-dim; verified live
+    tavily_api_key: str = os.getenv("TAVILY_API_KEY", "")  # web search / extract / crawl / map for the Web Intel page
     firecrawl_api_key: str = os.getenv("FIRECRAWL_API_KEY", "")
 
     # Nugen (second opinion in the copilot; optional)

@@ -761,6 +761,7 @@ export interface SecurityFinding {
   merchant: string | null;
   amount: number;
   txn_ids: string[];
+  corroborated_by?: string[];
   ai?: { model: string; verdict: "confirm" | "doubt"; note: string };
 }
 export interface AgentSummary { agent: string; name: string; findings: number; ms: number; score?: number; source?: string | null; error?: string | null; model?: string; ai?: "ok" | "error" | "off" }
