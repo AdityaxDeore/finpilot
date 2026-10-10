@@ -1,5 +1,8 @@
 "use client";
 
+import { BotIcon } from "@animateicons/react/lucide";
+import { LoopIcon } from "@/components/ui/LoopIcon";
+import { PromptInputBox } from "@/components/copilot/PromptInputBox";
 import { useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
@@ -21,8 +24,6 @@ import { api } from "@/lib/api";
 import { useUserId } from "@/lib/hooks";
 import { getOfflineOnly, setOfflineOnly } from "@/lib/user";
 import type { AnswerContract, Recommendation } from "@/lib/types";
-import { Card } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
 import { ConfidenceChip } from "@/components/ui/ConfidenceChip";
 import { Chip } from "@/components/ui/Chip";
 import { formatCurrency, formatImpactValue } from "@/lib/format";
@@ -175,223 +176,135 @@ export default function CopilotPage() {
     }
   }
 
-  return (
-    <div className="flex flex-col gap-6 max-w-4xl mx-auto pb-16">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-black/[0.04]">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="font-display text-2xl sm:text-3xl font-medium text-ink">
-              Financial Copilot
-            </h1>
-            <span className="flex h-2 w-2 rounded-full bg-ember animate-pulse" />
-          </div>
-          <p className="mt-1 text-xs sm:text-sm text-graphite">
-            Grounded in your real transactions. Delivers clear, verifiable 3-lane answers with Firebase AI Logic.
-          </p>
-        </div>
+  const empty = turns.length === 0 && !loading && !error;
+  const persona = userId.replace("demo-", "").replace(/^./, (c) => c.toUpperCase());
 
-        {/* Toggles */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            type="button"
-            onClick={() => setUseFirebaseAI(!useFirebaseAI)}
-            className={cn(
-              "flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-colors cursor-pointer",
-              useFirebaseAI
-                ? "border-amber-400/40 bg-amber-500/10 text-amber-600 font-medium"
-                : "border-black/[0.08] bg-fog/80 text-graphite hover:bg-fog"
-            )}
-          >
-            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-            <span>Firebase AI Logic</span>
-          </button>
+  const inputBox = (
+    <PromptInputBox
+      value={input}
+      onChange={setInput}
+      onSend={() => send(input)}
+      isLoading={loading}
+      placeholder="Ask about spending, debts, forecast gaps, or affordability..."
+      footer="Every number is grounded in your own records. Enter to send, Shift+Enter for a new line."
+    />
+  );
 
-          {/* Offline Mode Toggle */}
-          <label className="flex shrink-0 items-center gap-2 rounded-full border border-black/[0.08] bg-fog/80 px-3 py-1.5 text-xs text-graphite shadow-sm cursor-pointer hover:bg-fog transition-colors">
-            <input
-              type="checkbox"
-              defaultChecked={getOfflineOnly()}
-              onChange={(e) => setOfflineOnly(e.target.checked)}
-              className="h-3.5 w-3.5 rounded border-black/20 accent-ember cursor-pointer"
-            />
-            <span className="font-medium">Offline Rule-Engine Only</span>
-          </label>
-        </div>
-      </div>
+  const toggles = (
+    <div className="flex flex-wrap items-center justify-center gap-2">
+      <button
+        type="button"
+        onClick={() => setUseFirebaseAI(!useFirebaseAI)}
+        className={cn(
+          "flex items-center gap-1.5 rounded-full px-3 py-1 text-xs transition-colors cursor-pointer",
+          useFirebaseAI ? "bg-tint-lime text-olive font-medium" : "text-graphite hover:bg-fog"
+        )}
+      >
+        <Sparkles className="h-3.5 w-3.5" /> Firebase AI Logic
+      </button>
+      <label className="flex items-center gap-2 rounded-full px-3 py-1 text-xs text-graphite cursor-pointer hover:bg-fog transition-colors">
+        <input
+          type="checkbox"
+          defaultChecked={getOfflineOnly()}
+          onChange={(e) => setOfflineOnly(e.target.checked)}
+          className="h-3.5 w-3.5 rounded accent-ember cursor-pointer"
+        />
+        Offline rule engine only
+      </label>
+    </div>
+  );
 
-      {/* Suggested Categorized Starter Prompts (Top) */}
-      {turns.length === 0 && (
-        <div className="flex flex-col gap-3 py-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-pewter">
-              Suggested Inquiries for {userId.replace("demo-", "")}
-            </span>
-            <span className="text-[11px] text-pewter">Click prompt to run analysis</span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {CATEGORIZED_PROMPTS.map((p) => {
-              const Icon = p.icon;
-              return (
+  if (empty) {
+    return (
+      <div className="mx-auto flex min-h-[calc(100vh-10rem)] w-full max-w-3xl flex-col items-center justify-center gap-6 pb-10">
+        <motion.h1
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center font-display text-3xl font-medium text-ink sm:text-4xl"
+        >
+          Hey, {persona}. Ready to dive in?
+        </motion.h1>
+        <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }} className="w-full">
+          {inputBox}
+        </motion.div>
+        <ul className="w-full max-w-xl">
+          {CATEGORIZED_PROMPTS.map((p, i) => {
+            const Icon = p.icon;
+            return (
+              <motion.li key={p.category} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 + i * 0.06 }}>
                 <button
-                  key={p.category}
                   type="button"
                   onClick={() => send(p.query)}
-                  className="flex flex-col text-left p-4 rounded-chip border border-black/[0.08] bg-white hover:bg-fog hover:border-black/[0.14] transition-all shadow-[0_1px_3px_rgba(0,0,0,0.02)] active:scale-[0.99] group cursor-pointer"
+                  className="flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-3 text-left text-sm text-graphite transition-colors hover:bg-fog hover:text-ink"
                 >
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <span
-                      className={cn(
-                        "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border",
-                        p.badgeTone
-                      )}
-                    >
-                      <Icon className="h-3 w-3" />
-                      {p.category}
-                    </span>
-                    <span className="text-pewter group-hover:text-ember group-hover:translate-x-0.5 transition-all text-xs font-bold">
-                      →
-                    </span>
-                  </div>
-                  <span className="text-xs font-medium text-ink leading-relaxed">
-                    &ldquo;{p.query}&rdquo;
-                  </span>
+                  <Icon className="h-4 w-4 shrink-0 text-pewter" />
+                  <span className="truncate">{p.query}</span>
                 </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+              </motion.li>
+            );
+          })}
+        </ul>
+        {toggles}
+      </div>
+    );
+  }
 
-      {/* Conversation Thread */}
-      <div className="flex flex-col gap-6 min-h-[300px]">
+  return (
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 pb-6">
+      <div className="flex flex-col gap-7">
         <AnimatePresence initial={false}>
           {turns.map((t, i) =>
             t.role === "user" ? (
               <motion.div
                 key={i}
-                initial={{ opacity: 0, y: 8, scale: 0.98 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                className="ml-auto max-w-[85%] sm:max-w-[75%] flex flex-col items-end"
-              >
-                <div className="rounded-2xl rounded-br-sm bg-sage text-ink px-4 py-3 text-sm shadow-[0_2px_8px_rgba(0,0,0,0.1)]">
-                  {t.message}
-                </div>
-                <span className="text-[10px] text-pewter mt-1 px-1">You</span>
-              </motion.div>
-            ) : (
-              <motion.div
-                key={i}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="flex flex-col gap-1.5 w-full"
+                className="ml-auto max-w-[85%] rounded-3xl bg-sage px-5 py-3 text-sm text-ink sm:max-w-[75%]"
               >
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-ember text-white text-[11px] font-bold shadow-sm">
-                    F
-                  </div>
-                  <span className="text-xs font-semibold text-ink">FinPilot Copilot</span>
-                  <span className="text-[10px] text-pewter">Three-lane verified answer</span>
-                </div>
-                <Card className="p-5 sm:p-7 shadow-sm">
-                  {t.answer && <CopilotAnswerContractView answer={t.answer} />}
-                </Card>
+                {t.message}
+              </motion.div>
+            ) : (
+              <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex w-full gap-3">
+                <span className="mt-1 flex size-7 shrink-0 items-center justify-center rounded-full bg-lime text-ink">
+                  <Sparkles className="h-3.5 w-3.5" />
+                </span>
+                <div className="min-w-0 flex-1">{t.answer && <CopilotAnswerContractView answer={t.answer} />}</div>
               </motion.div>
             )
           )}
         </AnimatePresence>
 
-        {/* Loading Indicator */}
         {loading && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex items-center gap-3 p-4 rounded-chip border border-black/[0.06] bg-fog/60 self-start"
-          >
-            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-ember text-white text-[11px] font-bold animate-pulse">
-              F
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-medium text-graphite">
-                Analyzing transactions & cash-flow models...
-              </span>
-              <span className="flex gap-1 ml-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-ember animate-bounce" />
-                <span className="h-1.5 w-1.5 rounded-full bg-ember animate-bounce [animation-delay:0.2s]" />
-                <span className="h-1.5 w-1.5 rounded-full bg-ember animate-bounce [animation-delay:0.4s]" />
-              </span>
-            </div>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-3 self-start">
+            <span className="flex size-7 items-center justify-center rounded-full bg-lime text-ink">
+              <LoopIcon icon={BotIcon} size={16} every={1500} />
+            </span>
+            <span className="text-sm text-graphite">Thinking</span>
+            <span className="flex gap-1">
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-pewter" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-pewter [animation-delay:0.2s]" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-pewter [animation-delay:0.4s]" />
+            </span>
           </motion.div>
         )}
 
-        {/* Error Notification */}
         {error && (
-          <div className="p-4 rounded-chip border border-rose-200 bg-rose-50/60 text-xs text-rose-700 flex items-center gap-2">
-            <span>⚠️</span>
-            <span>Could not reach copilot: {error}</span>
+          <div className="rounded-2xl border border-rose-200 bg-rose-50/60 p-4 text-sm text-rose-700">
+            Could not reach copilot: {error}
           </div>
         )}
       </div>
 
-      {/* Floating Query Input Bar & Bottom Starter Chips */}
-      <div className="sticky bottom-4 pt-4 bg-gradient-to-t from-background via-background/95 to-transparent backdrop-blur-sm flex flex-col gap-2">
-        {/* Categorized Prompt Starter Chips (Quick Bar) */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none px-1">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-pewter shrink-0 flex items-center gap-1">
-            <Sparkles className="h-3 w-3 text-ember" /> Quick Explorers:
-          </span>
-          {CATEGORIZED_PROMPTS.map((p) => (
-            <button
-              key={p.category}
-              type="button"
-              onClick={() => send(p.query)}
-              disabled={loading}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-black/[0.08] bg-white hover:bg-fog hover:border-black/[0.18] text-[11px] font-medium text-graphite hover:text-ink shrink-0 transition-all shadow-[0_1px_2px_rgba(0,0,0,0.03)] active:scale-95 cursor-pointer disabled:opacity-50"
-            >
-              <span className="font-semibold text-ink">{p.category}</span>
-              <span className="text-pewter">&middot;</span>
-              <span className="truncate max-w-[170px] sm:max-w-[220px]">
-                {p.query}
-              </span>
-            </button>
-          ))}
-        </div>
-
-        <form
-          className="flex items-center gap-2 p-1.5 rounded-2xl border border-black/[0.1] bg-white/95 shadow-[0_8px_30px_rgba(15,23,42,0.08)] backdrop-blur-xl"
-          onSubmit={(e) => {
-            e.preventDefault();
-            send(input);
-          }}
-        >
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask about spending, debts, forecast gaps, or affordability..."
-            className="flex-1 bg-transparent px-4 py-2.5 text-sm text-ink outline-none placeholder:text-pewter"
-            disabled={loading}
-          />
-          <Button
-            type="submit"
-            variant="primary"
-            size="md"
-            disabled={loading || !input.trim()}
-            className="px-5 py-2.5 rounded-xl text-xs font-semibold shrink-0"
-          >
-            Ask Copilot
-          </Button>
-        </form>
-        <div className="flex items-center justify-between px-3 pt-1 text-[10px] text-pewter">
-          <span>Every number is grounded in your actual database records</span>
-          <span>Press Enter ↵ to send</span>
-        </div>
+      <div className="sticky bottom-4 flex flex-col gap-2 bg-gradient-to-t from-background via-background/95 to-transparent pt-4">
+        {inputBox}
+        {toggles}
       </div>
     </div>
   );
 }
 
 function CopilotAnswerContractView({ answer }: { answer: AnswerContract }) {
-  const { facts, predictions, recommendations, data_gaps, narrative } = answer;
+  const { facts, predictions, recommendations, data_gaps, narrative, nugen_narrative, nugen_confidence } = answer;
   const isEmpty =
     facts.length === 0 && predictions.length === 0 && recommendations.length === 0 && !narrative;
 
@@ -405,7 +318,22 @@ function CopilotAnswerContractView({ answer }: { answer: AnswerContract }) {
       {narrative && (
         <div className="rounded-surface border border-black/[0.06] bg-fog/60 p-4 text-sm leading-relaxed text-graphite flex items-start gap-3">
           <Sparkles className="h-4 w-4 text-ember shrink-0 mt-0.5" />
-          <div className="flex-1">{narrative}</div>
+          <div className="flex-1">
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-pewter">Gemini</p>
+            {narrative}
+          </div>
+        </div>
+      )}
+
+      {nugen_narrative && (
+        <div className="flex items-start gap-3 rounded-surface border border-lime-dark/40 bg-tint-lime p-4 text-sm leading-relaxed text-graphite">
+          <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-olive" />
+          <div className="flex-1">
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-pewter">
+              Nugen{typeof nugen_confidence === "number" ? ` · ${Math.round(nugen_confidence)}% confidence` : ""}
+            </p>
+            {nugen_narrative}
+          </div>
         </div>
       )}
 
