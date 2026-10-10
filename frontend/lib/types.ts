@@ -114,6 +114,17 @@ export interface AnswerContract {
   narrative: string;
   nugen_narrative?: string | null;
   nugen_confidence?: number | null;
+  source?: string | null;
+}
+
+export type ChatEngine = "auto" | "deep" | "fast";
+
+export interface SchemesFeed {
+  today: string;
+  note: string;
+  nudges: string[];
+  deadlines: { id: string; name: string; what: string; date: string; days_left: number; link: string }[];
+  always_open: { name: string; what: string; link: string }[];
 }
 
 export interface RecurringObligation {

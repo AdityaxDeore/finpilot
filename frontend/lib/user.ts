@@ -85,7 +85,7 @@ export function setUserId(id: string) {
 }
 
 /** Privacy preference: when on, the copilot never sends financial data to
- * the Gemini API -- every answer comes from the local rule-based router
+ * the AI service -- every answer comes from the local rule-based router
  * instead. Per-viewer, localStorage-backed, same pattern as the persona id
  * above. See the Security page's "Data & privacy" section. */
 const OFFLINE_ONLY_KEY = "finpilot:copilot_offline_only";

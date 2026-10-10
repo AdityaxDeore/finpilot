@@ -313,7 +313,7 @@ export default function Home() {
               </div>
               <h3 className="text-lg lg:text-2xl font-semibold text-ink">Complete Data Privacy</h3>
               <p className="mt-2 text-sm lg:text-base text-graphite leading-relaxed lg:max-w-md">
-                Google Gemini function calling with a 100% offline rule-based router toggle. Your financial data stays local.
+                NVIDIA-hosted AI with a 100% offline rule-based mode toggle. Your financial data stays local.
               </p>
             </div>
             <div className="mt-6 pt-4 border-t border-black/[0.04] text-xs font-semibold text-purple-600">

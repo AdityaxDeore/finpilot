@@ -1,6 +1,8 @@
 import type {
   Account,
   AnswerContract,
+  ChatEngine,
+  SchemesFeed,
   Budget,
   BudgetStatus,
   CategorizationRule,
@@ -121,11 +123,12 @@ export const api = {
   // "demo-priya" server-side, so omitting it here would silently ignore
   // whatever persona the rest of the app (dashboard/simulate/timeline, all
   // of which use useUserId()) is currently showing.
-  chat: (message: string, userId: string) =>
+  chat: (message: string, userId: string, model: ChatEngine = "auto", history: { role: "user" | "assistant"; content: string }[] = []) =>
     apiFetch<AnswerContract>("/api/chat", {
       method: "POST",
-      body: JSON.stringify({ message, user_id: userId, force_offline: getOfflineOnly() }),
+      body: JSON.stringify({ message, user_id: userId, force_offline: getOfflineOnly(), model, history }),
     }),
+  schemes: () => apiFetch<SchemesFeed>("/api/schemes"),
   simulate: (userId: string, req: SimulationRequest) =>
     apiFetch<SimulationResult>(`/api/simulate/${userId}`, { method: "POST", body: JSON.stringify(req) }),
   addEvent: (userId: string, payload: Record<string, unknown>) =>

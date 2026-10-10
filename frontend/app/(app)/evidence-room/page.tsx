@@ -304,7 +304,7 @@ export default function EvidenceRoomPage() {
                         ))}
                       </ul>
                     )}
-                    <p className="text-[11px] text-pewter">Written by {report.verdict_source === "rules" ? "FinPilot (nothing to explain)" : report.verdict_source === "gemini" ? "Gemini" : "Nugen"}</p>
+                    <p className="text-[11px] text-pewter">Written by FinPilot</p>
                   </>
                 ) : (
                   <>

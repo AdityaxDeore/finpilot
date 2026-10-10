@@ -222,7 +222,7 @@ export default function SecurityPage() {
               </li>
               <li>
                 When you ask the copilot a question, a summary of your relevant financial data is sent to
-                Google&apos;s Gemini API to generate the answer. If you&apos;d rather nothing leave this app,
+                NVIDIA&apos;s hosted AI models to generate the answer. If you&apos;d rather nothing leave this app,
                 the copilot always has a fully offline fallback that never calls an external AI service.
               </li>
               <li>API access to your data requires a valid, matching sign-in token -- it is never inferred from a URL alone.</li>
