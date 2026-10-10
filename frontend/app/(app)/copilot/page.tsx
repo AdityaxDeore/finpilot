@@ -3,7 +3,7 @@
 import { BotIcon } from "@animateicons/react/lucide";
 import { LoopIcon } from "@/components/ui/LoopIcon";
 import { PromptInputBox } from "@/components/copilot/PromptInputBox";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -178,101 +178,39 @@ export default function CopilotPage() {
 
   const empty = turns.length === 0 && !loading && !error;
   const persona = userId.replace("demo-", "").replace(/^./, (c) => c.toUpperCase());
+  const scroller = useRef<HTMLDivElement>(null);
 
-  const inputBox = (
-    <PromptInputBox
-      value={input}
-      onChange={setInput}
-      onSend={() => send(input)}
-      isLoading={loading}
-      placeholder="Ask about spending, debts, forecast gaps, or affordability..."
-      footer="Every number is grounded in your own records. Enter to send, Shift+Enter for a new line."
-    />
-  );
-
-  const toggles = (
-    <div className="flex flex-wrap items-center justify-center gap-2">
-      <button
-        type="button"
-        onClick={() => setUseFirebaseAI(!useFirebaseAI)}
-        className={cn(
-          "flex items-center gap-1.5 rounded-full px-3 py-1 text-xs transition-colors cursor-pointer",
-          useFirebaseAI ? "bg-tint-lime text-olive font-medium" : "text-graphite hover:bg-fog"
-        )}
-      >
-        <Sparkles className="h-3.5 w-3.5" /> Firebase AI Logic
-      </button>
-      <label className="flex items-center gap-2 rounded-full px-3 py-1 text-xs text-graphite cursor-pointer hover:bg-fog transition-colors">
-        <input
-          type="checkbox"
-          defaultChecked={getOfflineOnly()}
-          onChange={(e) => setOfflineOnly(e.target.checked)}
-          className="h-3.5 w-3.5 rounded accent-ember cursor-pointer"
-        />
-        Offline rule engine only
-      </label>
-    </div>
-  );
-
-  if (empty) {
-    return (
-      <div className="mx-auto flex min-h-[calc(100vh-10rem)] w-full max-w-3xl flex-col items-center justify-center gap-6 pb-10">
-        <motion.h1
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center font-display text-3xl font-medium text-ink sm:text-4xl"
-        >
-          Hey, {persona}. Ready to dive in?
-        </motion.h1>
-        <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }} className="w-full">
-          {inputBox}
-        </motion.div>
-        <ul className="w-full max-w-xl">
-          {CATEGORIZED_PROMPTS.map((p, i) => {
-            const Icon = p.icon;
-            return (
-              <motion.li key={p.category} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 + i * 0.06 }}>
-                <button
-                  type="button"
-                  onClick={() => send(p.query)}
-                  className="flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-3 text-left text-sm text-graphite transition-colors hover:bg-fog hover:text-ink"
-                >
-                  <Icon className="h-4 w-4 shrink-0 text-pewter" />
-                  <span className="truncate">{p.query}</span>
-                </button>
-              </motion.li>
-            );
-          })}
-        </ul>
-        {toggles}
-      </div>
-    );
-  }
+  // keep the newest message in view inside the thread, never scroll the whole page
+  useEffect(() => {
+    scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: "smooth" });
+  }, [turns.length, loading, error]);
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 pb-6">
-      <div className="flex flex-col gap-7">
-        <AnimatePresence initial={false}>
-          {turns.map((t, i) =>
-            t.role === "user" ? (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="ml-auto max-w-[85%] rounded-3xl bg-sage px-5 py-3 text-sm text-ink sm:max-w-[75%]"
-              >
-                {t.message}
-              </motion.div>
-            ) : (
-              <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex w-full gap-3">
-                <span className="mt-1 flex size-7 shrink-0 items-center justify-center rounded-full bg-lime text-ink">
-                  <Sparkles className="h-3.5 w-3.5" />
-                </span>
-                <div className="min-w-0 flex-1">{t.answer && <CopilotAnswerContractView answer={t.answer} />}</div>
-              </motion.div>
-            )
-          )}
-        </AnimatePresence>
+    <div className="mx-auto flex h-[calc(100dvh-8.5rem)] min-h-[420px] w-full max-w-3xl flex-col">
+      {/* thread: the only part that scrolls */}
+      <div ref={scroller} className={cn("flex min-h-0 flex-1 flex-col overflow-y-auto px-1", empty ? "justify-end" : "gap-7 pb-6 pt-2")}>
+        {empty ? (
+          <motion.h1 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="pb-6 text-center font-display text-3xl font-medium text-ink sm:text-4xl">
+            Hey, {persona}. Ready to dive in?
+          </motion.h1>
+        ) : (
+          <AnimatePresence initial={false}>
+            {turns.map((t, i) =>
+              t.role === "user" ? (
+                <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="ml-auto max-w-[85%] rounded-3xl bg-sage px-5 py-3 text-sm text-ink sm:max-w-[75%]">
+                  {t.message}
+                </motion.div>
+              ) : (
+                <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex w-full gap-3">
+                  <span className="mt-1 flex size-7 shrink-0 items-center justify-center rounded-full bg-lime text-ink">
+                    <Sparkles className="h-3.5 w-3.5" />
+                  </span>
+                  <div className="min-w-0 flex-1">{t.answer && <CopilotAnswerContractView answer={t.answer} />}</div>
+                </motion.div>
+              )
+            )}
+          </AnimatePresence>
+        )}
 
         {loading && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-3 self-start">
@@ -288,17 +226,52 @@ export default function CopilotPage() {
           </motion.div>
         )}
 
-        {error && (
-          <div className="rounded-2xl border border-rose-200 bg-rose-50/60 p-4 text-sm text-rose-700">
-            Could not reach copilot: {error}
-          </div>
-        )}
+        {error && <div className="rounded-2xl border border-rose-200 bg-rose-50/60 p-4 text-sm text-rose-700">Could not reach copilot: {error}</div>}
       </div>
 
-      <div className="sticky bottom-4 flex flex-col gap-2 bg-gradient-to-t from-background via-background/95 to-transparent pt-4">
-        {inputBox}
-        {toggles}
+      {/* input: always the same place in the column, so it never jumps */}
+      <div className="shrink-0 pt-2">
+        <PromptInputBox
+          value={input}
+          onChange={setInput}
+          onSend={() => send(input)}
+          isLoading={loading}
+          placeholder="Ask about spending, debts, forecast gaps, or affordability..."
+          footer="Every number is grounded in your own records."
+        />
+        <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
+          <button
+            type="button"
+            onClick={() => setUseFirebaseAI(!useFirebaseAI)}
+            className={cn("flex items-center gap-1.5 rounded-full px-3 py-1 text-xs transition-colors cursor-pointer", useFirebaseAI ? "bg-tint-lime text-olive font-medium" : "text-graphite hover:bg-fog")}
+          >
+            <Sparkles className="h-3.5 w-3.5" /> Firebase AI Logic
+          </button>
+          <label className="flex cursor-pointer items-center gap-2 rounded-full px-3 py-1 text-xs text-graphite transition-colors hover:bg-fog">
+            <input type="checkbox" defaultChecked={getOfflineOnly()} onChange={(e) => setOfflineOnly(e.target.checked)} className="h-3.5 w-3.5 cursor-pointer rounded accent-ember" />
+            Offline rule engine only
+          </label>
+        </div>
       </div>
+
+      {/* suggestions sit under the input and collapse after the first message */}
+      <AnimatePresence initial={false}>
+        {empty && (
+          <motion.ul key="starters" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "13rem" }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.25 }} className="shrink-0 overflow-hidden pt-4">
+            {CATEGORIZED_PROMPTS.map((p) => {
+              const Icon = p.icon;
+              return (
+                <li key={p.category}>
+                  <button type="button" onClick={() => send(p.query)} className="flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-3 text-left text-sm text-graphite transition-colors hover:bg-fog hover:text-ink">
+                    <Icon className="h-4 w-4 shrink-0 text-pewter" />
+                    <span className="truncate">{p.query}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </motion.ul>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
