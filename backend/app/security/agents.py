@@ -3,7 +3,7 @@
 Six are deterministic checks over TransactionRow data (every finding links the transactions behind it); each gets an AI
 second opinion from its own NVIDIA model (ai_agents.py) that also sees the earlier agents' findings. The Web Checker
 looks up the riskiest merchants on the live web, the Risk Scorer combines everything (agents that flag the same merchant
-corroborate each other), and the Verdict Writer explains it with the NVIDIA model (Nugen as backup). Nothing here invents numbers.
+corroborate each other), and the Verdict Writer explains it with the NVIDIA model (with a backup NVIDIA model). Nothing here invents numbers.
 """
 from __future__ import annotations
 
@@ -21,7 +21,6 @@ from pydantic import BaseModel
 from app.analytics.anomalies import detect_anomalies
 from app.analytics.recurring import detect_recurring, find_redundant_subscriptions, normalize_merchant
 from app import telemetry
-from app.copilot import nugen
 from app.core import store
 from app.core.config import get_settings
 from app.security import ai_agents
@@ -225,23 +224,16 @@ def _brief(f: dict) -> dict:
 
 
 def write_verdict(findings: list[dict], score: int, run: str | None = None) -> tuple[dict | None, str | None, str | None]:
-    """(verdict, source, error). The Verdict Writer's model chain first, Nugen as a last resort, otherwise (None, None, reason)."""
+    """(verdict, source, error). The Verdict Writer's NVIDIA model, then its backup, otherwise (None, None, reason)."""
     top = sorted(findings, key=lambda f: -_WEIGHT[f["severity"]])[:12]
     brief = {"score": score, "n": len(findings), "f": [_brief(f) for f in top]}
     errors = []
     if ai_agents._key()[0]:
         try:
-            data, model, _ = ai_agents.ask_json("verdict_writer", brief, 380, run=run, system=_VERDICT_SYSTEM)
+            data, model, _ = ai_agents.ask_json("verdict_writer", brief, 380, run=run, system=_VERDICT_SYSTEM, check=_Verdict.model_validate)
             return _Verdict.model_validate(data).model_dump(), model, None
         except Exception as exc:  # noqa: BLE001
             errors.append(f"AI: {'busy' if '429' in str(exc) or '529' in str(exc) else 'unavailable'}")
-    text = nugen.complete(_VERDICT_SYSTEM, json.dumps(brief, separators=(",", ":")), 500)
-    if text:
-        try:
-            return _Verdict.model_validate_json(re.search(r"\{.*\}", text, re.S).group(0)).model_dump(), "nugen", None
-        except Exception:  # noqa: BLE001
-            return {"headline": "Nugen's assessment", "what_is_wrong": text, "what_to_do": []}, "nugen", None
-    errors.append("Nugen: unavailable")
     return None, None, "; ".join(errors) + ". The findings above are real; only the written explanation is missing."
 
 

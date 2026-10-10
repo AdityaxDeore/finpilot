@@ -20,7 +20,6 @@ KEYS = {
     "NVIDIA_SPEECH_API_KEY": ("NVIDIA NIM", "Speech"),
     "GEMINI_API_KEY": ("Google Gemini", "UI translation (first choice) and photo recognition"),
     "TAVILY_API_KEY": ("Tavily", "Web Intel page and the Web Checker agent"),
-    "NUGEN_API_KEY": ("Nugen", "Second opinion and Verdict Writer last resort"),
 }
 AGENT_TASKS = {
     "data_guardian": "Audit data quality; AI finds wrongly categorised merchants",
