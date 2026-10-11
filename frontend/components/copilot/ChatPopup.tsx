@@ -38,6 +38,21 @@ interface Msg {
 }
 
 /** Floating FinPilot chat in the bottom-right corner. Quick questions; the full Copilot page keeps saved chats. */
+const MEM = "finpilot:voice_memory";
+/** What was said in earlier voice chats, kept in this browser so the assistant remembers across page loads. */
+function recallVoice(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(MEM) ?? "[]");
+  } catch {
+    return [];
+  }
+}
+function rememberVoice(...lines: string[]) {
+  try {
+    localStorage.setItem(MEM, JSON.stringify([...recallVoice(), ...lines].slice(-8)));
+  } catch {}
+}
+
 export function ChatPopup() {
   const pathname = usePathname();
   const router = useRouter();
@@ -156,7 +171,7 @@ export function ChatPopup() {
         // spoken questions go to the voice agent first: it sees the screen, thinks out loud, answers like a person and can open, scroll and click
         setLog((l) => ({ heard: message, live: false, steps: [], answer: "", over: false, ...l }));
         addStep("Reading what is on your screen…");
-        const plan = await api.voiceAct(message, pathname, getLang(), snapshotScreen(), history.map((h) => `${h.role}: ${h.content}`.slice(0, 200)).slice(-4)).catch(() => null);
+        const plan = await api.voiceAct(message, pathname, getLang(), snapshotScreen(), [...recallVoice(), ...history.map((h) => `${h.role}: ${h.content}`.slice(0, 200)).slice(-4)].slice(-8), userId).catch(() => null);
         if (!plan) {
           doneStep("The assistant is busy, using the normal chat instead");
         } else {
@@ -170,7 +185,8 @@ export function ChatPopup() {
             await runActions(plan.actions, (p) => router.push(p), (text, done) => (done ? doneStep(text) : addStep(text)));
             if (plan.actions.some((x) => x.type === "navigate")) {
               addStep("Reading the new screen…");
-              const next = await api.voiceAct(`${message} (I have just opened the new screen for you; now answer from what is on it, no more actions)`, location.pathname, getLang(), snapshotScreen(), []).catch(() => null);
+              const next = await api.voiceAct(`${message} (I have just opened the new screen for you; now finish the task using what is on it: click the control that does it if there is one, otherwise explain the next step)`, location.pathname, getLang(), snapshotScreen(), [], userId).catch(() => null);
+              if (next?.actions.length) await runActions(next.actions.filter((x) => x.type !== "navigate"), (p) => router.push(p), (text, done) => (done ? doneStep(text) : addStep(text)));
               doneStep("Done");
               if (next?.say) {
                 speak(next.say);
@@ -185,6 +201,7 @@ export function ChatPopup() {
           }
           if (plan.ask_copilot) addStep("Checking your data…");
         }
+        if (plan?.say) rememberVoice(`user: ${message}`.slice(0, 200), `assistant: ${plan.say}`.slice(0, 200));
         patch({ over: !plan?.ask_copilot });
       }
       reply ??= await answer(message, history);

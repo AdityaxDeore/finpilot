@@ -166,8 +166,8 @@ export const api = {
   /** English UI text -> Hindi/Marathi (server caches; used only for text nobody hand-translated). */
   translateTexts: (lang: string, texts: string[]) =>
     apiFetch<{ translations: Record<string, string> }>("/api/translate", { method: "POST", body: JSON.stringify({ lang, texts }) }),
-  voiceAct: (text: string, path: string, lang: string, screen: unknown, history: string[]) =>
-    apiFetch<{ thinking?: string; say: string; ask_copilot: boolean; actions: import("@/lib/voiceAgent").VoiceAction[] }>("/api/voice/act", { method: "POST", body: JSON.stringify({ text, path, lang, screen, history }) }),
+  voiceAct: (text: string, path: string, lang: string, screen: unknown, history: string[], userId = "") =>
+    apiFetch<{ thinking?: string; say: string; ask_copilot: boolean; actions: import("@/lib/voiceAgent").VoiceAction[] }>("/api/voice/act", { method: "POST", body: JSON.stringify({ text, path, lang, screen, history, user_id: userId }) }),
   schemeAnalyst: (scheme: string, question: string) =>
     apiFetch<import("@/lib/types").SchemeAnalysis>("/api/web/scheme-analyst", { method: "POST", body: JSON.stringify({ scheme, question }) }),
   web: (kind: "search" | "extract" | "crawl" | "map", body: Record<string, string>) =>
@@ -249,6 +249,10 @@ export const api = {
     apiFetch<{ consent_id: string }>(`/api/aa/${userId}/consent/approve`, { method: "POST", body: JSON.stringify({ handle, otp }) }),
   aaImport: (userId: string, consentId: string) =>
     apiFetch<{ accounts: number; transactions: number }>(`/api/aa/${userId}/import`, { method: "POST", body: JSON.stringify({ consent_id: consentId }) }),
+  /** Plaid: get a Link token, then trade the public token Link returns for a one-time import. */
+  plaidLinkToken: (userId: string) => apiFetch<{ link_token: string }>(`/api/plaid/${userId}/link-token`, { method: "POST" }),
+  plaidImport: (userId: string, publicToken: string) =>
+    apiFetch<{ accounts: number; transactions: number }>(`/api/plaid/${userId}/import`, { method: "POST", body: JSON.stringify({ public_token: publicToken }) }),
   connectConnector: (userId: string, connector: string, profile: ConnectProfile, url = "") =>
     apiFetch<{ connected: boolean; accounts: number; transactions: number }>(
       `/api/connectors/${userId}/${connector}/connect`,
