@@ -199,6 +199,11 @@ class HouseholdMemberRow(SQLModel, table=True):
     user_id: str = Field(index=True)
     role: str = Field(default="editor")  # "owner" | "editor" | "viewer"
     joined_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    # Managed members (e.g. kids) have no login: user_id is a synthetic "managed-<id>" that only
+    # household endpoints ever resolve, so their data never appears outside the Household section.
+    is_managed: bool = False
+    display_name: str | None = None
+    relationship: str | None = None
 
 
 class HouseholdInviteRow(SQLModel, table=True):

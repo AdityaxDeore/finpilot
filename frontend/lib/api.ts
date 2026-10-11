@@ -33,6 +33,10 @@ import type {
   Household,
   HouseholdInvite,
   HouseholdSummary,
+  AddManagedMemberRequest,
+  AddManagedTransactionRequest,
+  MemberLedger,
+  HouseholdInsights,
 
   NetWorthHistory,
   Connector,
@@ -467,6 +471,16 @@ export const api = {
     }),
   revokeInvite: (userId: string, inviteId: string) =>
     apiFetch<{ revoked: boolean; id: string }>(`/api/household/${userId}/invites/${inviteId}`, { method: "DELETE" }),
+  addManagedMember: (userId: string, req: AddManagedMemberRequest) =>
+    apiFetch<HouseholdSummary>(`/api/household/${userId}/managed-members`, { method: "POST", body: JSON.stringify(req) }),
+  householdInsights: (userId: string) => apiFetch<HouseholdInsights>(`/api/household/${userId}/insights`),
+  memberLedger: (userId: string, memberUserId: string) =>
+    apiFetch<MemberLedger>(`/api/household/${userId}/members/${memberUserId}/ledger`),
+  addManagedTransaction: (userId: string, memberUserId: string, req: AddManagedTransactionRequest) =>
+    apiFetch<MemberLedger>(`/api/household/${userId}/members/${memberUserId}/transactions`, {
+      method: "POST",
+      body: JSON.stringify(req),
+    }),
   removeMember: (userId: string, memberUserId: string) =>
     apiFetch<{ removed: boolean; user_id: string }>(`/api/household/${userId}/members/${memberUserId}`, {
       method: "DELETE",
