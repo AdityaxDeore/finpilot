@@ -27,19 +27,33 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAsync, useUserId } from "@/lib/hooks";
-import type { HouseholdRole, HouseholdSummary } from "@/lib/types";
+import type { HouseholdRole } from "@/lib/types";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { triggerConfetti } from "@/components/ui/Confetti";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { ManagedMembersPanel } from "@/components/household/ManagedMembersPanel";
+import {
+  AssetsLiabilitiesChart,
+  CashflowChart,
+  CategoryChart,
+  NetWorthDonut,
+  SpendTrendChart,
+} from "@/components/household/HouseholdCharts";
 
 export default function HouseholdPage() {
   const userId = useUserId();
   const fetchHousehold = useCallback(() => api.household(userId), [userId]);
 
-  const { data: householdData, error, loading, reload } = useAsync(fetchHousehold, [userId]);
+  const { data: householdData, loading, reload } = useAsync(fetchHousehold, [userId]);
+  const fetchInsights = useCallback(() => api.householdInsights(userId), [userId]);
+  const { data: insights, reload: reloadInsights } = useAsync(fetchInsights, [userId]);
+  const reloadAll = useCallback(() => {
+    reload();
+    reloadInsights();
+  }, [reload, reloadInsights]);
 
   // Create Household State
   const [householdName, setHouseholdName] = useState("");
@@ -361,10 +375,10 @@ export default function HouseholdPage() {
 
       {/* Active Household Dashboard View */}
       {household && nwSummary && (
-        <div className="flex flex-col gap-8">
-          {/* Top Hero KPI Metrics */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Card className="p-5 border border-black/[0.08] shadow-xs">
+        <div className="grid grid-cols-1 md:grid-cols-6 lg:grid-cols-12 gap-4 auto-rows-min">
+          {/* Top Hero KPI Metrics (bento tiles) */}
+          <div className="contents">
+            <Card className="p-5 border border-black/[0.08] shadow-xs md:col-span-3 lg:col-span-4">
               <span className="text-[11px] font-bold uppercase tracking-wider text-pewter block">
                 Combined Net Worth
               </span>
@@ -381,9 +395,9 @@ export default function HouseholdPage() {
               </div>
             </Card>
 
-            <Card className="p-5 border border-black/[0.08] shadow-xs">
+            <Card className="p-5 border border-black/[0.08] shadow-xs md:col-span-3 lg:col-span-4">
               <span className="text-[11px] font-bold uppercase tracking-wider text-pewter block">
-                Active Co-Pilots
+                Household Members
               </span>
               <span className="font-display text-2xl sm:text-3xl font-bold text-ink block mt-1">
                 {members.length} {members.length === 1 ? "Member" : "Members"}
@@ -393,7 +407,7 @@ export default function HouseholdPage() {
               </p>
             </Card>
 
-            <Card className="p-5 border border-black/[0.08] shadow-xs flex flex-col justify-between">
+            <Card className="p-5 border border-black/[0.08] shadow-xs flex flex-col justify-between md:col-span-6 lg:col-span-4">
               <div>
                 <span className="text-[11px] font-bold uppercase tracking-wider text-pewter block">
                   Your Access Tier
@@ -419,8 +433,19 @@ export default function HouseholdPage() {
             </Card>
           </div>
 
+          {/* Visual analytics bento */}
+          <NetWorthDonut summary={nwSummary} className="md:col-span-3 lg:col-span-4" />
+          <SpendTrendChart
+            insights={insights}
+            members={members.map((m) => ({ user_id: m.user_id, display_name: m.display_name ?? "Member" }))}
+            className="md:col-span-3 lg:col-span-8"
+          />
+          <CategoryChart insights={insights} className="md:col-span-3 lg:col-span-4" />
+          <CashflowChart insights={insights} className="md:col-span-3 lg:col-span-4" />
+          <AssetsLiabilitiesChart summary={nwSummary} className="md:col-span-6 lg:col-span-4" />
+
           {/* Shared Wealth Contribution Split */}
-          <Card className="p-6 border border-black/[0.08] shadow-xs flex flex-col gap-5">
+          <Card className="md:col-span-6 lg:col-span-12 p-6 border border-black/[0.08] shadow-xs flex flex-col gap-5">
             <CardHeader className="mb-0">
               <div className="flex items-center justify-between w-full">
                 <div>
@@ -513,9 +538,9 @@ export default function HouseholdPage() {
           </Card>
 
           {/* Members Table & Invite Partner Row */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="contents">
             {/* Active Members Table (7 cols) */}
-            <Card className="lg:col-span-7 p-6 border border-black/[0.08] shadow-xs flex flex-col gap-4">
+            <Card className="md:col-span-6 lg:col-span-7 p-6 border border-black/[0.08] shadow-xs flex flex-col gap-4">
               <CardHeader className="mb-0">
                 <div className="flex items-center justify-between w-full">
                   <div>
@@ -542,6 +567,11 @@ export default function HouseholdPage() {
                         <div>
                           <div className="flex items-center gap-2">
                             <p className="text-xs font-bold text-ink">{m.display_name}</p>
+                            {m.is_managed && (
+                              <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50 px-1.5 py-0.2 rounded-full border border-indigo-200">
+                                No account{m.relationship ? ` · ${m.relationship}` : ""}
+                              </span>
+                            )}
                             {isCurrent && (
                               <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded-full border border-emerald-200">
                                 You
@@ -579,7 +609,7 @@ export default function HouseholdPage() {
             </Card>
 
             {/* Invite New Partner Card (5 cols) */}
-            <Card className="lg:col-span-5 p-6 border border-black/[0.08] shadow-xs flex flex-col justify-between gap-4">
+            <Card className="md:col-span-6 lg:col-span-5 p-6 border border-black/[0.08] shadow-xs flex flex-col justify-between gap-4">
               <div>
                 <CardHeader className="mb-2">
                   <CardTitle className="text-base font-semibold text-ink">Invite Co-Pilot</CardTitle>
@@ -673,8 +703,11 @@ export default function HouseholdPage() {
             </Card>
           </div>
 
+          {/* Family members without accounts + member transaction monitoring */}
+          <ManagedMembersPanel userId={userId} members={members} canEdit={canInvite} onChanged={reloadAll} className="md:col-span-6 lg:col-span-12" />
+
           {/* Shared Expenses Split & Settlement ("Who Owes Who") */}
-          <Card className="p-6 border border-black/[0.08] shadow-xs flex flex-col gap-6">
+          <Card className="md:col-span-6 lg:col-span-12 p-6 border border-black/[0.08] shadow-xs flex flex-col gap-6">
             <CardHeader className="mb-0">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 w-full">
                 <div>
@@ -878,7 +911,7 @@ export default function HouseholdPage() {
 
           {/* Pending Invitations Table */}
           {invites.length > 0 && (
-            <Card className="p-6 border border-black/[0.08] shadow-xs flex flex-col gap-4">
+            <Card className="md:col-span-6 lg:col-span-12 p-6 border border-black/[0.08] shadow-xs flex flex-col gap-4">
               <CardHeader className="mb-0">
                 <div className="flex items-center justify-between w-full">
                   <div>
