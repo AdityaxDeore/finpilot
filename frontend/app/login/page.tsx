@@ -58,7 +58,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await signInWithGoogle();
-      router.push("/copilot");
+      router.push("/dashboard");
     } catch (err: unknown) {
       const mfa = getMfaResolver(err);
       if (mfa) {
@@ -85,7 +85,7 @@ export default function LoginPage() {
         setSuccess("Signed in successfully! Redirecting...");
       }
       setTimeout(() => {
-        router.push("/copilot");
+        router.push("/dashboard");
       }, 1000);
     } catch (err: unknown) {
       const mfa = getMfaResolver(err);
@@ -107,7 +107,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await finishTotpSignIn(resolver, mfaCode.trim());
-      router.push("/copilot");
+      router.push("/dashboard");
     } catch (err: unknown) {
       setError(authErrorMessage(err, "Invalid code."));
     } finally {
@@ -186,7 +186,7 @@ export default function LoginPage() {
                 <p className="mt-1 text-[11px] text-pewter">UID: {currentUser.uid}</p>
               </div>
               <div className="flex gap-3">
-                <Button size="lg" className="flex-1" onClick={() => router.push("/copilot")}>
+                <Button size="lg" className="flex-1" onClick={() => router.push("/dashboard")}>
                   Go to dashboard
                 </Button>
                 <Button size="lg" variant="outline" onClick={() => signOut()}>

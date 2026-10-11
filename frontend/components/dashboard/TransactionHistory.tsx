@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 
 const STATUS: Record<ReviewStatus, { label: string; cls: string }> = {
   reviewed: { label: "Completed", cls: "bg-tint-leaf text-leaf" },
-  pending: { label: "Pending", cls: "bg-tint-sun text-[#b97a00]" },
+  pending: { label: "Completed", cls: "bg-tint-leaf text-leaf" }, // the money has moved; "pending" here only meant not yet reviewed
   skipped: { label: "Skipped", cls: "bg-fog text-graphite" },
 };
 

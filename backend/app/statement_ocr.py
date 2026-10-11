@@ -12,6 +12,9 @@ _IDENTITY_LINE = re.compile(
     r"^\W*(?:account\s*(?:holder|name)|a/?c\s*(?:holder|name)|customer\s*(?:name|id)|cust(?:omer)?\s*id|cif|name|address|"
     r"branch|nominee|joint\s*holder|mr\.?|mrs\.?|ms\.?|shri|smt)\b.*$", re.I)
 
+# Same for Hindi / Marathi labels (no \b: Devanagari vowel signs do not count as word characters).
+_IDENTITY_LINE_DEVA = re.compile(r"^\W*(?:नाम|पता|पत्ता|खाताधारक|खातेदार|ग्राहक|शाखा|नामांकित|श्रीमती|श्री)(?=[\s:\-–]|$)")
+
 # (kind, pattern, replacement). Most specific first so a 12-digit Aadhaar is not reported as an account number.
 _MASKS: list[tuple[str, re.Pattern, str]] = [
     ("email", re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+"), "[email]"),
@@ -25,8 +28,12 @@ _MASKS: list[tuple[str, re.Pattern, str]] = [
 _LABELLED_ACCOUNT = re.compile(r"((?:a/?c|account)\s*(?:no\.?|number|#)?\s*[:\-]?\s*)[Xx*\d][Xx*\d\s-]{5,}", re.I)
 
 
+_DEVA_DIGITS = {0x966 + i: str(i) for i in range(10)}  # Hindi and Marathi share the Devanagari numerals
+
+
 def redact(text: str) -> tuple[str, dict[str, int]]:
     """Return (clean text, how many of each kind were removed)."""
+    text = text.translate(_DEVA_DIGITS)  # ५०,००० -> 50,000 before anything is matched
     removed: dict[str, int] = {}
 
     def bump(kind: str, n: int = 1) -> None:
@@ -34,7 +41,7 @@ def redact(text: str) -> tuple[str, dict[str, int]]:
 
     kept: list[str] = []
     for line in text.splitlines():
-        if _IDENTITY_LINE.match(line.strip()):
+        if _IDENTITY_LINE.match(line.strip()) or _IDENTITY_LINE_DEVA.match(line.strip()):
             bump("identity_lines")
             continue
         line, n = _LABELLED_ACCOUNT.subn(lambda m: m.group(1) + "[account]", line)
@@ -48,17 +55,21 @@ def redact(text: str) -> tuple[str, dict[str, int]]:
     return "\n".join(kept), removed
 
 
-_MONTHS = "jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec"
+_MONTH_NAMES = {n: i for i, names in enumerate([
+    "jan जनवरी जानेवारी", "feb फरवरी फेब्रुवारी", "mar मार्च", "apr अप्रैल एप्रिल", "may मई मे", "jun जून", "jul जुलाई जुलै",
+    "aug अगस्त ऑगस्ट", "sep सितंबर सितम्बर सप्टेंबर", "oct अक्टूबर अक्तूबर ऑक्टोबर", "nov नवंबर नवम्बर नोव्हेंबर", "dec दिसंबर दिसम्बर डिसेंबर"], 1)
+    for n in names.split()}
+_MONTHS = "|".join(sorted(_MONTH_NAMES, key=len, reverse=True))  # longest first so 'मार्च' is not cut short
 _DATE = re.compile(rf"^\W*(\d{{1,2}})[\s/.-]+(\d{{1,2}}|{_MONTHS})[\s/.-]+(\d{{4}}|\d{{2}})\b", re.I)
 _AMOUNT = re.compile(r"(?<![\w.])(\d{1,3}(?:,\d{2,3})*|\d+)\.\d{2}(?!\d)")
-_CREDIT_WORDS = re.compile(r"\b(?:cr|credit|salary|refund|interest|deposit|received|cashback|neft\s*cr|upi/cr)\b", re.I)
-_DEBIT_WORDS = re.compile(r"\b(?:dr|debit|withdrawal|atm|paid|emi|charges?|upi/dr)\b", re.I)
+_CREDIT_WORDS = re.compile(r"\b(?:cr|credit|salary|refund|interest|deposit|received|cashback|neft\s*cr|upi/cr)\b|जमा|वेतन|ब्याज|व्याज|वापसी|परतावा", re.I)
+_DEBIT_WORDS = re.compile(r"\b(?:dr|debit|withdrawal|atm|paid|emi|charges?|upi/dr)\b|निकासी|नावे|भुगतान|शुल्क|खर्च|काढले", re.I)
 
 
 def _to_date(d: str, m: str, y: str) -> date | None:
     try:
         year = int(y) + (2000 if len(y) == 2 else 0)
-        month = int(m) if m.isdigit() else _MONTHS.split("|").index(m.lower()) + 1
+        month = int(m) if m.isdigit() else _MONTH_NAMES[m.lower()]
         return date(year, month, int(d))
     except ValueError:
         return None
@@ -102,3 +113,25 @@ def parse_transactions(clean_text: str) -> list[dict]:
             prev_balance = balance
         rows.append({"date": d.isoformat(), "description": desc[:160] or "Transaction", "amount": round(sign * value, 2), "balance": balance})
     return rows
+
+
+_DATE_ANY = re.compile(_DATE.pattern.replace(r"^\W*", ""), re.I)
+_TIME = re.compile(r"\d{1,2}:\d{2}(?::\d{2})?")
+_PRICE = re.compile(r"(?<![\d.,])\d[\d,]*\.\d{1,2}(?!\d)")  # no \w guard: OCR often glues a misread rupee sign on, like 'र21.0'
+_PAID_LINE = re.compile(r"upi\s*=|total|amount|fare|price|paid|भा[ड़डर]|एकूण|कुल|रक्कम|किराया|तिकीट\s*दर", re.I)
+
+
+def parse_receipt_txn(clean_text: str) -> list[dict]:
+    """One ticket or bill (no statement rows): its date, the amount paid, and a short description. [] if no amount is found.
+
+    The amount is the last price on a line that looks like a total or fare, else the largest price on the page.
+    """
+    lines = [l.strip() for l in clean_text.splitlines() if l.strip()]
+    when = next((d for l in lines if (m := _DATE_ANY.search(l)) and (d := _to_date(*m.groups()))), None)
+    paid = [float(p.replace(",", "")) for l in lines if _PAID_LINE.search(l) for p in _PRICE.findall(l)]
+    prices = [float(p.replace(",", "")) for l in lines for p in _PRICE.findall(l)]
+    amount = paid[-1] if paid else max(prices, default=0.0)
+    if amount <= 0:
+        return []
+    desc = next((t for l in lines if re.search(r"[A-Za-zऀ-ॿ]{3}", t := _TIME.sub("", _DATE_ANY.sub("", l)).strip(" :-|")) and not re.search(r"\d{4,}|upi", t, re.I) and not _PRICE.search(t)), "Receipt")
+    return [{"date": (when or date.today()).isoformat(), "description": desc[:160], "amount": -round(amount, 2), "balance": None}]

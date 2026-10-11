@@ -36,3 +36,17 @@ def test_second_read_does_not_hit_firestore(monkeypatch):
 
 def test_log_tables_are_always_read_live():
     assert AuditLogRow.__tablename__ in store._QUIET
+
+
+def test_put_writes_through_and_only_invalidates_its_own_table(monkeypatch):
+    uid = "cache-test-4"
+    store.query(GoalRow, user_id=uid)  # warm
+    store.query(GoalRow, user_id="someone-else")
+    store.put(_goal(uid, "fresh"))
+    try:
+        monkeypatch.setattr(store, "_q", lambda *a, **k: (_ for _ in ()).throw(AssertionError("went to Firestore")))
+        assert [g.name for g in store.query(GoalRow, user_id=uid)] == ["fresh"]  # patched in, no refetch
+        assert store.query(GoalRow, user_id="someone-else") == []  # filter respected
+    finally:
+        monkeypatch.undo()
+        store.delete_where(GoalRow, user_id=uid)

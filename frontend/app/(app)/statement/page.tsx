@@ -19,8 +19,9 @@ export default function StatementPage() {
   const fetchStatementData = useCallback(async () => {
     const dashPromise = api.dashboard(userId);
     const accPromise = api.accounts(userId).catch(() => []);
-    const [dashboard, accounts] = await Promise.all([dashPromise, accPromise]);
-    return { dashboard, accounts };
+    const txnPromise = api.transactions(userId, { page: 1, page_size: 200 }).then((r) => r.items).catch(() => []);
+    const [dashboard, accounts, transactions] = await Promise.all([dashPromise, accPromise, txnPromise]);
+    return { dashboard, accounts, transactions };
   }, [userId]);
 
   const { data, error, loading, reload } = useAsync(fetchStatementData, [userId]);
@@ -46,11 +47,11 @@ export default function StatementPage() {
             <ArrowLeft className="h-4 w-4" />
           </Link>
           <div>
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-ember bg-orange-50 px-2.5 py-0.5 rounded-full border border-ember/20">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="whitespace-nowrap text-[11px] font-bold uppercase tracking-wider text-ember bg-orange-50 px-2.5 py-0.5 rounded-full border border-ember/20">
                 Official Statement
               </span>
-              <span className="text-xs text-pewter font-medium">• Executive PDF Export</span>
+              <span className="whitespace-nowrap text-xs text-pewter font-medium">• Executive PDF Export</span>
             </div>
             <h1 className="font-display text-xl sm:text-2xl font-bold text-ink tracking-tight mt-0.5">
               Monthly Health Statement
@@ -151,6 +152,7 @@ export default function StatementPage() {
           <ExecutiveStatement
             dashboard={data.dashboard}
             accounts={data.accounts}
+            transactions={data.transactions}
             userId={userId}
           />
         </motion.div>

@@ -27,6 +27,8 @@ import { useAnalystMode, useSimpleMode } from "@/lib/simple";
 import { AnalystPanel } from "@/components/dashboard/AnalystPanel";
 import { useT } from "@/lib/i18n";
 import { RoleSpotlight } from "@/components/dashboard/RoleSpotlight";
+import { PaymentReviewCard } from "@/components/dashboard/PaymentReviewCard";
+import { PhonePairCard } from "@/components/dashboard/PhonePairCard";
 import { PromoCard } from "@/components/dashboard/PromoCard";
 import { CategoryDonut, IncomeVsSpend, SpendingShifts, TopMerchants } from "@/components/dashboard/SpendCharts";
 import { EvilHoverTraceBarChart } from "@/components/shadcn/hover-trace-bar-chart";
@@ -65,6 +67,7 @@ export default function DashboardPage() {
   const [simple, setSimple] = useSimpleMode(userId);
   const [analyst, setAnalyst] = useAnalystMode(userId);
   const profile = useAsync(useCallback(() => api.profile(userId), [userId]), [userId]);
+  const student = profile.data?.answers.role === "Student"; // little or no income: spending and saving, not income, forecasts or investing
   const fetchDashboard = useCallback(() => api.dashboard(userId), [userId]);
   const { data, error, loading, reload } = useAsync(fetchDashboard, [userId]);
   // Pull recent transactions (200/page max) to power the charts and sparklines.
@@ -135,7 +138,12 @@ export default function DashboardPage() {
 
   const connected = data.has_data;
   if (simple) {
-    return <SimpleHome name={profile.data?.answers.name} income={data.monthly_income} spent={data.monthly_expenses} connected={connected} onFullView={() => setSimple(false)} onSaved={reload} />;
+    return (
+      <div className="flex flex-col gap-4">
+        <SimpleHome name={profile.data?.answers.name} income={data.monthly_income} spent={data.monthly_expenses} connected={connected} onFullView={() => setSimple(false)} onSaved={reload} />
+        <PhonePairCard />
+      </div>
+    );
   }
   const months = spend.months;
   const topCategory = spend.categories[0]?.label;
@@ -184,6 +192,9 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      <PaymentReviewCard />
+      <PhonePairCard />
+
       {analyst && connected && <AnalystPanel data={data} spend={spend} />}
 
       {!connected && (
@@ -221,7 +232,7 @@ export default function DashboardPage() {
           expenses={data.monthly_expenses}
           savingsRate={data.savings_rate}
         />
-        <IncomeCard months={spend.months} txns={txns ?? []} />
+        {!student && <IncomeCard months={spend.months} txns={txns ?? []} />}
         <KpiCard
           label={t("d.money_out")}
           value={formatCurrency(data.monthly_expenses)}
@@ -237,7 +248,7 @@ export default function DashboardPage() {
         <div className="flex lg:col-span-6 [&>*]:flex-1">
           <CategoryDonut summary={spend} />
         </div>
-        <Card className="min-w-0 lg:col-span-3">
+        <Card className={`min-w-0 ${student ? "lg:col-span-6" : "lg:col-span-3"}`}>
           <CardHeader>
             <CardTitle className="font-display text-lg">{t("d.monthly_spend")}</CardTitle>
             <CardDescription>{t("d.hover")}</CardDescription>
@@ -253,9 +264,11 @@ export default function DashboardPage() {
             )}
           </CardContent>
         </Card>
-        <div className="flex lg:col-span-3 [&>*]:flex-1">
-          <PromoCard connected={connected} topCategory={topCategory} />
-        </div>
+        {!student && (
+          <div className="flex lg:col-span-3 [&>*]:flex-1">
+            <PromoCard connected={connected} topCategory={topCategory} />
+          </div>
+        )}
       </div>
 
       <TransactionHistory txns={txns ?? []} />
@@ -267,7 +280,7 @@ export default function DashboardPage() {
       )}
 
       {/* Forecast / net worth */}
-      <Card className="min-w-0">
+      {!student && <Card className="min-w-0">
         <Tabs defaultValue="spend">
           <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
             <div>
@@ -292,16 +305,16 @@ export default function DashboardPage() {
             </TabsContent>
           </CardContent>
         </Tabs>
-      </Card>
+      </Card>}
 
       {/* Spending visuals: three cards in one row */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <IncomeVsSpend summary={spend} />
+      <div className={`grid grid-cols-1 gap-4 ${student ? "lg:grid-cols-2" : "lg:grid-cols-3"}`}>
+        {!student && <IncomeVsSpend summary={spend} />}
         <TopMerchants summary={spend} />
         <SpendingShifts summary={spend} />
       </div>
 
-      <InvestGuide userId={userId} income={data.monthly_income} expenses={data.monthly_expenses} debts={data.debts} />
+      {!student && <InvestGuide userId={userId} income={data.monthly_income} expenses={data.monthly_expenses} debts={data.debts} />}
 
       <MoneySummary
         userId={userId}

@@ -21,7 +21,8 @@ export function useSimpleMode(userId: string): [boolean, (on: boolean) => void] 
   const profile = useAsync(useCallback(() => api.profile(userId), [userId]), [userId]);
   const override = useSyncExternalStore((cb) => (listeners.add(cb), () => void listeners.delete(cb)), () => read(OVERRIDE), () => null);
   const comfort = profile.data?.answers.comfort;
-  const simple = override ? override === "1" : !!comfort && comfort !== "I am comfortable";
+  const vendor = profile.data?.answers.role === "Small vendor (shop, cart, stall)"; // a stall owner gets the minimal view even if they said they can read
+  const simple = override ? override === "1" : vendor || (!!comfort && comfort !== "I am comfortable");
   useEffect(() => {
     try {
       localStorage.setItem(NOW, simple ? "1" : "0");

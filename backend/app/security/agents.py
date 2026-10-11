@@ -237,12 +237,29 @@ def write_verdict(findings: list[dict], score: int, run: str | None = None) -> t
     return None, None, "; ".join(errors) + ". The findings above are real; only the written explanation is missing."
 
 
+def verdict_for(findings: list[dict], score: int, run: str | None = None) -> tuple[dict | None, str | None, str | None]:
+    if findings:
+        return write_verdict(findings, score, run)
+    return {"headline": "No security problems found.", "what_is_wrong": "All checks came back clean on your current data.", "what_to_do": ["Re-run after your next sync."]}, "rules", None
+
+
+def save_report(user_id: str, run: str, rows: list, findings: list[dict], score: int, summaries: list[dict], verdict, source, error) -> dict:
+    report = {
+        "created_at": datetime.now(timezone.utc).isoformat(), "risk_score": score, "risk_level": risk_level(score),
+        "transactions_checked": len(rows), "agents": summaries, "findings": findings,
+        "run": run, "verdict": verdict, "verdict_source": source, "verdict_error": error,
+        "demo_threats_present": any(DEMO_TAG in (r.tags or "") for r in rows),
+    }
+    store.put(InvestigationRow(user_id=user_id, risk_score=score, report=json.dumps(report, default=str)))
+    return report
+
+
 def investigate(user_id: str, pace: float = 0.35):
     """Generator of progress events; the last one is the saved report."""
     rows, accounts = store.query(TransactionRow, user_id=user_id), store.query(AccountRow, user_id=user_id)
     all_findings, summaries = [], {}
     run, score = uuid.uuid4().hex[:8], 0
-    telemetry.record(kind="run", run=run, user=user_id, transactions=len(rows))
+    telemetry.record(kind="run", run=run, user=user_id, transactions=len(rows), parts=len(AGENTS), via="stream")
     for key, name, _ in AGENTS:
         yield {"type": "agent", "agent": key, "status": "running"}
         t0 = time.time()
@@ -255,7 +272,7 @@ def investigate(user_id: str, pace: float = 0.35):
             score, extra = ai_agents.calibrate(risk_score(all_findings), all_findings, run)
             res, extra = [], {**extra, "score": score}
         elif key == "verdict_writer":
-            verdict, source, error = write_verdict(all_findings, score, run) if all_findings else ({"headline": "No security problems found.", "what_is_wrong": "All checks came back clean on your current data.", "what_to_do": ["Re-run after your next sync."]}, "rules", None)
+            verdict, source, error = verdict_for(all_findings, score, run)
             res, extra = [], {"source": source, "error": error}
         else:
             res, extra = CHECKS[key](rows, accounts), {}
@@ -264,14 +281,9 @@ def investigate(user_id: str, pace: float = 0.35):
             all_findings += res
         time.sleep(pace)
         summaries[key] = {"agent": key, "name": name, "findings": len(res), "ms": int((time.time() - t0) * 1000), **extra}
+        telemetry.record(kind="stage", run=run, agent=key, step="agent", ms=summaries[key]["ms"], findings=len(res))
         yield {"type": "agent", "agent": key, "status": "done", **summaries[key]}
-    report = {
-        "created_at": datetime.now(timezone.utc).isoformat(), "risk_score": score, "risk_level": risk_level(score),
-        "transactions_checked": len(rows), "agents": list(summaries.values()), "findings": all_findings,
-        "run": run, "verdict": verdict, "verdict_source": source, "verdict_error": error,
-        "demo_threats_present": any(DEMO_TAG in (r.tags or "") for r in rows),
-    }
-    store.put(InvestigationRow(user_id=user_id, risk_score=score, report=json.dumps(report, default=str)))
+    report = save_report(user_id, run, rows, all_findings, score, list(summaries.values()), verdict, source, error)
     yield {"type": "report", "report": report}
 
 

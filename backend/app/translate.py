@@ -102,6 +102,7 @@ def translate(lang: str, texts: list[str]) -> dict[str, str]:
     todo = list(dict.fromkeys(t for t in texts if t not in table))
     if todo:
         chunks = [todo[i:i + _CHUNK] for i in range(0, len(todo), _CHUNK)]
+        telemetry.record(kind="split", agent="translate", op=f"to {lang}", parts=len(chunks), detail=f"{len(todo)} new strings, {len(texts) - len(todo)} from cache, {_CHUNK} per call")
         with ThreadPoolExecutor(max_workers=4) as pool:
             fresh = {}
             for part in pool.map(lambda c: _chunk(lang, c), chunks):

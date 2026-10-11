@@ -36,7 +36,7 @@ BACKUPS = {  # tried when the primary is busy or times out
     "data_guardian": "z-ai/glm-5.3-flash",
     "duplicate_detector": "z-ai/glm-5.3-flash",
     "fraud_hunter": "openai/gpt-oss-20b",
-    "merchant_verifier": "nvidia/llama-3.1-nemoguard-8b-content-safety",
+    "merchant_verifier": None,  # no other safety classifier is reachable; on failure the rule findings stand
     "subscription_sleuth": "nvidia/nemotron-3.5-lightning-30b-a3b",
     "pattern_analyst": "nvidia/nemotron-3-super-120b-a12b",
     "web_checker": "nvidia/nemotron-3.5-lightning-30b-a3b",
@@ -54,6 +54,7 @@ ROLES = {  # the job each agent is hired for: this is what makes one kind of mod
     "web_checker": 'You read web search results about a merchant. v = "scam" only if the sources report fraud or regulator warnings; "legit" if it is a known real business; else "unclear". Reply JSON only: {"v":"scam"|"legit"|"unclear","n":"<=20 words citing what the sources say"}',
     "risk_scorer": 'You calibrate a 0-100 personal-finance risk score from counts. adj is -10..10: raise it if findings are corroborated or the web says scam, lower it if the AI doubts most findings. Reply JSON only: {"adj":<int>,"why":"<=14 words"}',
 }
+_THINKERS = ("gpt-oss", "glm")  # reasoning models spend max_tokens on hidden thinking: without headroom they return ""
 _cache: dict[str, tuple[float, dict]] = {}
 _TTL = 600.0
 
@@ -67,6 +68,8 @@ def _key() -> tuple[str, str]:
 
 def _post(model: str, messages: list[dict], max_tokens: int, extra: dict | None = None, *, agent: str = "", run: str | None = None) -> str:
     secret, label = _key()
+    if any(k in model for k in _THINKERS):
+        max_tokens = max(max_tokens * 5, 500)
     t = telemetry.Timer()
     try:
         r = httpx.post(URL, headers={"Authorization": f"Bearer {secret}"}, timeout=12,
@@ -85,13 +88,13 @@ def _parse(content: str) -> dict:
     return json.loads(content[content.index("{"):content.rindex("}") + 1])
 
 
-def ask_json(agent: str, payload: dict, max_tokens: int, *, run: str | None = None, system: str | None = None) -> tuple[dict, str, bool]:
+def ask_json(agent: str, payload: dict, max_tokens: int, *, run: str | None = None, system: str | None = None, check=None) -> tuple[dict, str, bool]:
     """(parsed JSON, model that answered, used_backup). Tries the primary then the backup, logs each hop, caches the answer."""
     system = system or ROLES[agent]
     user = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     msgs = [{"role": "system", "content": system}, {"role": "user", "content": user}]
     extra = {"response_format": {"type": "json_object"}, "chat_template_kwargs": {"enable_thinking": False}}
-    chain = (MODELS[agent], BACKUPS[agent])
+    chain = tuple(m for m in (MODELS[agent], BACKUPS[agent]) if m)
     ck = hashlib.sha1(f"{agent}|{system}|{user}".encode()).hexdigest()
     hit = _cache.get(ck)
     if hit and time.time() - hit[0] < _TTL:
@@ -101,6 +104,8 @@ def ask_json(agent: str, payload: dict, max_tokens: int, *, run: str | None = No
     for n, model in enumerate(chain):
         try:
             data = _parse(_post(model, msgs, max_tokens, extra, agent=agent, run=run))
+            if check:
+                check(data)  # an answer in the wrong shape counts as a failure, so the backup model gets its turn
         except Exception as exc:  # noqa: BLE001 - busy, timeout or unparseable: next model in the chain
             last = exc
             if n + 1 < len(chain):
@@ -112,8 +117,15 @@ def ask_json(agent: str, payload: dict, max_tokens: int, *, run: str | None = No
 
 
 def _safety(model: str, text: str, run: str | None) -> bool:
-    out = _post(model, [{"role": "user", "content": text}], 60, {"chat_template_kwargs": {"request_categories": "/categories", "enable_thinking": False}}, agent="merchant_verifier", run=run)
-    return "unsafe" in out.lower().split("safety categories")[0]
+    for attempt in (0, 1):
+        try:
+            out = _post(model, [{"role": "user", "content": text}], 60, {"chat_template_kwargs": {"request_categories": "/categories", "enable_thinking": False}}, agent="merchant_verifier", run=run)
+            return "unsafe" in out.lower().split("safety categories")[0]
+        except httpx.HTTPStatusError as exc:
+            if attempt or exc.response.status_code != 429:
+                raise
+            time.sleep(1.2)  # the classifier rate-limits bursts: one pause, one retry
+    return False
 
 
 def review(agent: str, findings: list[dict], rows, board: list[dict] = (), run: str | None = None) -> tuple[list[dict], dict]:
@@ -141,13 +153,13 @@ def review(agent: str, findings: list[dict], rows, board: list[dict] = (), run: 
 def _merchant_safety(findings, rows, run, extra):
     flagged = {f["merchant"] for f in findings}
     seen = {r.merchant: r for r in rows if r.amount < 0 and r.merchant not in flagged}
-    names = list(seen)[:12]  # bounded: each name is one call
-    for n, model in enumerate((MODELS["merchant_verifier"], BACKUPS["merchant_verifier"])):
+    names = list(seen)[:10]  # bounded: each name is one call
+    for n, model in enumerate(m for m in (MODELS["merchant_verifier"], BACKUPS["merchant_verifier"]) if m):
         try:
-            with ThreadPoolExecutor(max_workers=6) as pool:
+            with ThreadPoolExecutor(max_workers=2) as pool:  # the classifier answers 429 on bursts
                 bad = [nm for nm, unsafe in zip(names, pool.map(lambda nm: _safety(model, f"Payment to '{nm}'. {seen[nm].description or ''}", run), names)) if unsafe]
         except Exception as exc:  # noqa: BLE001
-            if n == 0:
+            if BACKUPS["merchant_verifier"] and n == 0:
                 telemetry.record(kind="fallback", agent="merchant_verifier", run=run, model=model, to=BACKUPS["merchant_verifier"], reason=str(exc)[:80])
             continue
         for nm in bad:
@@ -168,7 +180,7 @@ def _data_audit(findings, rows, run, extra):
     top = Counter((r.merchant, _cat(r)) for r in rows if r.amount < 0).most_common(25)
     if not top:
         return findings, extra
-    data, model, backup = ask_json("data_guardian", {"pairs": [list(k) for k, _ in top]}, 220, run=run)
+    data, model, backup = ask_json("data_guardian", {"pairs": [list(k) for k, _ in top]}, 320, run=run)
     by_name = {r.merchant: r for r in rows}
     for item in data.get("bad", [])[:5]:
         r = by_name.get(item.get("m"))
@@ -187,24 +199,34 @@ def web_evidence(findings: list[dict], run: str | None = None) -> tuple[list[dic
         return findings, extra
     merchants = list(dict.fromkeys(f["merchant"] for f in sorted(findings, key=lambda f: (f["severity"] != "high", not f.get("corroborated_by"))) if f["merchant"] and f["severity"] != "low"))[:3]
     extra["ai"] = "ok"
-    for m in merchants:
+
+    def one(m: str):
         try:
             r = _call("search", {"query": f"Is {m} a legitimate business or a scam? reviews complaints", "search_depth": "basic", "include_answer": True, "max_results": 3}, agent="web_checker", run=run)
         except Exception:  # noqa: BLE001 - rate limit or network: skip this merchant
-            extra["ai"] = "error"
-            continue
+            return m, None, None
         results = r.get("results") or []
         web = {"answer": (r.get("answer") or "")[:260], "url": (results[:1] or [{}])[0].get("url", ""), "verdict": "unclear"}
+        used = None
         try:  # the model reads a trimmed digest, not the pages
             data, model, backup = ask_json("web_checker", {"m": m, "answer": web["answer"][:300], "snips": [x.get("content", "")[:160] for x in results[:3]]}, 90, run=run)
             if data.get("v") in ("scam", "legit", "unclear"):
                 web.update(verdict=data["v"], answer=str(data.get("n") or web["answer"])[:260])
-            extra.update(model=model, backup=backup)
+            used = (model, backup)
         except Exception:  # noqa: BLE001 - keep Tavily's own answer
             pass
-        for f in findings:
-            if f["merchant"] == m:
-                f["web"] = web
+        return m, web, used
+
+    with ThreadPoolExecutor(max_workers=3) as pool:  # the merchants are independent
+        for m, web, used in pool.map(one, merchants):
+            if web is None:
+                extra["ai"] = "error"
+                continue
+            if used:
+                extra.update(model=used[0], backup=used[1])
+            for f in findings:
+                if f["merchant"] == m:
+                    f["web"] = web
     return findings, extra
 
 

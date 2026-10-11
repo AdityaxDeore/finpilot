@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { CheckCircle2, Loader2, Lock, ShieldCheck } from "lucide-react";
+import type { ConfirmationResult } from "firebase/auth";
 import { api } from "@/lib/api";
+import { authErrorMessage, confirmPhoneOtp, sendPhoneOtp } from "@/lib/firebase/auth";
 import type { ConnectProfile } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/shadcn/button";
@@ -22,7 +24,7 @@ const PROFILES: { id: ConnectProfile; name: string; blurb: string; color: string
 
 const STEPS = ["Consent approved", "Fetching encrypted bank data", "Decrypting and reading UPI payments", "Building your dashboard"];
 
-type Phase = "details" | "otp" | "working";
+type Phase = "details" | "verify" | "otp" | "working";
 
 // set while the user is away approving the consent on the Account Aggregator's own screens
 const PENDING_KEY = "finpilot-aa-pending";
@@ -38,16 +40,54 @@ export function LinkGooglePayDialog({ open, onOpenChange, userId }: { open: bool
   const [phase, setPhase] = useState<Phase>("details");
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [smsCode, setSmsCode] = useState("");
+  const [confirmation, setConfirmation] = useState<ConfirmationResult | null>(null);
+  const recaptchaRef = useRef<HTMLDivElement>(null);
 
   const mobileOk = /^[6-9]\d{9}$/.test(mobile);
 
   function reset() {
     setPhase("details");
     setOtp("");
+    setSmsCode("");
+    setConfirmation(null);
     setStep(0);
   }
 
-  async function askConsent() {
+  /** Everyone proves they own the number with a real SMS OTP (Firebase) before consent. */
+  async function requestConsent() {
+    setBusy(true);
+    try {
+      setConfirmation(await sendPhoneOtp(mobile, recaptchaRef.current!));
+      setSmsCode("");
+      setPhase("verify");
+      toast.success(`OTP sent to +91 ${mobile.slice(0, 2)}******${mobile.slice(-2)}`);
+    } catch (e) {
+      // Phone sign-in not enabled (or no billing) in Firebase: carry on, the aggregator still checks the number with its own OTP
+      if (["auth/operation-not-allowed", "auth/billing-not-enabled"].includes((e as { code?: string }).code ?? "")) {
+        await askConsent();
+        return;
+      }
+      toast.error(authErrorMessage(e, "Could not send the OTP"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function verifySms() {
+    if (!confirmation) return;
+    setBusy(true);
+    try {
+      await confirmPhoneOtp(confirmation, smsCode);
+    } catch (e) {
+      toast.error(authErrorMessage(e, "Could not verify the OTP"));
+      setBusy(false);
+      return;
+    }
+    await askConsent(true);
+  }
+
+  async function askConsent(phoneVerified = false) {
     setBusy(true);
     try {
       const r = await api.aaConsent(userId, mobile, profile, `${window.location.origin}/connect`);
@@ -55,6 +95,11 @@ export function LinkGooglePayDialog({ open, onOpenChange, userId }: { open: bool
         // real Account Aggregator: it takes the OTP and bank linking on its own screens, then sends the user back here
         sessionStorage.setItem(PENDING_KEY, JSON.stringify({ userId, handle: r.handle }));
         window.location.assign(r.redirect_url);
+        return;
+      }
+      if (phoneVerified && r.demo_otp) {
+        // the real SMS OTP already proved the number, so the demo aggregator's own OTP step is redundant
+        await importConsent((await api.aaApprove(userId, r.handle, r.demo_otp)).consent_id);
         return;
       }
       setHandle(r.handle);
@@ -161,9 +206,28 @@ export function LinkGooglePayDialog({ open, onOpenChange, userId }: { open: bool
               <li className="flex items-center gap-2"><ShieldCheck className="size-4 text-leaf" /> Read-only: bank balances and the last 12 months of transactions</li>
               <li className="flex items-center gap-2"><Lock className="size-4 text-leaf" /> Data is encrypted end to end. Disconnect any time.</li>
             </ul>
-            <Button size="lg" onClick={askConsent} disabled={!mobileOk || busy} className="rounded-full bg-lime text-ink hover:bg-lime-dark">
+            <Button size="lg" onClick={requestConsent} disabled={!mobileOk || busy} className="rounded-full bg-lime text-ink hover:bg-lime-dark">
               {busy && <Loader2 className="mr-1.5 size-4 animate-spin" />} Request consent
             </Button>
+          </div>
+        )}
+
+        {/* invisible reCAPTCHA anchor for Firebase phone auth; must stay mounted */}
+        <div ref={recaptchaRef} />
+
+        {phase === "verify" && (
+          <div className="grid gap-4">
+            <p className="rounded-2xl bg-tint-lime p-3 text-sm text-ink">
+              We texted a 6-digit OTP to +91 {mobile.slice(0, 2)}******{mobile.slice(-2)}. Enter it to confirm this number is yours.
+            </p>
+            <Input inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="6-digit OTP" aria-label="SMS OTP" value={smsCode} onChange={(e) => setSmsCode(e.target.value.replace(/\D/g, ""))} />
+            <div className="flex gap-2">
+              <Button variant="ghost" onClick={reset} disabled={busy}>Back</Button>
+              <Button variant="outline" onClick={requestConsent} disabled={busy}>Resend</Button>
+              <Button className="flex-1 rounded-full bg-lime text-ink hover:bg-lime-dark" onClick={verifySms} disabled={smsCode.length !== 6 || busy}>
+                {busy && <Loader2 className="mr-1.5 size-4 animate-spin" />} Verify &amp; continue
+              </Button>
+            </div>
           </div>
         )}
 

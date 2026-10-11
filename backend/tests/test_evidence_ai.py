@@ -103,3 +103,12 @@ def test_telemetry_summary_counts_calls_and_never_stores_secrets(tmp_path, monke
     s = telemetry.summary()
     assert s["by_key"][0]["calls"] == 2 and s["by_key"][0]["success"] == 50 and s["by_key"][0]["avg_ms"] == 200 and s["tokens"] == 50
     telemetry._events.clear()
+
+
+def test_wrong_shape_answer_falls_through_to_backup(monkeypatch):
+    monkeypatch.setattr(ai_agents, "_key", lambda: ("k", "K"))
+    answers = iter(['{"headline": "x"}', '{"headline": "x", "what_is_wrong": "y", "what_to_do": ["z"]}'])
+    monkeypatch.setattr(ai_agents, "_post", lambda *a, **k: next(answers))
+    from app.security.agents import _Verdict
+    data, model, backup = ai_agents.ask_json("verdict_writer", {"score": 1}, 100, system="s", check=_Verdict.model_validate)
+    assert backup is True and model == ai_agents.BACKUPS["verdict_writer"] and data["what_to_do"] == ["z"]

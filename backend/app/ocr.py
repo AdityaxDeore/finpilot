@@ -9,11 +9,26 @@ import numpy as np
 from PIL import Image, UnidentifiedImageError
 
 
-@lru_cache(maxsize=1)
-def _engine():
-    from rapidocr import RapidOCR  # imported late: loading the models takes about a second
+@lru_cache(maxsize=2)
+def _engine(devanagari: bool = False):
+    from rapidocr import LangRec, ModelType, OCRVersion, RapidOCR  # imported late: loading the models takes about a second
 
-    return RapidOCR()
+    if not devanagari:
+        return RapidOCR()
+    # Hindi / Marathi recognizer (also reads Latin letters and digits); downloaded on first use
+    return RapidOCR(params={"Rec.lang_type": LangRec.DEVANAGARI, "Rec.ocr_version": OCRVersion.PPOCRV5, "Rec.model_type": ModelType.MOBILE})
+
+_DEVA_LETTER = re.compile(r"[ऄ-ह]")
+_MAX_SIDE = 1600
+
+
+def _confidence(res) -> float:
+    return float(np.mean(res.scores)) if res.scores else 0.0
+
+
+def warm() -> None:
+    """Load the OCR models now so the first upload does not pay for it."""
+    _engine(False)(np.zeros((64, 64, 3), dtype=np.uint8))
 
 
 def read_text(data: bytes) -> str:
@@ -22,7 +37,15 @@ def read_text(data: bytes) -> str:
         img = Image.open(io.BytesIO(data)).convert("RGB")
     except (UnidentifiedImageError, OSError):
         return ""
-    res = _engine()(np.array(img))
+    img.thumbnail((_MAX_SIDE, _MAX_SIDE))  # phone photos are 4000px+; OCR cost grows with pixels and gains nothing past this
+    arr = np.array(img)
+    # English model first (one pass for the common case). Low confidence means another script: try the Devanagari model
+    # (Hindi/Marathi, also reads Latin letters and digits) and keep whichever read the page more confidently.
+    res = _engine(False)(arr)
+    if _confidence(res) < 0.85:
+        alt = _engine(True)(arr)
+        if _confidence(alt) > _confidence(res) and len(_DEVA_LETTER.findall("".join(alt.txts or ()))) >= 3:
+            res = alt
     if res.txts is None or res.boxes is None:
         return ""
     items = sorted(((float(b[:, 1].mean()), float(b[:, 0].min()), t, float(b[:, 1].max() - b[:, 1].min())) for b, t in zip(res.boxes, res.txts)))

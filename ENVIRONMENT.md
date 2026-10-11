@@ -66,6 +66,8 @@ The mock flow needs nothing. These switch on the real Setu sandbox. All four mus
 | `INNGEST_DEV=1` | `frontend/.env.local` **only** | Local development. Do not set on Vercel. |
 | `INNGEST_SIGNING_KEY`, `INNGEST_EVENT_KEY` | Vercel | From the Inngest dashboard. |
 | `BACKEND_URL` | Vercel | The deployed backend's public URL. Defaults to `http://127.0.0.1:8000`. |
+| `INNGEST_JOB_TOKEN` | backend **and** frontend (Vercel) | Any long random string. The Inngest function sends it as `X-Job-Token`; the backend's `/api/jobs/*` stages refuse every call without it (503 when unset). |
+| `INNGEST_EVENT_KEY` | backend | Lets `POST /api/security/{user}/investigate-job` send the start event. Not needed locally with `INNGEST_DEV=1`. |
 
 ## 7. Other switches
 

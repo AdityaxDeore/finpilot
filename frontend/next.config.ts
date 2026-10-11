@@ -8,6 +8,7 @@ const nextConfig: NextConfig = {
   // 127.0.0.1 gets those requests silently blocked with just a console
   // warning, which can otherwise be mistaken for a real hydration bug.
   allowedDevOrigins: ["127.0.0.1", "localhost"],
+  devIndicators: false, // hides the dev-mode "N" badge that overlaps the phone pay app
 };
 
 export default nextConfig;

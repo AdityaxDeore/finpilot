@@ -1,6 +1,7 @@
 """Web Intel: Tavily search / extract / crawl / map, proxied so the API key never reaches the browser."""
 from __future__ import annotations
 
+import re
 from typing import Literal
 
 import httpx
@@ -50,9 +51,46 @@ def _call(path: str, payload: dict, agent: str = "web-intel", run: str | None = 
     return body
 
 
+_INDIA_HINT = re.compile(r"india|₹|\b(rbi|sebi|inr|gst|epf|nps|ppf|itr|upi)\b", re.I)
+
+
 @router.post("/search")
 def search(b: Search) -> dict:
-    return _call("search", {"query": b.query, "search_depth": b.depth, "topic": b.topic, "include_answer": True, "max_results": 6})
+    """FinPilot is for Indian users: unless the question already says so, ask about India and boost Indian sources (Tavily's `country` only works for the general topic)."""
+    payload = {"query": b.query if _INDIA_HINT.search(b.query) else f"{b.query} India", "search_depth": b.depth, "topic": b.topic,
+               "include_answer": True, "include_favicon": True, "max_results": 8}
+    if b.topic == "general":
+        payload["country"] = "india"
+    return _call("search", payload)
+
+
+class Deals(BaseModel):
+    item: str = Field(min_length=2, max_length=120)
+    budget: float = Field(gt=0)
+
+
+_STORES = {"croma.com": "Croma", "vijaysales.com": "Vijay Sales", "amazon.in": "Amazon", "flipkart.com": "Flipkart", "reliancedigital.in": "Reliance Digital",
+           "tatacliq.com": "Tata CLiQ", "poorvika.com": "Poorvika", "sangeethamobiles.com": "Sangeetha"}
+_PRICE = re.compile(r"(?:₹|rs\.?|inr)\s*([\d,]{4,10})", re.I)
+
+
+@router.post("/deals")
+def deals(b: Deals) -> dict:
+    """Where to buy `item` in India within `budget`: Indian retailers only, with the lowest price each page mentions and any offer text."""
+    res = _call("search", {"query": f"{b.item} price offers discount bank offer EMI India", "search_depth": "advanced", "include_answer": True,
+                           "include_favicon": True, "include_domains": list(_STORES), "max_results": 10}, agent="goal-deals")
+    offers = []
+    for r in res.get("results", []):
+        host = r["url"].split("/")[2].removeprefix("www.")
+        text = f"{r.get('title', '')} {r.get('content', '')}"
+        prices = sorted(int(m.replace(",", "")) for m in _PRICE.findall(text) if m.replace(",", "").isdigit())
+        plausible = [p for p in prices if b.budget * 0.35 <= p <= b.budget * 2]  # drop EMI figures, 'starting from' teasers and accessories
+        offers.append({"store": next((n for d, n in _STORES.items() if host.endswith(d)), host), "title": r.get("title"), "url": r["url"], "favicon": r.get("favicon"),
+                       "price": min(plausible) if plausible else None, "within_budget": bool(plausible) and min(plausible) <= b.budget})
+    offers.sort(key=lambda o: (o["price"] is None, not o["within_budget"], o["price"] or 0))
+    seen: dict[str, int] = {}
+    varied = [o for o in offers if seen.__setitem__(o["store"], seen.get(o["store"], 0) + 1) is None and seen[o["store"]] <= 2]  # at most two per store
+    return {"answer": res.get("answer"), "offers": varied}
 
 
 @router.post("/extract")

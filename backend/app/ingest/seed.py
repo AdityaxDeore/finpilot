@@ -123,15 +123,28 @@ def seed_if_empty() -> None:
 
 
 def ensure_demo_seeded() -> None:
-    """Called when a demo persona is requested: self-heals missing demo data, checking at most every 30 s per process."""
+    """Called when a demo persona is requested: self-heals missing demo data, re-checking at most every 30 s per process.
+
+    Only the very first check blocks a request; later re-checks run in the background so no request pays the Firestore round trips.
+    """
     global _checked_at
     if time.monotonic() - _checked_at < _RECHECK_SECONDS:
         return
-    with _ensure_lock:
+    if _checked_at and not _ensure_lock.acquire(blocking=False):
+        return  # a refresh is already running
+    elif not _checked_at:
+        _ensure_lock.acquire()
+    try:
         if time.monotonic() - _checked_at < _RECHECK_SECONDS:
+            return
+        if _checked_at:
+            _checked_at = time.monotonic()  # claim this window, then refresh off the request path
+            threading.Thread(target=seed_if_empty, daemon=True).start()
             return
         seed_if_empty()
         _checked_at = time.monotonic()
+    finally:
+        _ensure_lock.release()
 
 
 if __name__ == "__main__":

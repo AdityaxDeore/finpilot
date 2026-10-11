@@ -2,6 +2,7 @@ import { getLang, getSimpleNow } from "@/lib/i18n";
 
 import type {
   OpsOverview,
+  OpsProbe,
   Account,
   AnswerContract,
   ChatEngine,
@@ -38,6 +39,9 @@ import type {
   ConnectProfile,
   NotificationItem,
   PlanParams,
+  PayResult, PayReviewItem,
+  ForecastRiskQuery,
+  ForecastRiskReport,
   PlanResult,
   PlanScenario,
   PlanScenarioSummary,
@@ -138,6 +142,14 @@ async function errorMessage(path: string, res: Response): Promise<string> {
   return `API ${path} failed: ${res.status} ${text}`;
 }
 
+const pairHeader = (code?: string): Record<string, string> => (code ? { "X-Pair-Code": code } : {});
+
+async function liveGet<T>(path: string, code?: string): Promise<T> {
+  const res = await fetch(`${API_URL}${path}`, { cache: "no-store", headers: { ...(await authHeader()), ...pairHeader(code) } });
+  if (!res.ok) throw new Error(await errorMessage(path, res));
+  return res.json() as Promise<T>;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const auth = await authHeader();
   const res = await fetch(`${API_URL}${path}`, {
@@ -154,7 +166,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-function planQuery(p: PlanParams): string {
+function planQuery(p: object): string {
   const q = new URLSearchParams();
   for (const [k, v] of Object.entries(p)) if (v !== undefined) q.set(k, String(v));
   const s = q.toString();
@@ -173,6 +185,7 @@ export const api = {
   web: (kind: "search" | "extract" | "crawl" | "map", body: Record<string, string>) =>
     apiFetch<{ answer?: string; results?: Record<string, unknown>[]; failed_results?: unknown[]; base_url?: string }>(`/api/web/${kind}`, { method: "POST", body: JSON.stringify(body) }),
   opsOverview: () => request<OpsOverview>("/api/ops/overview"),
+  opsProbe: (env: string) => request<OpsProbe>(`/api/ops/probe/${env}`, { method: "POST" }),
   dashboard: (userId: string) => apiFetch<DashboardSnapshot>(`/api/dashboard/${userId}`),
   // user_id must be threaded through explicitly -- ChatRequest defaults to
   // "demo-priya" server-side, so omitting it here would silently ignore
@@ -239,6 +252,11 @@ export const api = {
     apiFetch<Goal>(`/api/goals/${userId}/${goalId}`, { method: "PATCH", body: JSON.stringify(req) }),
   deleteGoal: (userId: string, goalId: string) =>
     apiFetch<void>(`/api/goals/${userId}/${goalId}`, { method: "DELETE" }),
+
+  /** Indian retailers' prices and offers for an item within a budget (Croma, Vijay Sales, Amazon...). */
+  goalDeals: (item: string, budget: number) =>
+    apiFetch<{ answer?: string | null; offers: { store: string; title: string; url: string; favicon?: string | null; price: number | null; within_budget: boolean }[] }>(
+      "/api/web/deals", { method: "POST", body: JSON.stringify({ item, budget }) }),
 
   // Connectors: linking a source is what fills the app with data
   connectors: (userId: string) => apiFetch<Connector[]>(`/api/connectors/${userId}`),
@@ -404,6 +422,19 @@ export const api = {
     if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail ?? `Could not read that photo: ${res.status}`);
     return res.json();
   },
+  /** Phone pay app: books a scanned-QR payment into the ledger (no real money moves). `code` is the pairing code from the dashboard. */
+  pay: (userId: string, body: { payee_name: string; upi_id: string; amount: number; note?: string }, code?: string) =>
+    apiFetch<PayResult>(`/api/pay/${userId}`, { method: "POST", body: JSON.stringify(body), headers: pairHeader(code) }),
+  /** Signed-in website: mint a code so the phone app can pay into this account. */
+  payPair: (userId: string) => apiFetch<{ code: string; expires_in_days: number }>(`/api/pay/${userId}/pair`, { method: "POST" }),
+  payPairStatus: (userId: string, code?: string) => liveGet<{ claimed: boolean; connected: boolean }>(`/api/pay/${userId}/pair${code ? `?code=${encodeURIComponent(code)}` : ""}`),
+  /** The next three are uncached on purpose (apiFetch reuses GETs for 30s) and send the sign-in token, or the pairing code on the phone. */
+  payReviews: (userId: string, limit = 3, code?: string) => liveGet<PayReviewItem[]>(`/api/pay/${userId}/reviews?limit=${limit}`, code),
+  payHistory: (userId: string, code?: string) =>
+    liveGet<{ id: string; merchant: string; amount: number; date: string; category: string }[]>(`/api/pay/${userId}/history`, code),
+  payLive: (userId: string, code?: string) => liveGet<{ version: number }>(`/api/pay/${userId}/live`, code),
+  setPayReviewStatus: (userId: string, id: string, status: "confirmed" | "reported") =>
+    apiFetch<{ id: string; status: string }>(`/api/pay/${userId}/reviews/${id}/status`, { method: "POST", body: JSON.stringify({ status }) }),
   taughtItems: (userId: string) => apiFetch<TaughtItem[]>(`/api/expenses/${userId}/items`),
   forgetItem: (userId: string, item: string) => apiFetch<unknown>(`/api/expenses/${userId}/items/${encodeURIComponent(item)}`, { method: "DELETE" }).finally(clearApiCache),
   deleteDocument: (userId: string, id: string) =>
@@ -412,6 +443,8 @@ export const api = {
   // Financial plan (constrained action planner + monthly probabilistic forecast)
   plan: (userId: string, p: PlanParams = {}) =>
     apiFetch<PlanResult>(`/api/plan/${userId}${planQuery(p)}`),
+  forecastRisk: (userId: string, q: ForecastRiskQuery = {}) =>
+    apiFetch<ForecastRiskReport>(`/api/forecast-risk/${userId}${planQuery(q)}`),
   replan: (userId: string, p: PlanParams, shock: PlanShock) =>
     apiFetch<ReplanResult>(`/api/plan/${userId}/replan`, { method: "POST", body: JSON.stringify({ ...p, shock }) }),
   // Public (synthetic data) -- no user id.

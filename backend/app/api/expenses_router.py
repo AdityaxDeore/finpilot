@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
+from fastapi.concurrency import run_in_threadpool
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
@@ -50,6 +51,11 @@ async def suggest_expense(
     image = await _photo(photo)
     if not image and not (name and name.strip()):
         raise HTTPException(422, "Send a photo or a name")
+    return await run_in_threadpool(_suggest_sync, user_id, image, name, city)
+
+
+def _suggest_sync(user_id: str, image: bytes | None, name: str | None, city: str | None) -> dict:
+    # CPU-bound (OCR + CLIP): runs in a worker thread so it never blocks the event loop for other requests
     text = read_text(image) if image else ""
     bill = parse_receipt(text)
     if text and not bill["total"]:  # readable text but no total found: let the vision model look at it
@@ -127,7 +133,7 @@ async def teach(
     key = item_key(name)
     if category not in _CATEGORIES:
         category = suggest(user_id, None, key, None)["category"]
-    remember(user_id, key, price, category, image)
+    await run_in_threadpool(remember, user_id, key, price, category, image)
     return {"item": key, "price": price, "category": category}
 
 
@@ -138,16 +144,21 @@ async def snap(user_id: str = Depends(resolve_user_id), photo: UploadFile = File
     if not image:
         raise HTTPException(422, "Send a photo")
     try:
-        out = suggest(user_id, image, None, None)
-        if out["source"] != "memory":  # this exact photo is new: ask the vision model which taught item it is
-            taught = sorted({r.item for r in store.query(PriceMemoryRow, user_id=user_id)})
-            if (seen := vlm.match_item(image, taught)):
-                out = suggest(user_id, None, seen, None)
+        out = await run_in_threadpool(_snap_suggest, user_id, image)
     except OSError as e:
         raise HTTPException(422, "Could not read that photo") from e
     if out["source"] == "memory" and out["price"]:
         return {"added": True, **_save(user_id, out["item"], out["price"], out["category"], image)}
     return {"added": False, "suggestion": out}
+
+
+def _snap_suggest(user_id: str, image: bytes) -> dict:
+    out = suggest(user_id, image, None, None)
+    if out["source"] != "memory":  # this exact photo is new: ask the vision model which taught item it is
+        taught = sorted({r.item for r in store.query(PriceMemoryRow, user_id=user_id)})
+        if (seen := vlm.match_item(image, taught)):
+            out = suggest(user_id, None, seen, None)
+    return out
 
 
 @router.get("/expenses/{user_id}/items")

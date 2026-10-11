@@ -79,6 +79,8 @@ const S: Record<string, string[]> = {
   "ob.desc": ["Tell me a little about you so my advice fits your life.", "अपने बारे में थोड़ा बताइए ताकि मेरी सलाह आपके काम आए।", "तुमच्याबद्दल थोडे सांगा म्हणजे माझा सल्ला तुम्हाला उपयोगी पडेल."],
   "ob.save": ["Save answers", "जवाब सहेजें", "उत्तरे जतन करा"],
   "ob.skip": ["Skip for now", "अभी छोड़ें", "आत्ता वगळा"],
+  "ob.next": ["Next", "आगे", "पुढे"],
+  "ob.back": ["Back", "पीछे", "मागे"],
   "q.age": ["What is your age?", "आपकी उम्र क्या है?", "तुमचे वय किती आहे?"],
   "q.role": ["Who are you?", "आप कौन हैं?", "तुम्ही कोण आहात?"],
   "q.role_other": ["What do you do?", "आप क्या काम करते हैं?", "तुम्ही काय काम करता?"],

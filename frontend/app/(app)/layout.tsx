@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { AuthGate } from "@/components/AuthGate";
 import { NavShell } from "@/components/NavShell";
 import { Toaster } from "@/components/shadcn/sonner";
+import { LiveSync } from "@/components/LiveSync";
 import { SheetAutoSync } from "@/components/connect/SheetAutoSync";
 import { ChatPopup } from "@/components/copilot/ChatPopup";
 import { OnboardingGate } from "@/components/onboarding/OnboardingGate";
@@ -17,6 +18,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <ChatPopup />
         <OnboardingGate />
         <SheetAutoSync />
+        <LiveSync />
         <Toaster richColors position="top-right" />
       </NavShell>
     </AuthGate>

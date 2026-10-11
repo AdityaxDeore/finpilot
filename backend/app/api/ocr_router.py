@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 from datetime import date
 
+from fastapi.concurrency import run_in_threadpool
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
@@ -18,7 +19,7 @@ from app.ingest.categorize import categorize
 from app.aa.mapper import _merchant
 from app.models import AccountRow, TransactionRow
 from app.ocr import read_text
-from app.statement_ocr import parse_transactions, redact
+from app.statement_ocr import parse_receipt_txn, parse_transactions, redact
 
 router = APIRouter()
 
@@ -46,13 +47,13 @@ async def extract(file: UploadFile, user_id: str = Depends(resolve_user_id)) -> 
     raw = await file.read(_MAX_BYTES + 1)
     if len(raw) > _MAX_BYTES:
         raise HTTPException(400, "File too large (max 5MB)")
-    text = read_text(raw) if name.endswith(_IMAGES) else raw.decode("utf-8", errors="replace")
+    text = await run_in_threadpool(read_text, raw) if name.endswith(_IMAGES) else raw.decode("utf-8", errors="replace")
     if not text.strip():
         raise HTTPException(400, "Could not read any text. Try a sharper, well-lit photo.")
     clean, removed = redact(text)
-    txns = parse_transactions(clean)
+    txns = parse_transactions(clean) or parse_receipt_txn(clean)  # a single ticket or bill has no statement rows
     if not txns:
-        raise HTTPException(422, "No transactions found. The photo should show dates and amounts.")
+        raise HTTPException(422, "No transactions found. The photo should show dates and amounts, or a bill with a total.")
     return {"transactions": [{k: t[k] for k in ("date", "description", "amount")} for t in txns], "removed": removed}
 
 

@@ -38,6 +38,7 @@ CATALOG: dict[str, tuple[str, str, bool]] = {
     "google_sheets": ("Google Sheets", "A live expense sheet: edit it and the app updates", True),
     "invoices": ("Gmail & Drive invoices", "Bills and invoices parsed automatically", True),
     "investments": ("Mutual funds & stocks", "SIPs and holdings from your depository", True),
+    "plaid": ("Plaid", "Link a US or European bank (sandbox) to import accounts and transactions", True),
 }
 
 # Demo datasets for the non-Google-Pay connectors, all kept in one folder.
@@ -198,7 +199,7 @@ def export(connector: str, user_id: str = Depends(resolve_user_id)) -> Response:
         raise HTTPException(404, "Unknown connector")
     if store.get(ConnectionRow, f"{user_id}:{connector}") is None:
         raise HTTPException(409, f"{CATALOG[connector][0]} isn't connected")
-    if connector in ("google_pay", "google_sheets"):
+    if connector in ("google_pay", "google_sheets", "plaid"):
         data = {"transactions": [t.model_dump(mode="json") for t in store.query(TransactionRow, user_id=user_id)]}
     else:
         data = _dataset(connector)
@@ -216,5 +217,8 @@ def disconnect(connector: str, user_id: str = Depends(resolve_user_id)) -> None:
         _clear_user(user_id)
     elif connector == "google_sheets":
         _clear_sheet(user_id)
+    elif connector == "plaid":
+        from app.api.plaid_router import clear_plaid
+        clear_plaid(user_id)
     store.delete_where(InsightsSnapshotRow, user_id=user_id)
     store.delete(ConnectionRow, f"{user_id}:{connector}")

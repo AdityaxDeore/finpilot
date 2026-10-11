@@ -18,6 +18,7 @@ from app.api.notifications_router import router as notifications_router
 from app.api.profile_router import router as profile_router
 from app.api.aa_router import router as aa_router
 from app.api.plan_router import router as plan_router
+from app.api.forecast_risk_router import router as forecast_risk_router
 from app.api.routes import router
 from app.api.rules_router import router as rules_router
 from app.api.security_router import router as security_router
@@ -28,6 +29,8 @@ from app.api.web_router import router as web_router
 from app.api.voice_router import router as voice_router
 from app.api.ops_router import router as ops_router
 from app.api.jobs_router import router as jobs_router
+from app.api.plaid_router import router as plaid_router
+from app.api.pay_router import router as pay_router
 from app.api.webhooks_router import router as webhooks_router
 from app.api.tax_router import router as tax_router
 from app.api.transactions_router import router as transactions_router
@@ -41,16 +44,31 @@ async def lifespan(_: FastAPI):
     # Seed + warm the demo personas on every start (fresh deploy, serverless cold start, local emulator), without blocking boot.
     def _prepare_demo() -> None:
         try:
-            from app.ingest.seed import seed_if_empty
+            from app.ingest.seed import ensure_demo_seeded
 
-            seed_if_empty()
+            ensure_demo_seeded()
         except Exception as exc:
             import logging
             logging.getLogger(__name__).warning("Demo persona seeding skipped: %s", exc)
 
     import threading
 
+    def _warm_models() -> None:
+        # load OCR + CLIP now, off the request path, so the first upload/photo is not the slow one
+        import logging
+
+        try:
+            from app.ocr import warm as warm_ocr
+            from app.expenses import suggest as photo
+
+            warm_ocr()
+            photo._catalog_vectors()
+            photo.vision._image_model()
+        except Exception as exc:
+            logging.getLogger(__name__).warning("Model warm-up skipped: %s", exc)
+
     threading.Thread(target=_prepare_demo, daemon=True).start()
+    threading.Thread(target=_warm_models, daemon=True).start()
     yield
 
 
@@ -77,6 +95,7 @@ app.include_router(router, prefix="/api")
 app.include_router(transactions_router, prefix="/api")
 app.include_router(budgets_router, prefix="/api")
 app.include_router(plan_router, prefix="/api")
+app.include_router(forecast_risk_router, prefix="/api")
 app.include_router(copilot_feed_router, prefix="/api")
 # These already embed "/api/..." in each route's own path decorator
 # (unlike routes.py/transactions_router/budgets_router, which rely on the
@@ -90,6 +109,8 @@ app.include_router(web_router)
 app.include_router(voice_router)
 app.include_router(ops_router)
 app.include_router(jobs_router)
+app.include_router(plaid_router)
+app.include_router(pay_router, prefix="/api")
 app.include_router(household_router)
 app.include_router(networth_router)
 app.include_router(notifications_router)

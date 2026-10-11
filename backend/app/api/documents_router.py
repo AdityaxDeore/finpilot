@@ -1,6 +1,7 @@
 """Upload / list / delete text documents that the Copilot RAG can cite."""
 from __future__ import annotations
 
+from fastapi.concurrency import run_in_threadpool
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 
 from app.core import store
@@ -28,7 +29,7 @@ async def upload_document(file: UploadFile, user_id: str = Depends(resolve_user_
     raw = await file.read(_MAX_BYTES + 1)
     if len(raw) > _MAX_BYTES:
         raise HTTPException(400, "File too large (max 2MB)")
-    original = read_text(raw) if name.lower().endswith(_IMAGES) else raw.decode("utf-8", errors="replace")
+    original = await run_in_threadpool(read_text, raw) if name.lower().endswith(_IMAGES) else raw.decode("utf-8", errors="replace")
     text = compact(name, original)[:_MAX_CHARS]
     if not text.strip():
         raise HTTPException(400, "No text found in that file")

@@ -16,10 +16,7 @@ import {
   FlaskConical,
   GitCompare,
   Route,
-  Calculator,
-  History,
   FileText,
-  ShieldCheck,
   ShieldAlert,
   ScanSearch,
   Network,
@@ -30,6 +27,7 @@ import {
   Globe,
   Landmark,
   Activity,
+  ChartLine,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -83,9 +81,9 @@ export const NAV_GROUPS: { label: string; tone: string; links: NavLink[] }[] = [
       { href: "/financial-security", label: "Financial Security", icon: ShieldAlert },
       { href: "/simulate", label: "Simulate", icon: FlaskConical },
       { href: "/plan", label: "Plan", icon: Route },
-      { href: "/scenarios", label: "Compare", icon: GitCompare },
-      { href: "/tax", label: "Tax", icon: Calculator },
-      { href: "/timeline", label: "Timeline", icon: History },
+      { href: "/forecast-risk", label: "Forecast & Risk", icon: ChartLine },
+      { href: "/scenarios", label: "Compare, Tax & Timeline", icon: GitCompare },
+      { href: "/agent-ops", label: "Agent Ops", icon: Activity },
     ],
   },
   {
@@ -96,15 +94,19 @@ export const NAV_GROUPS: { label: string; tone: string; links: NavLink[] }[] = [
     ],
   },
   {
+    label: "Schemes",
+    tone: "text-[#0fb67a]",
+    links: [
+      { href: "/scheme-analyst", label: "Scheme Analyst", icon: Landmark },
+      { href: "/web-intel", label: "Web Intel", icon: Globe },
+    ],
+  },
+  {
     label: "Security",
     tone: "text-[#d6336c]",
     links: [
-      { href: "/security", label: "Security", icon: ShieldCheck },
       { href: "/evidence-room", label: "Evidence Council", icon: ScanSearch },
       { href: "/council", label: "Risk Council", icon: Users },
-      { href: "/scheme-analyst", label: "Scheme Analyst", icon: Landmark },
-      { href: "/web-intel", label: "Web Intel", icon: Globe },
-  { href: "/agent-ops", label: "Agent Ops", icon: Activity },
       { href: "/twin", label: "Twin Simulator", icon: Network },
       { href: "/my-data", label: "My Data", icon: Database },
       { href: "/profile", label: "Profile", icon: UserRound },

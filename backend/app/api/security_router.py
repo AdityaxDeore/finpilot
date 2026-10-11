@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from app.api.connectors_router import CATALOG, DATASET_FILES, _dataset
+from app.api.jobs_router import enqueue_evidence
 from app.core import store
 from app.core.audit import log_audit_event
 from app.core.auth import resolve_user_id
@@ -28,6 +29,13 @@ def _log(request: Request, user_id: str, what: str) -> None:
 def investigate(request: Request, user_id: str = Depends(resolve_user_id)) -> StreamingResponse:
     _log(request, user_id, "Evidence Room investigation read your transactions and accounts")
     return StreamingResponse((json.dumps(e, default=str) + "\n" for e in agents.investigate(user_id)), media_type="application/x-ndjson")
+
+
+@router.post("/{user_id}/investigate-job")
+def investigate_job(request: Request, user_id: str = Depends(resolve_user_id)) -> dict:
+    """Same investigation, run as a background Inngest job: the agents run in parallel and every step shows in Inngest's dashboard."""
+    _log(request, user_id, "Evidence Room background investigation will read your transactions and accounts")
+    return enqueue_evidence(user_id)
 
 
 @router.post("/{user_id}/council")

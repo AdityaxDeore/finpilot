@@ -14,6 +14,7 @@ _FILE = Path(__file__).resolve().parent.parent / ".telemetry.jsonl"
 _MAX = 600
 _lock = threading.Lock()
 _events: deque[dict] = deque(maxlen=_MAX)
+_up: dict[str, bool] = {}  # provider -> last call succeeded; a flip writes an outage / recovery event
 
 
 def _load() -> None:
@@ -28,10 +29,14 @@ _load()
 
 
 def record(**event) -> dict:
-    """kind: call | fallback | cache | search. Common fields: provider, key, model, agent, run, ok, ms, tokens, error."""
+    """kind: call | fallback | cache | search | split | index | outage | recovery. Common fields: provider, key, model, agent, run, ok, ms, tokens, error."""
     event["ts"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     with _lock:
         _events.append(event)
+        prov = event.get("provider")
+        if event.get("kind") == "call" and prov and _up.get(prov, True) != bool(event.get("ok")):
+            _up[prov] = bool(event.get("ok"))
+            _events.append({"kind": "recovery" if event.get("ok") else "outage", "provider": prov, "ts": event["ts"], "agent": event.get("agent"), "error": event.get("error")})
         try:
             with _FILE.open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps(event, ensure_ascii=False) + "\n")
@@ -60,6 +65,7 @@ def _bucket(rows: list[dict], field: str) -> list[dict]:
         if e.get("kind") != "call" or not e.get(field):
             continue
         b = out.setdefault(e[field], {"name": e[field], "calls": 0, "errors": 0, "ms": 0, "tokens": 0})
+        b.update(last_ok=bool(e.get("ok")), last_ts=e["ts"], last_error=e.get("error"))  # rows are oldest-first: the final write wins
         b["calls"] += 1
         b["errors"] += 0 if e.get("ok") else 1
         b["ms"] += e.get("ms", 0)
@@ -75,3 +81,8 @@ def summary() -> dict:
         "fallbacks": sum(e.get("kind") == "fallback" for e in rows), "cache_hits": sum(e.get("kind") == "cache" for e in rows),
         "tokens": sum(e.get("tokens") or 0 for e in rows if e.get("kind") == "call"),
     }
+
+
+def provider_state() -> dict[str, bool]:
+    with _lock:
+        return dict(_up)
