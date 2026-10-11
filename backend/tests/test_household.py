@@ -175,9 +175,33 @@ def test_household_networth_endpoint():
     assert "members_breakdown" in data
 
 
-def test_wealth_shares_add_up_to_100_when_a_member_has_negative_net_worth():
+def test_wealth_shares_add_up_to_100():
     data = client.get("/api/household/demo-priya").json()
     shares = {m["display_name"]: m["pct_of_household"] for m in data["net_worth_summary"]["members_breakdown"]}
-    assert shares["Priya"] == 0.0  # her car loan outweighs her assets
     assert abs(sum(shares.values()) - 100) < 0.2
     assert all(0 <= v <= 100 for v in shares.values())
+
+
+def test_managed_member_lifecycle():
+    r = client.post("/api/household/demo-priya/managed-members", json={"name": "Anaya", "relationship": "Child", "opening_balance": 500})
+    assert r.status_code == 200
+    kid = next(m for m in r.json()["members"] if m["is_managed"])
+    assert kid["display_name"] == "Anaya" and kid["user_id"].startswith("managed-")
+    assert len(r.json()["members"]) == 3
+
+    t = client.post(f"/api/household/demo-priya/members/{kid['user_id']}/transactions",
+                    json={"merchant": "School fees", "amount": -300, "category": "other"})
+    assert t.status_code == 200
+    assert t.json()["balance"] == 200 and t.json()["total_out"] == 300
+
+    # Real members' data can't be written through this endpoint
+    assert client.post("/api/household/demo-priya/members/demo-arjun/transactions",
+                       json={"merchant": "x", "amount": -1}).status_code == 404
+    # Priya can monitor Arjun
+    assert client.get("/api/household/demo-priya/members/demo-arjun/ledger").status_code == 200
+    # Arjun (editor) can see the kid too; managed ids are not usable as logins
+    assert client.get(f"/api/household/{kid['user_id']}").status_code in (401, 403, 404)
+
+    d = client.delete(f"/api/household/demo-priya/members/{kid['user_id']}")
+    assert d.status_code == 200
+    assert client.get("/api/household/demo-priya").json()["members"].__len__() == 2

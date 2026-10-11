@@ -12,6 +12,8 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
+_Date = date  # alias: model fields named `date` shadow the type inside class bodies
+
 # ---------------------------------------------------------------------------
 # Domain enums
 # ---------------------------------------------------------------------------
@@ -702,6 +704,8 @@ class HouseholdMember(BaseModel):
     display_name: Optional[str] = None
     avatar_letter: Optional[str] = None
     net_worth: Optional[float] = None
+    is_managed: bool = False
+    relationship: Optional[str] = None
 
 
 class HouseholdInvite(BaseModel):
@@ -723,6 +727,55 @@ class CreateHouseholdRequest(BaseModel):
 class CreateInviteRequest(BaseModel):
     email: str
     role: HouseholdRole = HouseholdRole.editor
+
+
+class AddManagedMemberRequest(BaseModel):
+    name: str
+    relationship: Optional[str] = None  # e.g. "Child", "Parent"
+    opening_balance: float = 0.0
+
+
+class AddManagedTransactionRequest(BaseModel):
+    merchant: str
+    amount: float  # positive = money in, negative = money out
+    category: TxnCategory = TxnCategory.other
+    date: Optional[_Date] = None
+    description: Optional[str] = None
+
+
+class MemberLedger(BaseModel):
+    member: HouseholdMember
+    balance: float
+    total_in: float
+    total_out: float
+    transactions: list[Transaction]
+
+
+class MonthlyMemberSpend(BaseModel):
+    month: str  # "YYYY-MM"
+    by_member: dict[str, float]  # user_id -> outflow
+    total: float
+
+
+class CategorySpend(BaseModel):
+    category: str
+    total: float
+    by_member: dict[str, float]
+
+
+class MemberCashflow(BaseModel):
+    user_id: str
+    display_name: str
+    income: float
+    spend: float
+    savings_rate: float  # percent, 0 when no income
+
+
+class HouseholdInsights(BaseModel):
+    months: list[MonthlyMemberSpend]
+    categories: list[CategorySpend]
+    cashflow: list[MemberCashflow]
+    window_label: str
 
 
 class AcceptInviteRequest(BaseModel):

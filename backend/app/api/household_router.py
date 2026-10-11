@@ -9,15 +9,24 @@ from __future__ import annotations
 import hashlib
 import secrets
 from collections import defaultdict
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, date as date_cls, datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from app.core.auth import resolve_user_id
 from app.core import store
 from app.ingest.personas import FAMILY_MEMBERS
+from app.api.transactions_router import _row_to_transaction
 from app.models import AccountRow, HouseholdInviteRow, HouseholdMemberRow, HouseholdRow, TransactionRow
 from app.schemas import (
+    AddManagedMemberRequest,
+    CategorySpend,
+    HouseholdInsights,
+    MemberCashflow,
+    MonthlyMemberSpend,
+    AddManagedTransactionRequest,
+    MemberLedger,
+    Transaction,
     AcceptInviteRequest,
     CreateHouseholdRequest,
     CreateInviteRequest,
@@ -102,7 +111,10 @@ def _build_household_summary(
         total_assets += assets
         total_liabilities += liabilities
 
-        display_name = _PERSONA_NAMES.get(m.user_id, m.user_id.replace("demo-", "").capitalize())
+        if m.is_managed:
+            display_name = m.display_name or "Member"
+        else:
+            display_name = _PERSONA_NAMES.get(m.user_id, m.user_id.replace("demo-", "").capitalize())
         avatar_letter = display_name[:1].upper()
 
         members_list.append(
@@ -115,6 +127,8 @@ def _build_household_summary(
                 display_name=display_name,
                 avatar_letter=avatar_letter,
                 net_worth=nw,
+                is_managed=m.is_managed,
+                relationship=m.relationship,
             )
         )
 
@@ -336,8 +350,181 @@ def remove_member(
     if not target_member:
         raise HTTPException(404, "Member not found in household")
 
+    if target_member.is_managed:
+        store.delete_where(TransactionRow, user_id=member_user_id)
+        store.delete_where(AccountRow, user_id=member_user_id)
     store.delete(HouseholdMemberRow, target_member.id)
     return {"removed": True, "user_id": member_user_id}
+
+
+def _managed_member(household_id: str, member_user_id: str) -> HouseholdMemberRow:
+    m = store.first(HouseholdMemberRow, household_id=household_id, user_id=member_user_id)
+    if not m or not m.is_managed:
+        raise HTTPException(404, "Managed member not found in household")
+    return m
+
+
+def _member_to_schema(m: HouseholdMemberRow) -> HouseholdMember:
+    _, _, nw = _compute_user_wealth(m.user_id)
+    name = m.display_name if m.is_managed else _PERSONA_NAMES.get(m.user_id, m.user_id.replace("demo-", "").capitalize())
+    name = name or "Member"
+    return HouseholdMember(
+        id=m.id, household_id=m.household_id, user_id=m.user_id, role=HouseholdRole(m.role),
+        joined_at=m.joined_at, display_name=name, avatar_letter=name[:1].upper(), net_worth=nw,
+        is_managed=m.is_managed, relationship=m.relationship,
+    )
+
+
+@router.post("/api/household/{user_id}/managed-members", response_model=HouseholdSummary)
+def add_managed_member(
+    req: AddManagedMemberRequest, user_id: str = Depends(resolve_user_id)
+) -> HouseholdSummary:
+    """Add a person with no login (e.g. a child) whose finances the household manages."""
+    membership = _get_user_membership(user_id)
+    if not membership:
+        raise HTTPException(404, "User does not belong to any household")
+    household, member = membership
+    if member.role not in ("owner", "editor"):
+        raise HTTPException(403, "Viewer role cannot add members")
+    name = req.name.strip()
+    if not name:
+        raise HTTPException(400, "Name is required")
+
+    managed = HouseholdMemberRow(
+        household_id=household.id,
+        user_id=f"managed-{secrets.token_hex(8)}",
+        role="viewer",
+        is_managed=True,
+        display_name=name[:60],
+        relationship=(req.relationship or "").strip()[:30] or None,
+    )
+    wallet = AccountRow(user_id=managed.user_id, name=f"{name[:40]}'s Wallet", type="savings", balance=req.opening_balance)
+    store.put(managed, wallet)
+    return _build_household_summary(household, user_id)
+
+
+@router.get("/api/household/{user_id}/members/{member_user_id}/ledger", response_model=MemberLedger)
+def member_ledger(member_user_id: str, user_id: str = Depends(resolve_user_id)) -> MemberLedger:
+    """Transactions & balance of any household member; owners/editors only."""
+    membership = _get_user_membership(user_id)
+    if not membership:
+        raise HTTPException(404, "User does not belong to any household")
+    household, me = membership
+    target = store.first(HouseholdMemberRow, household_id=household.id, user_id=member_user_id)
+    if not target:
+        raise HTTPException(404, "Member not found in household")
+    if member_user_id != user_id and me.role not in ("owner", "editor"):
+        raise HTTPException(403, "Viewer role cannot view other members' transactions")
+    txns = sorted(store.query(TransactionRow, user_id=member_user_id), key=lambda t: (t.date, t.created_at), reverse=True)
+    out = [_row_to_transaction(t) for t in txns[:200]]
+    _, _, bal = _compute_user_wealth(member_user_id)
+    return MemberLedger(
+        member=_member_to_schema(target),
+        balance=bal,
+        total_in=sum(t.amount for t in txns if t.amount > 0),
+        total_out=sum(-t.amount for t in txns if t.amount < 0),
+        transactions=out,
+    )
+
+
+@router.post("/api/household/{user_id}/members/{member_user_id}/transactions", response_model=MemberLedger)
+def add_managed_transaction(
+    member_user_id: str, req: AddManagedTransactionRequest, user_id: str = Depends(resolve_user_id)
+) -> MemberLedger:
+    """Record a transaction for a managed member. Real members' data is never writable from here."""
+    membership = _get_user_membership(user_id)
+    if not membership:
+        raise HTTPException(404, "User does not belong to any household")
+    household, me = membership
+    if me.role not in ("owner", "editor"):
+        raise HTTPException(403, "Viewer role cannot record transactions")
+    managed = _managed_member(household.id, member_user_id)
+    if not req.merchant.strip() or req.amount == 0:
+        raise HTTPException(400, "Description and a non-zero amount are required")
+    account = store.first(AccountRow, user_id=managed.user_id)
+    if not account:
+        account = AccountRow(user_id=managed.user_id, name=f"{managed.display_name}'s Wallet", type="savings", balance=0.0)
+    account.balance += req.amount
+    txn = TransactionRow(
+        user_id=managed.user_id,
+        account_id=account.id,
+        date=req.date or date_cls.today(),
+        amount=req.amount,
+        merchant=req.merchant.strip()[:80],
+        category=req.category.value,
+        description=req.description,
+        review_status="reviewed",
+    )
+    store.put(account, txn)
+    return member_ledger(member_user_id, user_id)
+
+
+_NON_SPEND = {"income", "transfer", "credit_card_payment", "investment_sip"}
+
+
+@router.get("/api/household/{user_id}/insights", response_model=HouseholdInsights)
+def household_insights(user_id: str = Depends(resolve_user_id)) -> HouseholdInsights:
+    """Household-wide spending aggregates for charts: monthly trend, categories, per-member cashflow."""
+    membership = _get_user_membership(user_id)
+    if not membership:
+        raise HTTPException(404, "User does not belong to any household")
+    household, me = membership
+    members = store.query(HouseholdMemberRow, household_id=household.id)
+    if me.role not in ("owner", "editor"):
+        members = [m for m in members if m.user_id == user_id]  # viewers only see their own numbers
+
+    per_member = {m.user_id: store.query(TransactionRow, user_id=m.user_id) for m in members}
+    all_dates = [t.date for txns in per_member.values() for t in txns]
+    anchor = min(max(all_dates), date_cls.today()) if all_dates else date_cls.today()
+
+    # last 6 calendar months ending at the anchor month
+    keys: list[str] = []
+    y, mo = anchor.year, anchor.month
+    for _ in range(6):
+        keys.append(f"{y:04d}-{mo:02d}")
+        mo -= 1
+        if mo == 0:
+            y, mo = y - 1, 12
+    keys.reverse()
+    month_data = {k: {m.user_id: 0.0 for m in members} for k in keys}
+
+    cutoff = anchor - timedelta(days=90)
+    cats: dict[str, dict[str, float]] = {}
+    inc = {m.user_id: 0.0 for m in members}
+    spend = {m.user_id: 0.0 for m in members}
+    for uid, txns in per_member.items():
+        for t in txns:
+            if t.date > anchor:
+                continue
+            key = f"{t.date.year:04d}-{t.date.month:02d}"
+            is_spend = t.amount < 0 and t.category not in _NON_SPEND
+            if is_spend and key in month_data:
+                month_data[key][uid] += -t.amount
+            if t.date >= cutoff:
+                if is_spend:
+                    cats.setdefault(t.category, {}).setdefault(uid, 0.0)
+                    cats[t.category][uid] += -t.amount
+                    spend[uid] += -t.amount
+                elif t.category == "income" and t.amount > 0:
+                    inc[uid] += t.amount
+
+    names = {m.user_id: (m.display_name or "Member") if m.is_managed else _PERSONA_NAMES.get(m.user_id, m.user_id.replace("demo-", "").capitalize()) for m in members}
+    categories = sorted(
+        (CategorySpend(category=c, total=round(sum(v.values()), 2), by_member={k: round(x, 2) for k, x in v.items()}) for c, v in cats.items()),
+        key=lambda c: -c.total,
+    )
+    return HouseholdInsights(
+        months=[MonthlyMemberSpend(month=k, by_member={u: round(v, 2) for u, v in d.items()}, total=round(sum(d.values()), 2)) for k, d in month_data.items()],
+        categories=categories,
+        cashflow=[
+            MemberCashflow(
+                user_id=u, display_name=names[u], income=round(inc[u], 2), spend=round(spend[u], 2),
+                savings_rate=round(max(0.0, (inc[u] - spend[u]) / inc[u] * 100), 1) if inc[u] > 0 else 0.0,
+            )
+            for u in names
+        ],
+        window_label="Last 90 days",
+    )
 
 
 @router.get("/api/household/{user_id}/networth", response_model=HouseholdNetWorthSummary)

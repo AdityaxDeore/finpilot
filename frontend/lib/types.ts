@@ -528,6 +528,8 @@ export interface HouseholdMember {
   display_name?: string;
   avatar_letter?: string;
   net_worth?: number;
+  is_managed?: boolean;
+  relationship?: string | null;
 }
 
 export interface HouseholdInvite {
@@ -599,6 +601,35 @@ export interface HouseholdSpending {
   can_view_all: boolean;
   total_spend: number;
   members: MemberSpending[];
+}
+
+export interface AddManagedMemberRequest {
+  name: string;
+  relationship?: string;
+  opening_balance?: number;
+}
+
+export interface AddManagedTransactionRequest {
+  merchant: string;
+  amount: number; // positive = in, negative = out
+  category?: string;
+  date?: string;
+  description?: string;
+}
+
+export interface MemberLedger {
+  member: HouseholdMember;
+  balance: number;
+  total_in: number;
+  total_out: number;
+  transactions: Transaction[];
+}
+
+export interface HouseholdInsights {
+  months: { month: string; by_member: Record<string, number>; total: number }[];
+  categories: { category: string; total: number; by_member: Record<string, number> }[];
+  cashflow: { user_id: string; display_name: string; income: number; spend: number; savings_rate: number }[];
+  window_label: string;
 }
 
 export interface HouseholdSummary {
