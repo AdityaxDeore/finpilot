@@ -2,11 +2,14 @@
 
 import { flash, glideTo } from "@/lib/voice";
 
-export type VoiceAction = ({ type: "navigate"; path: string } | { type: "scroll"; to: string } | { type: "click"; id: number; label?: string }) & { note?: string };
+export type VoiceAction = ({ type: "navigate"; path: string } | { type: "scroll"; to: string } | { type: "click"; id: number; label?: string } | { type: "fill"; field: string; value: string }) & { note?: string };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const DANGEROUS = /delete|remove|pay\b|send|submit|confirm|disconnect|sign.?out|log.?out|clear|reset|transfer|unlink|revoke/i; // the voice agent never presses these
 const label = (el: Element) => (el.getAttribute("aria-label") || el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 60);
+const FIELDS = "input:not([type=password]):not([type=hidden]):not([type=file]):not([type=checkbox]):not([type=radio]),textarea,select";
+const fieldLabel = (el: Element) =>
+  ((el as HTMLInputElement).labels?.[0]?.textContent || el.getAttribute("aria-label") || el.getAttribute("placeholder") || el.getAttribute("name") || "").replace(/\s+/g, " ").trim().slice(0, 60);
 
 /** What the user can currently see: headings, pressable controls (numbered on the page) and the main text. */
 export function snapshotScreen() {
@@ -23,7 +26,10 @@ export function snapshotScreen() {
     el.setAttribute("data-voice-id", String(id));
     controls.push({ id, label: l });
   });
+  const fields = [...main.querySelectorAll(FIELDS)].filter((el) => (el as HTMLElement).offsetParent && fieldLabel(el)).slice(0, 20)
+    .map((el) => ({ label: fieldLabel(el), type: (el as HTMLInputElement).type || "text", value: ((el as HTMLInputElement).value || "").slice(0, 40) }));
   return {
+    fields,
     title: document.title.slice(0, 120),
     headings: [...main.querySelectorAll("h1,h2,h3")].map((h) => (h.textContent ?? "").trim().slice(0, 80)).filter(Boolean).slice(0, 30),
     controls,
@@ -32,6 +38,26 @@ export function snapshotScreen() {
 }
 
 const norm = (v: string) => v.toLowerCase().replace(/\s+/g, " ").trim();
+
+/** Types into a form field the way a person would, so React sees the change. Dates must be YYYY-MM-DD. Returns false if the field is not there. */
+function fillField(want: string, value: string): boolean {
+  const w = norm(want);
+  const main = document.querySelector("main") ?? document.body;
+  const el = [...main.querySelectorAll(FIELDS)].find((e) => (e as HTMLElement).offsetParent && norm(fieldLabel(e)).includes(w)) as HTMLInputElement | HTMLSelectElement | undefined;
+  if (!el) return false;
+  let v = value;
+  if (el instanceof HTMLSelectElement) {
+    const opt = [...el.options].find((o) => norm(o.text).includes(norm(value)) || norm(o.value) === norm(value));
+    if (!opt) return false;
+    v = opt.value;
+  }
+  const proto = el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+  Object.getOwnPropertyDescriptor(proto, "value")?.set?.call(el, v);
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+  el.dispatchEvent(new Event("change", { bubbles: true }));
+  flash(el);
+  return true;
+}
 
 /** Finds what the user means on the current page: a heading first, then a control, then any text block. */
 function findOnPage(want: string): Element | null {
@@ -58,6 +84,11 @@ export async function runActions(actions: VoiceAction[], push: (path: string) =>
       while (!location.pathname.startsWith(a.path) && Date.now() < end) await sleep(100);
       await sleep(1200); // let the new page fill in
       onStep(a.note || `Opened ${a.path.slice(1)}`, true);
+    } else if (a.type === "fill") {
+      onStep(a.note || `Filling in ${a.field}…`, false);
+      await sleep(500);
+      onStep(fillField(a.field, a.value) ? a.note || `${a.field}: ${a.value}` : `Could not find the "${a.field}" field`, true);
+      await sleep(300);
     } else if (a.type === "scroll") {
       onStep(a.note || `Scrolling to ${a.to}…`, false);
       const dir = a.to.toLowerCase();

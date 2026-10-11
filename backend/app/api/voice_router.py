@@ -2,6 +2,7 @@
 (open a page, scroll, click). The model only picks from the controls it was shown; the browser executes and filters them."""
 from __future__ import annotations
 
+from datetime import date
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Header
@@ -33,7 +34,11 @@ _SYSTEM = (
     '[{"type":"navigate","path":str,"note":str}|{"type":"scroll","to":"top"|"bottom"|"up"|"down"|<exact heading or label text on screen>,"note":str}|{"type":"click","id":int,"note":str}]} '
     "where note is a short present-tense line telling the user what this step does (e.g. 'Scrolling to your Emergency Fund goal'), in the reply language. "
     "The USER DATA block is this person's real numbers (name, accounts, goals, score): use it to answer and to be personal, and say what you remember from the recent conversation. If the user asks to do something (like connect a card) go to the page that does it, then click the control for it (not a destructive one) or tell them the next step. "
-    "To show a specific item, prefer a scroll action to its exact text from the screen. Max 4 actions."
+    "To show a specific item, prefer a scroll action to its exact text from the screen. "
+    "When the user asks you to ADD or CREATE something (a goal, a budget...), do it for them: navigate if needed, then one fill action per detail they gave, then click the add button. "
+    'Fill actions look like {"type":"fill","field":<label of the input>,"value":str,"note":str}; a date value is always YYYY-MM-DD (today is {today}); amounts are plain numbers. '
+    'On a page you have not opened yet, use the labels it is known to have, and click by its label: {"type":"click","label":str}. '
+    "Known forms: /goals has fields 'Goal Name', 'Target Amount', 'Target Date' and the button 'Add Goal'. Keep a goal name short (2-4 words, like 'New car'), not the whole sentence. Ask the user for any detail you were not given instead of guessing. Max 8 actions."
 )
 
 
@@ -42,10 +47,17 @@ class Control(BaseModel):
     label: str = Field(max_length=60)
 
 
+class Field_(BaseModel):
+    label: str = Field(max_length=60)
+    type: str = Field(default="text", max_length=20)
+    value: str = Field(default="", max_length=40)
+
+
 class Screen(BaseModel):
     title: str = Field(default="", max_length=120)
     headings: list[str] = Field(default_factory=list, max_length=30)
     controls: list[Control] = Field(default_factory=list, max_length=50)
+    fields: list[Field_] = Field(default_factory=list, max_length=20)
     text: str = Field(default="", max_length=2500)
 
 
@@ -61,16 +73,21 @@ class Act(BaseModel):
 def _clean(plan: dict, screen: Screen) -> dict:
     """Keep only actions that point at real pages / controls the user could see."""
     labels = {c.id: c.label for c in screen.controls}
-    out = []
+    out, moved = [], False
     for a in plan.get("actions", []):
         t, note = a.get("type"), str(a.get("note", ""))[:90]
         if t == "navigate" and a.get("path") in PAGES:
             out.append({"type": "navigate", "path": a["path"], "note": note})
+            moved = True
+        elif t == "fill" and isinstance(a.get("field"), str) and a.get("value") is not None and (moved or any(f.label == a["field"] for f in screen.fields)):
+            out.append({"type": "fill", "field": a["field"][:60], "value": str(a["value"])[:100], "note": note})
+        elif t == "click" and moved and a.get("id") not in labels and isinstance(a.get("label"), str):
+            out.append({"type": "click", "id": 0, "label": a["label"][:60], "note": note})  # a page not on screen yet: the browser matches by label
         elif t == "scroll" and isinstance(a.get("to"), str):
             out.append({"type": "scroll", "to": a["to"][:60], "note": note})
         elif t == "click" and a.get("id") in labels:
             out.append({"type": "click", "id": a["id"], "label": labels[a["id"]], "note": note})
-    return {"thinking": str(plan.get("thinking", ""))[:200], "say": str(plan.get("say", ""))[:500], "ask_copilot": bool(plan.get("ask_copilot")), "actions": out[:4]}
+    return {"thinking": str(plan.get("thinking", ""))[:200], "say": str(plan.get("say", ""))[:500], "ask_copilot": bool(plan.get("ask_copilot")), "actions": out[:8]}
 
 
 async def _uid(b: Act, authorization: str | None = Header(default=None)) -> str:
@@ -99,13 +116,14 @@ def _user_data(user_id: str) -> str:
 def act(b: Act, user_id: str = Depends(_uid)) -> dict:
     _limit.check("voice")
     from app.copilot import nvidia
+    system = _SYSTEM.replace("{today}", date.today().isoformat())
     user = (
         f"Reply language: {LANG[b.lang]}\nCurrent page: {b.path}\nPages you can open: {PAGES}\n"
-        f"SCREEN title: {b.screen.title}\nheadings: {b.screen.headings}\ncontrols: {[c.model_dump() for c in b.screen.controls]}\nvisible text:\n{b.screen.text}\n\n"
+        f"SCREEN title: {b.screen.title}\nheadings: {b.screen.headings}\ncontrols: {[c.model_dump() for c in b.screen.controls]}\nform fields: {[f.model_dump() for f in b.screen.fields]}\nvisible text:\n{b.screen.text}\n\n"
         f"USER DATA: {_user_data(user_id)}\n"
         f"Recent conversation: {b.history}\nUser said: {b.text}"
     )
     try:
-        return _clean(nvidia.complete_json(_SYSTEM, user), b.screen)
+        return _clean(nvidia.complete_json(system, user), b.screen)
     except Exception:  # noqa: BLE001 - model busy: the browser falls back to the Copilot
         return {"say": "", "ask_copilot": True, "actions": [], "thinking": ""}
