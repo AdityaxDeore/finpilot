@@ -20,6 +20,7 @@ import { Input } from "@/components/shadcn/input";
 import { FinPilotLogo } from "@/components/FinPilotLogo";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { useT } from "@/lib/i18n";
+import { startDemo } from "@/lib/user";
 
 function GoogleIcon() {
   return (
@@ -262,8 +263,20 @@ export default function LoginPage() {
                 </div>
 
                 {error && (
-                  <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
-                    {error}
+                  <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700 space-y-2">
+                    <div>{error}</div>
+                    {error.includes("authorized") && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          startDemo();
+                          router.push("/dashboard");
+                        }}
+                        className="inline-block font-semibold text-rose-900 underline hover:text-black cursor-pointer text-[11px]"
+                      >
+                        ⚡ Click here to continue in Demo Mode without signing in →
+                      </button>
+                    )}
                   </div>
                 )}
                 {success && (
@@ -282,17 +295,32 @@ export default function LoginPage() {
                 <span className="absolute bg-white px-2.5 text-xs text-pewter">{t("login.or")}</span>
               </div>
 
-              <Button
-                type="button"
-                variant="outline"
-                size="lg"
-                className="w-full gap-2.5"
-                onClick={handleGoogleSignIn}
-                disabled={loading}
-              >
-                <GoogleIcon />
-                {t("login.google")}
-              </Button>
+              <div className="space-y-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="w-full gap-2.5"
+                  onClick={handleGoogleSignIn}
+                  disabled={loading}
+                >
+                  <GoogleIcon />
+                  {t("login.google")}
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="lg"
+                  className="w-full border border-mist bg-fog hover:bg-mist/30 text-ink text-xs font-medium transition"
+                  onClick={() => {
+                    startDemo();
+                    router.push("/dashboard");
+                  }}
+                >
+                  ⚡ Explore Demo App (No Sign-In Required)
+                </Button>
+              </div>
             </>
           )}
         </div>

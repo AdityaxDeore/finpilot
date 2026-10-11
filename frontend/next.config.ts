@@ -9,6 +9,16 @@ const nextConfig: NextConfig = {
   // warning, which can otherwise be mistaken for a real hydration bug.
   allowedDevOrigins: ["127.0.0.1", "localhost"],
   devIndicators: false, // hides the dev-mode "N" badge that overlaps the phone pay app
+  async rewrites() {
+    const backendUrl = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL;
+    if (!backendUrl) return [];
+    return [
+      {
+        source: "/api/:path*",
+        destination: `${backendUrl}/api/:path*`,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
