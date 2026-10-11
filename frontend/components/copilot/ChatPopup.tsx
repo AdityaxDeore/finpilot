@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { Maximize2, MessageCircle, Mic, RotateCcw, Sparkles, Square, X } from "lucide-react";
+import { Check, Loader2, Maximize2, MessageCircle, Mic, RotateCcw, Sparkles, Square, X } from "lucide-react";
 import { PromptInputBox } from "@/components/copilot/PromptInputBox";
 import { hostOf } from "@/components/copilot/AnswerView";
 import { api } from "@/lib/api";
@@ -55,10 +55,44 @@ export function ChatPopup() {
 
   const say = (status: string) => setCaption(status);
 
-  const voice = useVoiceInput((text) => {
-    setCaption(`Heard: "${text}"`);
-    void send(text, true);
-  }, (problem) => setCaption(problem));
+  // the voice panel by the mic: what you said (live), then every step the assistant takes
+  type Step = { text: string; done: boolean };
+  const [log, setLog] = useState<{ heard: string; live: boolean; steps: Step[]; answer: string; over: boolean } | null>(null);
+  const patch = (p: Partial<NonNullable<typeof log>>) => setLog((l) => (l ? { ...l, ...p } : l));
+  const addStep = (text: string, done = false) => setLog((l) => (l ? { ...l, steps: [...l.steps, { text, done }] } : l));
+  /** marks the last unfinished step done (and relabels it), or adds a finished one */
+  const doneStep = (text: string) =>
+    setLog((l) => {
+      if (!l) return l;
+      const i = l.steps.findLastIndex((s) => !s.done);
+      const steps = i < 0 ? [...l.steps, { text, done: true }] : l.steps.map((s, k) => (k === i ? { text, done: true } : s));
+      return { ...l, steps };
+    });
+
+  const voice = useVoiceInput(
+    (text) => {
+      patch({ heard: text, live: false });
+      void send(text, true);
+    },
+    (problem) => {
+      setLog(null);
+      setCaption(problem);
+    },
+    (live) => setLog((l) => ({ heard: live, live: true, steps: l?.steps ?? [], answer: "", over: false })),
+  );
+
+  const startVoice = () => {
+    stopSpeaking();
+    setLog({ heard: "", live: true, steps: [], answer: "", over: false });
+    voice.start();
+  };
+
+  // the panel fades 25 s after the assistant finishes
+  useEffect(() => {
+    if (!log?.over) return;
+    const t = setTimeout(() => setLog(null), 25000);
+    return () => clearTimeout(t);
+  }, [log?.over]);
 
   // the spoken answer also shows as a short caption by the mic, then fades
   useEffect(() => {
@@ -72,7 +106,7 @@ export function ChatPopup() {
       onOpenAssistant(() => {
         setOpen(true);
         stopSpeaking();
-        if (voice.supported && !voice.listening) voice.start();
+        if (voice.supported && !voice.listening) startVoice();
       }),
     [voice],
   );
@@ -119,30 +153,45 @@ export function ChatPopup() {
     let voiced = false;
     try {
       if (spoken) {
-        // spoken questions go to the voice agent first: it sees the screen, answers like a person and can open, scroll and click
+        // spoken questions go to the voice agent first: it sees the screen, thinks out loud, answers like a person and can open, scroll and click
+        setLog((l) => ({ heard: message, live: false, steps: [], answer: "", over: false, ...l }));
+        addStep("Reading what is on your screen…");
         const plan = await api.voiceAct(message, pathname, getLang(), snapshotScreen(), history.map((h) => `${h.role}: ${h.content}`.slice(0, 200)).slice(-4)).catch(() => null);
-        if (plan?.say) {
-          speak(plan.say);
-          setCaption(plan.say);
-        }
-        if (plan?.actions.length) {
-          const moved = plan.actions.some((x) => x.type === "navigate");
-          void runActions(plan.actions, (p) => router.push(p)).then(async () => {
-            if (!moved) return; // new screen: look at it and finish answering the original question
-            const next = await api.voiceAct(`${message} (I have just opened the new screen for you; now answer from what is on it, no more actions)`, location.pathname, getLang(), snapshotScreen(), []).catch(() => null);
-            if (next?.say) {
-              speak(next.say);
-              setCaption(next.say);
-              setMsgs((m) => [...m, { role: "assistant", text: next.say }]);
+        if (!plan) {
+          doneStep("The assistant is busy, using the normal chat instead");
+        } else {
+          doneStep(plan.thinking ? `Thinking: ${plan.thinking}` : "Understood");
+          if (plan.say) {
+            speak(plan.say);
+            patch({ answer: plan.say });
+          }
+          if (plan.actions.length) {
+            await new Promise((r) => setTimeout(r, 1400)); // think first, then act
+            await runActions(plan.actions, (p) => router.push(p), (text, done) => (done ? doneStep(text) : addStep(text)));
+            if (plan.actions.some((x) => x.type === "navigate")) {
+              addStep("Reading the new screen…");
+              const next = await api.voiceAct(`${message} (I have just opened the new screen for you; now answer from what is on it, no more actions)`, location.pathname, getLang(), snapshotScreen(), []).catch(() => null);
+              doneStep("Done");
+              if (next?.say) {
+                speak(next.say);
+                patch({ answer: next.say });
+                setMsgs((m) => [...m, { role: "assistant", text: next.say }]);
+              }
             }
-          });
+          }
+          if (!plan.ask_copilot && plan.say) {
+            reply = { role: "assistant", text: plan.say };
+            voiced = true;
+          }
+          if (plan.ask_copilot) addStep("Checking your data…");
         }
-        if (plan && !plan.ask_copilot && plan.say) {
-          reply = { role: "assistant", text: plan.say };
-          voiced = true;
-        }
+        patch({ over: !plan?.ask_copilot });
       }
       reply ??= await answer(message, history);
+      if (spoken && !voiced) {
+        doneStep("Done");
+        patch({ answer: reply.text.replace(/\*\*/g, ""), over: true });
+      }
     } catch {
       reply = { role: "assistant", text: "Sorry, I couldn't answer right now. Please try again in a minute." };
     }
@@ -252,7 +301,7 @@ export function ChatPopup() {
                       onClick={() => {
                         if (voice.listening) return voice.stop();
                         stopSpeaking();
-                        voice.start();
+                        startVoice();
                       }}
                       aria-label={voice.listening ? "Stop listening" : "Ask by voice"}
                       className={`flex items-center gap-1.5 rounded-full px-2 py-1 ${voice.listening ? "animate-pulse bg-lime text-ink" : "hover:bg-fog"}`}
@@ -267,6 +316,29 @@ export function ChatPopup() {
         )}
       </AnimatePresence>
 
+      {log && (
+        <div className="w-[min(340px,calc(100vw-2rem))] rounded-2xl bg-ink p-3.5 text-white shadow-xl">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-white/50">{log.live ? "Listening…" : "You said"}</span>
+            <button onClick={() => setLog(null)} aria-label="Close voice panel" className="text-white/50 hover:text-white"><X className="size-3.5" /></button>
+          </div>
+          <p className="mt-1 min-h-5 text-sm leading-snug">
+            {log.heard || <span className="text-white/40">Speak now, I will keep listening until you pause…</span>}
+            {log.live && <span className="ml-0.5 animate-pulse text-lime">|</span>}
+          </p>
+          {log.steps.length > 0 && (
+            <ul className="mt-2.5 space-y-1.5 border-t border-white/10 pt-2.5 text-xs">
+              {log.steps.map((st, i) => (
+                <li key={i} className={`flex items-start gap-2 ${st.done ? "text-white/80" : "text-lime"}`}>
+                  {st.done ? <Check className="mt-0.5 size-3 shrink-0 text-lime" /> : <Loader2 className="mt-0.5 size-3 shrink-0 animate-spin" />}
+                  <span>{st.text}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {log.answer && <p className="mt-2.5 border-t border-white/10 pt-2.5 text-sm leading-snug text-lime">{log.answer}</p>}
+        </div>
+      )}
       {caption && !open && (
         <p className="max-w-[min(300px,calc(100vw-6rem))] rounded-2xl bg-ink px-3.5 py-2 text-sm leading-snug text-white shadow-lg">{caption}</p>
       )}
@@ -276,7 +348,7 @@ export function ChatPopup() {
             if (!voice.supported) return setCaption("Voice input needs Chrome, Edge or Safari. Open FinPilot there to talk to it.");
             stopSpeaking();
             setCaption("");
-            voice.start();
+            startVoice();
           }}
           aria-label={voice.listening ? "Stop listening" : "Speak to FinPilot"}
           title={voice.listening ? "Listening… tap to stop" : "Speak to FinPilot"}

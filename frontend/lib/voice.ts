@@ -7,7 +7,8 @@ import { getLang, SPEECH_LANG } from "@/lib/i18n";
 interface Recognition {
   lang: string;
   interimResults: boolean;
-  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  continuous: boolean;
+  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }) => void) | null;
   onend: (() => void) | null;
   onerror: ((e: { error: string }) => void) | null;
   start: () => void;
@@ -28,16 +29,18 @@ const MIC_PROBLEMS: Record<string, string> = {
   "no-speech": "I did not hear anything. Tap the mic and try again.",
 };
 
-/** Push-to-talk: `start()` listens once and calls `onText` with what was said. */
-export function useVoiceInput(onText: (text: string) => void, onProblem?: (message: string) => void) {
+/** Push-to-talk: `start()` keeps listening until you pause for ~2 seconds (or tap stop), shows words live via `onLive`, then calls `onText` once with everything said. */
+export function useVoiceInput(onText: (text: string) => void, onProblem?: (message: string) => void, onLive?: (text: string) => void) {
   const supported = useSyncExternalStore(() => () => {}, () => recognitionCtor() !== null, () => false);
   const [listening, setListening] = useState(false);
   const rec = useRef<Recognition | null>(null);
   const cb = useRef(onText);
   const problem = useRef(onProblem);
+  const live = useRef(onLive);
   useEffect(() => {
     cb.current = onText;
     problem.current = onProblem;
+    live.current = onLive;
   });
 
   const start = useCallback(() => {
@@ -45,18 +48,26 @@ export function useVoiceInput(onText: (text: string) => void, onProblem?: (messa
     if (!Ctor) return;
     const r = new Ctor();
     r.lang = SPEECH_LANG[getLang()];
-    r.interimResults = false;
-    let heard = false;
+    r.interimResults = true;
+    r.continuous = true; // one sentence is not the whole request: keep listening through short pauses
+    let said = "";
+    let silence: ReturnType<typeof setTimeout> | undefined;
+    const quiet = () => {
+      clearTimeout(silence);
+      silence = setTimeout(() => r.stop(), 2200);
+    };
+    const hardStop = setTimeout(() => r.stop(), 40000);
     r.onresult = (e) => {
-      const text = e.results[0]?.[0]?.transcript?.trim();
-      if (text) {
-        heard = true;
-        cb.current(text);
-      }
+      said = Array.from(e.results, (x) => x[0].transcript).join(" ").replace(/\s+/g, " ").trim();
+      live.current?.(said);
+      quiet();
     };
     r.onend = () => {
+      clearTimeout(silence);
+      clearTimeout(hardStop);
       setListening(false);
-      if (!heard && !failed) problem.current?.("I did not hear anything. Tap the mic and try again.");
+      if (said) cb.current(said);
+      else if (!failed) problem.current?.("I did not hear anything. Tap the mic and try again.");
     };
     let failed = false;
     r.onerror = (e) => {
@@ -145,7 +156,7 @@ export async function scrollToSelector(path: string, selector: string, timeoutMs
 }
 
 /** Eased scroll driven by timers: native smooth scrolling is dropped by some browsers and background tabs. */
-function glideTo(y: number) {
+export function glideTo(y: number) {
   const from = window.scrollY;
   const to = Math.max(0, y);
   const start = Date.now();

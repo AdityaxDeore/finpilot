@@ -167,7 +167,7 @@ export const api = {
   translateTexts: (lang: string, texts: string[]) =>
     apiFetch<{ translations: Record<string, string> }>("/api/translate", { method: "POST", body: JSON.stringify({ lang, texts }) }),
   voiceAct: (text: string, path: string, lang: string, screen: unknown, history: string[]) =>
-    apiFetch<{ say: string; ask_copilot: boolean; actions: import("@/lib/voiceAgent").VoiceAction[] }>("/api/voice/act", { method: "POST", body: JSON.stringify({ text, path, lang, screen, history }) }),
+    apiFetch<{ thinking?: string; say: string; ask_copilot: boolean; actions: import("@/lib/voiceAgent").VoiceAction[] }>("/api/voice/act", { method: "POST", body: JSON.stringify({ text, path, lang, screen, history }) }),
   schemeAnalyst: (scheme: string, question: string) =>
     apiFetch<import("@/lib/types").SchemeAnalysis>("/api/web/scheme-analyst", { method: "POST", body: JSON.stringify({ scheme, question }) }),
   web: (kind: "search" | "extract" | "crawl" | "map", body: Record<string, string>) =>
