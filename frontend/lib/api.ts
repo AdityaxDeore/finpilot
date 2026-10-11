@@ -83,8 +83,13 @@ import { getOfflineOnly } from "./user";
 // the separate uvicorn server. NEXT_PUBLIC_API_URL overrides either.
 // Dev uses 127.0.0.1, not "localhost": uvicorn binds IPv4 only, and clients
 // that try IPv6 (::1) first wait ~2s per request before falling back.
+const configured = process.env.NEXT_PUBLIC_API_URL;
+const onLoopback = typeof window === "undefined" || /^(localhost|127\.0\.0\.1|\[::1\])$/.test(window.location.hostname);
+// A copied .env file can leave NEXT_PUBLIC_API_URL=http://127.0.0.1:8000 on the host: from a deployed site that is the visitor's own machine ("Failed to fetch"), so use the same origin instead.
 const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? (process.env.NODE_ENV === "production" ? "" : "http://127.0.0.1:8000");
+  configured && !onLoopback && /\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/.test(configured)
+    ? ""
+    : configured ?? (process.env.NODE_ENV === "production" ? "" : "http://127.0.0.1:8000");
 
 /** Attach the Firebase ID token whenever a user is signed in. Demo-only usage
  * (no signed-in session) omits the header, which the backend already allows
@@ -437,6 +442,9 @@ export const api = {
   payReviews: (userId: string, limit = 3, code?: string) => liveGet<PayReviewItem[]>(`/api/pay/${userId}/reviews?limit=${limit}`, code),
   payHistory: (userId: string, code?: string) =>
     liveGet<{ id: string; merchant: string; amount: number; date: string; category: string }[]>(`/api/pay/${userId}/history`, code),
+  payLimit: (userId: string) => liveGet<{ per_payment: number | null }>(`/api/pay/${userId}/limit`),
+  setPayLimit: (userId: string, per_payment: number | null) =>
+    apiFetch<{ per_payment: number | null }>(`/api/pay/${userId}/limit`, { method: "PUT", body: JSON.stringify({ per_payment }) }),
   payLive: (userId: string, code?: string) => liveGet<{ version: number }>(`/api/pay/${userId}/live`, code),
   setPayReviewStatus: (userId: string, id: string, status: "confirmed" | "reported") =>
     apiFetch<{ id: string; status: string }>(`/api/pay/${userId}/reviews/${id}/status`, { method: "POST", body: JSON.stringify({ status }) }),

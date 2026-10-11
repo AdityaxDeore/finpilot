@@ -129,7 +129,9 @@ export async function sendPhoneOtp(mobile: string, container: HTMLElement): Prom
   const a = await phoneAuth();
   // a verifier can't be reused after a failed or completed attempt
   recaptcha?.clear();
-  recaptcha = new RecaptchaVerifier(a, container, { size: "invisible" });
+  container.replaceChildren(); // a leftover widget in the same element makes reCAPTCHA throw "already been rendered"
+  const host = container.appendChild(document.createElement("div"));
+  recaptcha = new RecaptchaVerifier(a, host, { size: "invisible" });
   try {
     return await signInWithPhoneNumber(a, `+91${mobile}`, recaptcha);
   } catch (e) {
@@ -152,6 +154,19 @@ export async function signOut(): Promise<void> {
   await firebaseSignOut(auth);
   endDemo();
   setAuthUserId(null);
+  if (typeof window !== "undefined") {
+    try {
+      window.sessionStorage.clear();
+      for (let i = window.localStorage.length - 1; i >= 0; i--) {
+        const k = window.localStorage.key(i);
+        if (k && (k.startsWith("finpilot:benefits_session_closed:") || k.startsWith("finpilot:onboarding_closed:"))) {
+          window.localStorage.removeItem(k);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
 }
 
 /**

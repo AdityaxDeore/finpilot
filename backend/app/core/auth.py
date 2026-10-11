@@ -42,14 +42,16 @@ def verify_firebase_token(token: str) -> dict:
     """Verify a Firebase ID token's signature (Google's public certs), expiry,
     issuer and audience (= our project id). Never returns claims for an
     unverified token."""
-    try:
-        return google_id_token.verify_firebase_token(
-            token, google_requests.Request(), audience=get_settings().firebase_project_id
-        )
-    except google_exceptions.TransportError as exc:
-        raise HTTPException(503, f"Could not verify token (auth service unreachable): {exc}") from exc
-    except ValueError as exc:
-        raise HTTPException(401, f"Invalid or expired token: {exc}") from exc
+    for attempt in range(3):  # fetching Google's certs can hit a transient connection reset
+        try:
+            return google_id_token.verify_firebase_token(
+                token, google_requests.Request(), audience=get_settings().firebase_project_id
+            )
+        except google_exceptions.TransportError as exc:
+            if attempt == 2:
+                raise HTTPException(503, f"Could not verify token (auth service unreachable): {exc}") from exc
+        except ValueError as exc:
+            raise HTTPException(401, f"Invalid or expired token: {exc}") from exc
 
 
 verify_token = verify_firebase_token

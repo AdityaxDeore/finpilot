@@ -42,6 +42,7 @@ class TxnCategory(str, Enum):
     investment_sip = "investment_sip"
     credit_card_payment = "credit_card_payment"
     transfer = "transfer"
+    education = "education"
     fees_interest = "fees_interest"
     other = "other"
 

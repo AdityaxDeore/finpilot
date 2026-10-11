@@ -26,17 +26,29 @@ app.dependency_overrides[resolve_user_id] = lambda user_id: user_id
 client = TestClient(app)
 
 
-def test_persona_with_near_term_gap_produces_critical_cash_flow_gap_item():
-    # demo-meera is the deliberately "fragile" persona with a near-term
-    # forecast gap (see test_integration.py's persona ordering test).
-    r = client.get("/api/notifications/demo-meera")
+def test_fragile_user_with_near_term_gap_produces_critical_cash_flow_gap_item():
+    # the demo personas are all solvent; build a Meera-like user who is nearly out of cash
+    import copy
+
+    from app.ingest.personas import PERSONA_CONFIGS, generate_persona
+
+    cfg = copy.deepcopy(PERSONA_CONFIGS["demo-meera"])
+    cfg.user_id = "test-fragile-gap"
+    for spec in cfg.accounts:
+        if spec.key in ("checking", "savings"):
+            spec.balance = 500.0
+    for model in (TransactionRow, AccountRow):
+        store.delete_where(model, user_id=cfg.user_id)
+    data = generate_persona(cfg)
+    store.put(*data.accounts, *data.transactions)
+
+    r = client.get(f"/api/notifications/{cfg.user_id}")
     assert r.status_code == 200
     items = r.json()
     gap_items = [i for i in items if i["type"] == "cash_flow_gap"]
-    assert gap_items, f"expected a cash_flow_gap item for demo-meera, got: {items}"
+    assert gap_items, f"expected a cash_flow_gap item, got: {items}"
     assert gap_items[0]["severity"] == "critical"
-    # critical items sort first
-    assert items[0]["severity"] == "critical"
+    assert items[0]["severity"] == "critical"  # critical items sort first
 
 
 def test_persona_with_recurring_obligations_due_this_week_produces_upcoming_bill_items():

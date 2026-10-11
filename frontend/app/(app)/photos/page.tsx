@@ -27,6 +27,9 @@ export default function PhotosPage() {
   const [confirmPrice, setConfirmPrice] = useState("");
   const [confirmName, setConfirmName] = useState("");
 
+  const [quickName, setQuickName] = useState("");
+  const [quickPrice, setQuickPrice] = useState("");
+
   const [teachFile, setTeachFile] = useState<File | null>(null);
   const [teachName, setTeachName] = useState("");
   const [teachPrice, setTeachPrice] = useState("");
@@ -99,6 +102,15 @@ export default function PhotosPage() {
     if (out) setResult({ added: true, id: out.id, item: out.item, amount: out.amount, category: out.category });
   }
 
+  async function quickAdd(e: React.FormEvent) {
+    e.preventDefault();
+    const out = await run(() => api.addExpense(userId, quickName, Number(quickPrice)));
+    if (!out) return;
+    setResult({ added: true, id: out.id, item: out.item, amount: out.amount, category: out.category });
+    setQuickName("");
+    setQuickPrice("");
+  }
+
   async function teach(e: React.FormEvent) {
     e.preventDefault();
     if (!teachFile) return;
@@ -118,6 +130,18 @@ export default function PhotosPage() {
         <h1 className="font-display text-3xl font-medium text-ink">Photo prices</h1>
         <p className="mt-1 text-sm text-graphite">Teach FinPilot a photo and its price once. After that, a photo of it is all you need to add the expense.</p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Add an expense</CardTitle>
+        </CardHeader>
+        <form onSubmit={quickAdd} className="flex flex-col gap-3 p-5 pt-0">
+          <input className={field} value={quickName} onChange={(e) => setQuickName(e.target.value)} aria-label="Item" placeholder="What did you buy? e.g. tea" required />
+          <input className={field} value={quickPrice} onChange={(e) => setQuickPrice(e.target.value)} aria-label="Amount (₹)" placeholder="Amount (₹), e.g. 15" inputMode="decimal" required />
+          <Button type="submit" variant="primary" disabled={busy || !quickName.trim() || !(Number(quickPrice) > 0)}>Add expense</Button>
+          <p className="text-xs text-graphite">No photo needed. It is saved as today&apos;s cash expense and shows in your transactions.</p>
+        </form>
+      </Card>
 
       <Card>
         <CardHeader>

@@ -17,6 +17,7 @@ import {
   CreditCard,
   Download,
   Film,
+  GraduationCap,
   HeartPulse,
   Home,
   Percent,
@@ -81,6 +82,7 @@ export const CATEGORY_CONFIG: Record<
   investment_sip: { label: "Investment & SIP", icon: TrendingUp, tone: "success" },
   credit_card_payment: { label: "Credit Card", icon: CreditCard, tone: "neutral" },
   transfer: { label: "Transfer", icon: ArrowLeftRight, tone: "neutral" },
+  education: { label: "Education", icon: GraduationCap, tone: "info" },
   fees_interest: { label: "Fees & Interest", icon: Percent, tone: "warning" },
   other: { label: "Other", icon: HelpCircle, tone: "neutral" },
 };

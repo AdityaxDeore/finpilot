@@ -50,3 +50,11 @@ def test_put_writes_through_and_only_invalidates_its_own_table(monkeypatch):
     finally:
         monkeypatch.undo()
         store.delete_where(GoalRow, user_id=uid)
+
+
+def test_live_version_changes_on_write_without_firestore():
+    from app.models import AccountRow
+
+    before = store.live_version("live-user")
+    store.put(AccountRow(id="live-acc", user_id="live-user", name="x", type="checking", balance=1.0))
+    assert store.live_version("live-user") != before

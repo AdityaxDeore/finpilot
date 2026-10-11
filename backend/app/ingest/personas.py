@@ -125,133 +125,139 @@ class PersonaData:
 
 
 def _priya_config() -> PersonaConfig:
+    # Salaried software engineer, Bengaluru: saves ~10k SIP + ~11k free cash a month; assets comfortably exceed debt.
     return PersonaConfig(
         user_id="demo-priya",
         display_name="Priya",
         city="Bengaluru",
-        salary=95_000,
+        salary=100_000,
         salary_day=1,
         seed=163,
         accounts=[
-            AccountSpec("checking", "Priya Checking - HDFC", "checking", balance=42_000),
-            AccountSpec("savings", "Priya Savings - HDFC", "savings", balance=180_000),
-            AccountSpec("credit_card", "Priya Credit Card - HDFC Regalia", "credit_card", balance=-62_000, credit_limit=150_000, interest_rate_apr=42.0),
-            AccountSpec("car_loan", "Priya Car Loan - HDFC Auto", "loan", balance=-380_000, interest_rate_apr=9.5),
-            AccountSpec("invest", "Priya Zerodha Coin", "investment", balance=64_000),
+            AccountSpec("checking", "Priya Checking - HDFC", "checking", balance=85_000),
+            AccountSpec("savings", "Priya Savings - HDFC", "savings", balance=320_000),
+            AccountSpec("credit_card", "Priya Credit Card - HDFC Regalia", "credit_card", balance=-18_500, credit_limit=150_000, interest_rate_apr=42.0),
+            AccountSpec("car_loan", "Priya Car Loan - HDFC Auto", "loan", balance=-300_000, interest_rate_apr=9.5),
+            AccountSpec("invest", "Priya Zerodha Coin", "investment", balance=450_000),
         ],
         recurring=[
-            RecurringItem("Employer Payroll", TxnCategory.income, 95_000, 1, "checking", "Monthly salary credit"),
-            RecurringItem("Prestige Lakeview Apts", TxnCategory.rent_housing, -28_000, 5, "checking"),
-            RecurringItem("HDFC Auto Loan EMI", TxnCategory.emi_loan, -14_500, 10, "checking"),
+            RecurringItem("Employer Payroll", TxnCategory.income, 100_000, 1, "checking", "Monthly salary credit"),
+            RecurringItem("Prestige Lakeview Apts", TxnCategory.rent_housing, -30_000, 5, "checking"),
+            RecurringItem("HDFC Auto Loan EMI", TxnCategory.emi_loan, -12_500, 10, "checking"),
+            RecurringItem("BESCOM Electricity Bill", TxnCategory.utilities, -1_800, 12, "checking"),
             RecurringItem("Netflix", TxnCategory.subscriptions, -649, 14, "credit_card"),
             RecurringItem("Spotify", TxnCategory.subscriptions, -119, 16, "credit_card"),
             RecurringItem("Amazon Prime Video", TxnCategory.subscriptions, -299, 18, "credit_card"),
             RecurringItem("JioFiber Broadband", TxnCategory.subscriptions, -999, 8, "checking"),
             RecurringItem("Cult.fit Membership", TxnCategory.subscriptions, -1499, 20, "credit_card"),
             RecurringItem("Airtel Postpaid Recharge", TxnCategory.subscriptions, -599, 22, "checking"),
-            RecurringItem("Zerodha Coin SIP", TxnCategory.investment_sip, -5000, 3, "checking"),
-            RecurringItem("HDFC Credit Card Bill Payment", TxnCategory.credit_card_payment, -8000, 18, "checking"),
+            RecurringItem("Zerodha Coin SIP", TxnCategory.investment_sip, -10_000, 3, "checking"),
+            RecurringItem("HDFC Credit Card Bill Payment", TxnCategory.credit_card_payment, -15_000, 18, "checking"),
         ],
         debts=[
-            DebtSpec("car_loan", principal=380_000, interest_rate_apr=9.5, minimum_payment=14_500, due_day_of_month=10),
-            DebtSpec("credit_card", principal=62_000, interest_rate_apr=42.0, minimum_payment=3_100, due_day_of_month=18),
+            DebtSpec("car_loan", principal=300_000, interest_rate_apr=9.5, minimum_payment=12_500, due_day_of_month=10),
+            DebtSpec("credit_card", principal=18_500, interest_rate_apr=42.0, minimum_payment=925, due_day_of_month=18),
         ],
         daily_spend=[
-            SpendCategorySpec(TxnCategory.groceries, ["BigBasket", "DMart", "Zepto"], (4, 7), (400, 2200)),
-            SpendCategorySpec(TxnCategory.dining, ["Swiggy", "Zomato", "Starbucks", "Third Wave Coffee"], (10, 18), (150, 1200), account_key="credit_card"),
-            SpendCategorySpec(TxnCategory.transport, ["Uber", "Ola", "Indian Oil Petrol Pump"], (8, 14), (120, 900)),
-            SpendCategorySpec(TxnCategory.shopping, ["Amazon.in", "Myntra", "Nykaa"], (2, 5), (500, 4500), account_key="credit_card"),
+            SpendCategorySpec(TxnCategory.groceries, ["BigBasket", "DMart", "Zepto"], (5, 7), (600, 2800)),
+            SpendCategorySpec(TxnCategory.dining, ["Swiggy", "Zomato", "Starbucks", "Third Wave Coffee"], (6, 8), (250, 1400), account_key="credit_card"),
+            SpendCategorySpec(TxnCategory.transport, ["Uber", "Ola", "Indian Oil Petrol Pump"], (6, 9), (150, 1500)),
+            SpendCategorySpec(TxnCategory.shopping, ["Amazon.in", "Myntra", "Nykaa"], (2, 4), (500, 4500), account_key="credit_card"),
             SpendCategorySpec(TxnCategory.entertainment, ["PVR Cinemas", "BookMyShow"], (1, 3), (300, 1200), account_key="credit_card"),
             SpendCategorySpec(TxnCategory.healthcare, ["Apollo Pharmacy", "PharmEasy"], (1, 2), (200, 1500)),
         ],
         anomalies=[
-            AnomalySpec(months_ago=5, merchant="Croma Electronics", category=TxnCategory.shopping, amount=-58_000, account_key="credit_card", description="One-time laptop purchase"),
-            AnomalySpec(months_ago=6, merchant="Goibibo Flight Booking", category=TxnCategory.transport, amount=-22_500, account_key="credit_card", description="One-off vacation flight"),
+            AnomalySpec(months_ago=5, merchant="Croma Electronics", category=TxnCategory.shopping, amount=-42_000, account_key="credit_card", description="One-time laptop purchase"),
+            AnomalySpec(months_ago=7, merchant="Goibibo Flight Booking", category=TxnCategory.transport, amount=-18_500, account_key="credit_card", description="Vacation flight"),
         ],
     )
 
 
 def _arjun_config() -> PersonaConfig:
+    # Senior manager, Mumbai, two children: the home loan is well covered by savings and investments.
     return PersonaConfig(
         user_id="demo-arjun",
         display_name="Arjun",
         city="Mumbai",
-        salary=160_000,
+        salary=180_000,
         salary_day=1,
         seed=210,
         accounts=[
-            AccountSpec("checking", "Arjun Checking - ICICI", "checking", balance=210_000),
-            AccountSpec("savings", "Arjun Savings - ICICI", "savings", balance=950_000),
-            AccountSpec("credit_card", "Arjun Credit Card - ICICI Amazon Pay", "credit_card", balance=-18_000, credit_limit=300_000, interest_rate_apr=39.0),
-            AccountSpec("home_loan", "Arjun Home Loan - ICICI", "loan", balance=-4_200_000, interest_rate_apr=8.6),
-            AccountSpec("invest", "Arjun Groww Mutual Funds", "investment", balance=610_000),
+            AccountSpec("checking", "Arjun Checking - ICICI", "checking", balance=320_000),
+            AccountSpec("savings", "Arjun Savings - ICICI", "savings", balance=1_100_000),
+            AccountSpec("credit_card", "Arjun Credit Card - ICICI Amazon Pay", "credit_card", balance=-22_000, credit_limit=300_000, interest_rate_apr=39.0),
+            AccountSpec("home_loan", "Arjun Home Loan - ICICI", "loan", balance=-2_200_000, interest_rate_apr=8.6),
+            AccountSpec("invest", "Arjun Groww Mutual Funds", "investment", balance=2_000_000),
         ],
         recurring=[
-            RecurringItem("Employer Payroll", TxnCategory.income, 160_000, 1, "checking", "Monthly salary credit"),
-            RecurringItem("ICICI Home Loan EMI", TxnCategory.emi_loan, -42_000, 5, "checking"),
-            RecurringItem("Greenwood High School Fees", TxnCategory.other, -18_000, 7, "checking", "Recurring school fees - child 1"),
-            RecurringItem("Podar International School Fees", TxnCategory.other, -14_000, 7, "checking", "Recurring school fees - child 2"),
+            RecurringItem("Employer Payroll", TxnCategory.income, 180_000, 1, "checking", "Monthly salary credit"),
+            RecurringItem("ICICI Home Loan EMI", TxnCategory.emi_loan, -28_000, 5, "checking"),
+            RecurringItem("Society Maintenance", TxnCategory.rent_housing, -5_500, 4, "checking"),
+            RecurringItem("Greenwood High School Fees", TxnCategory.education, -18_000, 7, "checking", "Recurring school fees - child 1"),
+            RecurringItem("Podar International School Fees", TxnCategory.education, -14_000, 7, "checking", "Recurring school fees - child 2"),
             RecurringItem("Netflix", TxnCategory.subscriptions, -649, 12, "credit_card"),
-            RecurringItem("Amazon Prime", TxnCategory.subscriptions, -1499, 15, "credit_card"),
+            RecurringItem("Amazon Prime", TxnCategory.subscriptions, -299, 15, "credit_card"),
             RecurringItem("Hotstar Premium", TxnCategory.subscriptions, -299, 17, "credit_card"),
             RecurringItem("Tata Power Electricity Bill", TxnCategory.utilities, -4200, 9, "checking"),
             RecurringItem("Piped Gas Bill", TxnCategory.utilities, -1400, 11, "checking"),
-            RecurringItem("Groww Mutual Fund SIP", TxnCategory.investment_sip, -25_000, 3, "checking"),
-            RecurringItem("ICICI Credit Card Bill Payment", TxnCategory.credit_card_payment, -18_000, 20, "checking"),
+            RecurringItem("Groww Mutual Fund SIP", TxnCategory.investment_sip, -20_000, 3, "checking"),
+            RecurringItem("ICICI Credit Card Bill Payment", TxnCategory.credit_card_payment, -22_000, 20, "checking"),
         ],
         debts=[
-            DebtSpec("home_loan", principal=4_200_000, interest_rate_apr=8.6, minimum_payment=42_000, due_day_of_month=5),
+            DebtSpec("home_loan", principal=2_200_000, interest_rate_apr=8.6, minimum_payment=28_000, due_day_of_month=5),
         ],
         daily_spend=[
-            SpendCategorySpec(TxnCategory.groceries, ["DMart", "Nature's Basket", "BigBasket"], (5, 8), (600, 3000)),
-            SpendCategorySpec(TxnCategory.dining, ["Zomato", "Barbeque Nation", "Cafe Coffee Day"], (5, 9), (300, 2500), account_key="credit_card"),
-            SpendCategorySpec(TxnCategory.transport, ["Uber", "Indian Oil Petrol Pump", "Mumbai Metro"], (8, 12), (100, 1500)),
-            SpendCategorySpec(TxnCategory.shopping, ["Amazon.in", "Reliance Digital", "Decathlon"], (2, 4), (800, 6000), account_key="credit_card"),
-            SpendCategorySpec(TxnCategory.entertainment, ["PVR Cinemas", "BookMyShow"], (1, 2), (500, 1800), account_key="credit_card"),
-            SpendCategorySpec(TxnCategory.healthcare, ["Apollo Pharmacy", "Practo"], (1, 3), (300, 2500)),
+            SpendCategorySpec(TxnCategory.groceries, ["DMart", "Nature's Basket", "BigBasket"], (5, 7), (1000, 4600)),
+            SpendCategorySpec(TxnCategory.dining, ["Zomato", "Barbeque Nation", "Cafe Coffee Day"], (6, 9), (400, 1800), account_key="credit_card"),
+            SpendCategorySpec(TxnCategory.transport, ["Uber", "Indian Oil Petrol Pump", "Mumbai Metro"], (6, 9), (250, 1800)),
+            SpendCategorySpec(TxnCategory.shopping, ["Amazon.in", "Reliance Digital", "Decathlon"], (3, 5), (800, 5000), account_key="credit_card"),
+            SpendCategorySpec(TxnCategory.entertainment, ["PVR Cinemas", "BookMyShow"], (2, 3), (500, 2000), account_key="credit_card"),
+            SpendCategorySpec(TxnCategory.healthcare, ["Apollo Pharmacy", "Practo"], (1, 2), (500, 4500)),
         ],
         anomalies=[
-            AnomalySpec(months_ago=5, merchant="Taj Hotels Booking", category=TxnCategory.entertainment, amount=-45_000, account_key="credit_card", description="One-off family vacation"),
+            AnomalySpec(months_ago=5, merchant="Taj Hotels Booking", category=TxnCategory.entertainment, amount=-45_000, account_key="credit_card", description="Family vacation"),
         ],
     )
 
 
 def _meera_config() -> PersonaConfig:
+    # Freelance designer, Pune: income swings month to month, but small savings cushion.
     return PersonaConfig(
         user_id="demo-meera",
         display_name="Meera",
         city="Pune",
-        salary=42_000,
+        salary=52_000,
         salary_day=1,
         seed=305,
         accounts=[
-            AccountSpec("checking", "Meera Checking - Kotak", "checking", balance=3_200),
-            AccountSpec("savings", "Meera Savings - Kotak", "savings", balance=6_500),
-            AccountSpec("credit_card", "Meera Credit Card - Kotak", "credit_card", balance=-24_000, credit_limit=40_000, interest_rate_apr=45.0),
-            AccountSpec("student_loan", "Meera Student Loan - SBI", "loan", balance=-260_000, interest_rate_apr=10.5),
+            AccountSpec("checking", "Meera Checking - Kotak", "checking", balance=14_000),
+            AccountSpec("savings", "Meera Savings - Kotak", "savings", balance=55_000),
+            AccountSpec("credit_card", "Meera Credit Card - Kotak", "credit_card", balance=-9_000, credit_limit=60_000, interest_rate_apr=45.0),
+            AccountSpec("student_loan", "Meera Student Loan - SBI", "loan", balance=-90_000, interest_rate_apr=10.5),
+            AccountSpec("invest", "Meera Groww SIP", "investment", balance=60_000),
         ],
         recurring=[
-            RecurringItem("Employer Payroll", TxnCategory.income, 42_000, 1, "checking", "Monthly salary credit"),
+            RecurringItem("Employer Payroll", TxnCategory.income, 52_000, 1, "checking", "Monthly freelance and retainer income"),
             RecurringItem("Shared PG Rent", TxnCategory.rent_housing, -12_000, 3, "checking"),
-            RecurringItem("SBI Student Loan EMI", TxnCategory.emi_loan, -6_800, 7, "checking"),
+            RecurringItem("SBI Student Loan EMI", TxnCategory.emi_loan, -4_800, 7, "checking"),
+            RecurringItem("Groww Mutual Fund SIP", TxnCategory.investment_sip, -3_000, 5, "checking"),
             RecurringItem("Netflix", TxnCategory.subscriptions, -649, 12, "credit_card"),
             RecurringItem("Spotify", TxnCategory.subscriptions, -119, 14, "credit_card"),
             RecurringItem("Airtel Postpaid Recharge", TxnCategory.subscriptions, -499, 19, "checking"),
-            RecurringItem("Kotak Credit Card Bill Payment", TxnCategory.credit_card_payment, -2500, 22, "checking"),
+            RecurringItem("Kotak Credit Card Bill Payment", TxnCategory.credit_card_payment, -8_000, 22, "checking"),
         ],
         debts=[
-            DebtSpec("student_loan", principal=260_000, interest_rate_apr=10.5, minimum_payment=6_800, due_day_of_month=7),
+            DebtSpec("student_loan", principal=90_000, interest_rate_apr=10.5, minimum_payment=4_800, due_day_of_month=7),
         ],
         daily_spend=[
-            SpendCategorySpec(TxnCategory.groceries, ["Zepto", "Blinkit", "DMart"], (2, 4), (200, 900)),
-            SpendCategorySpec(TxnCategory.dining, ["Swiggy", "Zomato", "Starbucks", "Domino's Pizza"], (14, 22), (150, 900), account_key="credit_card"),
-            SpendCategorySpec(TxnCategory.transport, ["Uber", "Ola", "Rapido"], (10, 16), (80, 500)),
-            SpendCategorySpec(TxnCategory.shopping, ["Myntra", "Meesho", "Ajio", "Amazon.in"], (4, 8), (400, 3500), account_key="credit_card"),
-            SpendCategorySpec(TxnCategory.entertainment, ["PVR Cinemas", "BookMyShow"], (2, 4), (250, 900), account_key="credit_card"),
+            SpendCategorySpec(TxnCategory.groceries, ["Zepto", "Blinkit", "DMart"], (4, 6), (350, 1300)),
+            SpendCategorySpec(TxnCategory.dining, ["Swiggy", "Zomato", "Starbucks", "Domino's Pizza"], (7, 10), (200, 900), account_key="credit_card"),
+            SpendCategorySpec(TxnCategory.transport, ["Uber", "Ola", "Rapido"], (8, 12), (100, 600)),
+            SpendCategorySpec(TxnCategory.shopping, ["Myntra", "Meesho", "Ajio", "Amazon.in"], (2, 4), (400, 3000), account_key="credit_card"),
+            SpendCategorySpec(TxnCategory.entertainment, ["PVR Cinemas", "BookMyShow"], (1, 3), (250, 900), account_key="credit_card"),
         ],
         anomalies=[
-            AnomalySpec(months_ago=1, merchant="ATM Cash Withdrawal - Overdraft Fee", category=TxnCategory.fees_interest, amount=-590, account_key="checking", description="Overdraft fee after low balance"),
-            AnomalySpec(months_ago=5, merchant="Apple Store Online", category=TxnCategory.shopping, amount=-32_000, account_key="credit_card", description="One-off impulse electronics purchase"),
+            AnomalySpec(months_ago=5, merchant="Reliance Digital", category=TxnCategory.shopping, amount=-9_000, account_key="credit_card", description="Headphones"),
         ],
     )
 
@@ -363,7 +369,7 @@ FAMILY_CONFIGS: dict[str, PersonaConfig] = {
 PLAN_PROFILES: dict[str, dict[str, float | int]] = {
     "demo-priya": {"reserve": 40_000, "goal_amount": 60_000, "goal_month": 6},
     "demo-arjun": {"reserve": 300_000, "goal_amount": 400_000, "goal_month": 6},
-    "demo-meera": {"reserve": 5_000, "goal_amount": 30_000, "goal_month": 6},
+    "demo-meera": {"reserve": 60_000, "goal_amount": 200_000, "goal_month": 6},
 }
 
 
@@ -384,11 +390,11 @@ def _safe_day(anchor: date, day_of_month: int) -> date:
 
 # Per-persona lifestyle creep (monthly growth) on discretionary categories.
 _CREEP: dict[str, tuple[float, set[str]]] = {
-    "demo-priya": (1.045, {"dining", "shopping", "entertainment"}),
-    "demo-arjun": (1.03, {"groceries", "dining", "shopping", "entertainment", "transport"}),
+    "demo-priya": (1.03, {"dining", "shopping", "entertainment"}),
+    "demo-arjun": (1.008, {"groceries", "dining", "shopping", "entertainment", "transport"}),
 }
-# Meera's freelance income by month index (oldest first): 3 strong, 2 dry, a late invoice, repeat.
-_MEERA_INCOME = [1.25, 1.3, 1.2, 0.05, 0.0, 0.9, 1.3, 1.2, 1.1, 0.05, 0.0, 1.0]
+# Meera's freelance income by month index (oldest first): 3 strong, 2 lean, a late invoice, repeat.
+_MEERA_INCOME = [1.15, 1.2, 1.1, 0.4, 0.3, 0.9, 1.2, 1.1, 1.05, 0.4, 0.3, 1.0]
 _FESTIVE = {"shopping", "entertainment", "dining"}
 
 
@@ -419,35 +425,14 @@ def _fishy_rows(user_id: str, acc: dict[str, AccountRow]) -> list[TransactionRow
         ))
 
     if user_id == "demo-priya":
+        add(12, -849.0, "Zomato", "dining", "duplicate")  # charged twice
         add(12, -849.0, "Zomato", "dining", "duplicate")
-        add(12, -849.0, "Zomato", "dining", "duplicate")
-        add(31, -420.0, "BookMyShow", "entertainment", "duplicate")
-        add(30, -420.0, "BookMyShow", "entertainment", "duplicate")
         add(20, -7499.0, "Amaz0n Pay Seller", "shopping", "lookalike")
-        for k in range(12):  # Hotstar price hike 199 -> 399 -> 649, tagged only on the hiked months
-            amt = (649, 399)[k] if k < 2 else 199
-            add(30 * k + 3, -float(amt), "Hotstar Sports Pass", "subscriptions", "price_hike" if k < 2 else "subscription", rec=True)
-        add(14, -185000.0, "Unknown Intl Wire", "other", "outlier", key="checking",
-            desc="INTL WIRE OUT 02:00 IST UNVERIFIED BENEFICIARY REF X9921")
-        for amt in (99, 149, 199, 299, 399, 499):  # card-testing burst
-            add(5, -float(amt), "PixelGift Store", "shopping", "burst")
     elif user_id == "demo-arjun":
-        for amt in (25000, 22000, 20500, 17500):  # ATM burst, 85k in one day
-            add(7, -float(amt), "ATM Cash Withdrawal", "fees_interest", "cash_burst", key="checking")
-        add(8, -899.0, "Zomat0", "dining", "lookalike")
-        add(18, -24750.0, "Gyftr Gift Card Store", "fees_interest", "gift_card")
-        add(80, -78430.0, "Star Health Insurance Premium", "fees_interest", "lump", key="checking")  # real, not fishy
-        out[-1].tags = json.dumps(["lump"])
+        add(8, -899.0, "Zomat0", "dining", "lookalike")  # the duplicate EMI debit is added in generate_persona
     elif user_id == "demo-meera":
-        add(25, 1899.0, "Myntra Refund", "shopping", "refund_orphan")
-        add(-3, -499.0, "Swiggy", "dining", "data_quality_future")
-        add(11, 0.0, "Zepto", "groceries", "data_quality_zero")
-        add(6, -350.0, "", "shopping", "data_quality_no_merchant")
-        add(22, -94000.0, "Croma Electronics", "shopping", "outlier")
-        add(40, 28500.0, "Freelance Invoice 1042 - Studio Pixel", "income", "duplicate_income", key="checking")
-        add(38, 28500.0, "Freelance Invoice 1042 - Studio Pixel", "income", "duplicate_income", key="checking")
+        add(16, -380.0, "Swiggy", "dining", "duplicate")  # charged twice
         add(16, -380.0, "Swiggy", "dining", "duplicate")
-        add(15, -380.0, "Swiggy", "dining", "duplicate")
     return out
 
 
@@ -561,7 +546,7 @@ def generate_persona(config: PersonaConfig) -> PersonaData:
     transactions.sort(key=lambda t: t.date)
 
     now = datetime.now(timezone.utc)
-    pending_cutoff = max(0, len(transactions) - 12)
+    pending_cutoff = max(0, len(transactions) - 4)
     for idx, txn in enumerate(transactions):
         cat = txn.category
         tags: list[str] = json.loads(txn.tags) if txn.tags else []  # injected rows keep their own tags
@@ -675,7 +660,7 @@ def generate_persona(config: PersonaConfig) -> PersonaData:
                 name="Emergency Fund",
                 target_amount=500_000,
                 target_date=_safe_day(anchors[-1] + relativedelta(months=8), 15),
-                current_amount=180_000,
+                current_amount=320_000,
                 cover_key="emergency_fund",
                 funding_account_id=accounts_by_key["savings"].id if "savings" in accounts_by_key else None,
                 auto_track=True,
@@ -708,7 +693,7 @@ def generate_persona(config: PersonaConfig) -> PersonaData:
                 name="Kids Higher Education",
                 target_amount=2_500_000,
                 target_date=_safe_day(anchors[-1] + relativedelta(months=36), 1),
-                current_amount=610_000,
+                current_amount=1_200_000,
                 cover_key="higher_education",
                 funding_account_id=accounts_by_key["invest"].id if "invest" in accounts_by_key else None,
                 auto_track=True,
@@ -729,9 +714,9 @@ def generate_persona(config: PersonaConfig) -> PersonaData:
             GoalRow(
                 user_id=config.user_id,
                 name="Pay Off Student Loan Early",
-                target_amount=260_000,
+                target_amount=90_000,
                 target_date=_safe_day(anchors[-1] + relativedelta(months=24), 1),
-                current_amount=45_000,
+                current_amount=30_000,
                 cover_key="emergency_fund",
                 funding_account_id=accounts_by_key["savings"].id if "savings" in accounts_by_key else None,
                 auto_track=True,

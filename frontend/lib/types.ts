@@ -22,6 +22,7 @@ export type TxnCategory =
   | "investment_sip"
   | "credit_card_payment"
   | "transfer"
+  | "education"
   | "fees_interest"
   | "other";
 
@@ -1054,7 +1055,6 @@ export interface PayResult {
   paid_at: string;
   balance: number;
   account: string;
-  review: PayReview;
 }
 
 export interface PayCheck { key: string; label: string; status: "pass" | "warn" | "fail" | "info"; detail: string }
@@ -1069,5 +1069,5 @@ export interface PayReview {
   checks: PayCheck[]; impact: PayImpact; insights: string[];
 }
 export interface PayReviewItem {
-  id: string; payee_name: string; amount: number; status: "open" | "confirmed" | "reported"; created_at: string; review: PayReview;
+  id: string; payee_name: string; amount: number; status: "open" | "confirmed" | "reported" | "blocked"; created_at: string; review: PayReview;
 }

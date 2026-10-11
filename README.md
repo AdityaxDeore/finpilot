@@ -307,7 +307,7 @@ python -m venv .venv
 # On macOS / Linux:
 # source .venv/bin/activate
 
-pip install -r requirements.txt
+pip install -r requirements-local.txt
 ```
 
 #### Environment Configuration (Optional for Demo Mode)

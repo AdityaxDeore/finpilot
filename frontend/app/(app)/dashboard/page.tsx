@@ -27,7 +27,6 @@ import { useAnalystMode, useSimpleMode } from "@/lib/simple";
 import { AnalystPanel } from "@/components/dashboard/AnalystPanel";
 import { useT } from "@/lib/i18n";
 import { RoleSpotlight } from "@/components/dashboard/RoleSpotlight";
-import { PaymentReviewCard } from "@/components/dashboard/PaymentReviewCard";
 import { PhonePairCard } from "@/components/dashboard/PhonePairCard";
 import { PromoCard } from "@/components/dashboard/PromoCard";
 import { CategoryDonut, IncomeVsSpend, SpendingShifts, TopMerchants } from "@/components/dashboard/SpendCharts";
@@ -192,7 +191,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <PaymentReviewCard />
       <PhonePairCard />
 
       {analyst && connected && <AnalystPanel data={data} spend={spend} />}

@@ -22,8 +22,7 @@ export function LiveSync() {
           window.dispatchEvent(new Event(DATA_CHANGED_EVENT));
           const top = (await api.payReviews(userId, 1).catch(() => []))[0];
           if (top && seen.current !== null && top.id !== seen.current) {
-            const verdict = top.review.verdict === "secure" ? "passed the security check" : "needs your review";
-            toast(`${top.review.heavy ? "Heavy payment" : "Payment"} of ₹${top.amount.toLocaleString("en-IN")} to ${top.payee_name} ${verdict}`);
+            if (top.status === "blocked") toast.error(`Payment of ₹${top.amount.toLocaleString("en-IN")} to ${top.payee_name} was blocked: ${top.review.headline}`);
           }
           if (top) seen.current = top.id;
         }

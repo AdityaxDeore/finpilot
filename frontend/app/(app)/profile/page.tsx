@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { useAsync, useUserId } from "@/lib/hooks";
 import { isDemoUserId } from "@/lib/user";
 import { ProfileForm } from "@/components/onboarding/ProfileForm";
+import { PaymentReviewCard } from "@/components/dashboard/PaymentReviewCard";
 
 export default function ProfilePage() {
   const userId = useUserId();
@@ -24,6 +25,7 @@ export default function ProfilePage() {
           <ProfileForm key={userId + (profile.data?.level ?? "new")} userId={userId} initial={profile.data} onDone={() => profile.reload()} />
         )}
       </div>
+      <PaymentReviewCard />
     </div>
   );
 }

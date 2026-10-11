@@ -16,6 +16,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import {
   AlertTriangle,
+  GraduationCap,
   Car,
   CheckCircle2,
   Cloud,
@@ -68,6 +69,7 @@ export const CATEGORY_ICONS: Record<
   investment_sip: { label: "Investment & SIP", icon: TrendingUp },
   credit_card_payment: { label: "Credit Card", icon: CreditCard },
   transfer: { label: "Transfer", icon: CreditCard },
+  education: { label: "Education", icon: GraduationCap },
   fees_interest: { label: "Fees & Interest", icon: Percent },
   other: { label: "Other", icon: HelpCircle },
 };
@@ -84,6 +86,7 @@ const BUDGETABLE_CATEGORIES: TxnCategory[] = [
   "healthcare",
   "entertainment",
   "investment_sip",
+  "education",
   "fees_interest",
   "other",
 ];

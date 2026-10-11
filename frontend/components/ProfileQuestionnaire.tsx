@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import type { User } from "firebase/auth";
 import { Check, ExternalLink } from "lucide-react";
 import { onAuthChange } from "@/lib/firebase/auth";
+import { isDemoMode, getUserId } from "@/lib/user";
 import {
   Dialog,
   DialogContent,
@@ -166,6 +167,8 @@ function CheckboxList<T extends string>({
   );
 }
 
+const SESSION_PREFIX = "finpilot:benefits_session_closed:v1:";
+
 export function ProfileQuestionnaire() {
   const [userId, setUserId] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -179,18 +182,43 @@ export function ProfileQuestionnaire() {
   const [matches, setMatches] = useState<SchemeMatch[] | null>(null);
   const [storageWarning, setStorageWarning] = useState<string | null>(null);
 
-  useEffect(() => onAuthChange((user: User | null) => setUserId(user?.uid ?? null)), []);
+  useEffect(() => {
+    const checkUser = (user: User | null) => {
+      if (user) {
+        setUserId(user.uid);
+      } else if (isDemoMode()) {
+        setUserId(getUserId() || "demo-user");
+      } else {
+        setUserId(null);
+      }
+    };
+    const unsubscribe = onAuthChange(checkUser);
+    if (isDemoMode()) {
+      setUserId(getUserId() || "demo-user");
+    }
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     setMatches(null);
-    setAnswers({ age: "", state: "", work: [], income: "", groups: [] });
     if (!userId) {
       setOpen(false);
       return;
     }
     try {
       const saved = window.localStorage.getItem(`${STORAGE_PREFIX}${userId}`);
-      setOpen(!saved);
+      if (saved && saved !== "skipped") {
+        setAnswers(JSON.parse(saved));
+      } else {
+        setAnswers({ age: "", state: "", work: [], income: "", groups: [] });
+      }
+    } catch {
+      setAnswers({ age: "", state: "", work: [], income: "", groups: [] });
+    }
+
+    try {
+      const sessionClosed = window.sessionStorage.getItem(`${SESSION_PREFIX}${userId}`);
+      setOpen(sessionClosed !== "1");
     } catch {
       setStorageWarning("This browser blocked local storage. Your answers will only be available until you leave this page.");
       setOpen(true);
@@ -210,6 +238,7 @@ export function ProfileQuestionnaire() {
     const possibleMatches = findMatches(answers);
     try {
       window.localStorage.setItem(`${STORAGE_PREFIX}${userId}`, JSON.stringify(answers));
+      window.sessionStorage.setItem(`${SESSION_PREFIX}${userId}`, "1");
       setStorageWarning(null);
     } catch {
       setStorageWarning("Couldn't save answers on this device; these suggestions will disappear when you leave.");
@@ -220,9 +249,18 @@ export function ProfileQuestionnaire() {
   function skip() {
     if (!userId) return;
     try {
-      window.localStorage.setItem(`${STORAGE_PREFIX}${userId}`, "skipped");
+      window.sessionStorage.setItem(`${SESSION_PREFIX}${userId}`, "1");
     } catch {
       setStorageWarning("Couldn't save this choice on this device. The questionnaire may appear again next time.");
+    }
+    setOpen(false);
+  }
+
+  function closeAndContinue() {
+    if (userId) {
+      try {
+        window.sessionStorage.setItem(`${SESSION_PREFIX}${userId}`, "1");
+      } catch {}
     }
     setOpen(false);
   }
@@ -267,7 +305,7 @@ export function ProfileQuestionnaire() {
               </p>
             )}
             <p className="text-xs text-graphite">Always verify current eligibility, deadlines and application details on the official site.</p>
-            <Button onClick={() => setOpen(false)}>Continue to FinPilot</Button>
+            <Button onClick={closeAndContinue}>Continue to FinPilot</Button>
           </div>
         ) : (
           <form

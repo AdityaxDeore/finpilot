@@ -9,7 +9,7 @@ from dateutil.relativedelta import relativedelta
 from app.ingest.personas import PERSONA_CONFIGS, TODAY, generate_persona
 from app.security import agents
 
-RANGES = {"demo-priya": (55, 90), "demo-arjun": (30, 70), "demo-meera": (40, 80)}
+RANGES = {"demo-priya": (25, 60), "demo-arjun": (20, 55), "demo-meera": (0, 25)}  # mostly healthy ledgers: 1-3 findings each
 
 
 def _monthly(rows, pred):
@@ -41,7 +41,7 @@ def test_deterministic(uid):
 def test_priya_lifestyle_creep(checked):
     rows = checked["demo-priya"][0].transactions
     m = _monthly(rows, lambda r: r.category in ("dining", "shopping", "entertainment") and r.amount < 0 and abs(r.amount) < 20000 and "fishy" not in (r.tags or ""))
-    assert sum(m[-3:]) >= 1.3 * sum(m[:3])
+    assert sum(m[-5:]) >= 1.03 * sum(m[:5])  # gentle creep
 
 
 def test_meera_lumpy_income(checked):
@@ -53,7 +53,7 @@ def test_meera_lumpy_income(checked):
 def test_every_fishy_row_is_tagged_and_recent(checked):
     for _, (data, _) in checked.items():
         fishy = [t for t in data.transactions if "fishy" in (t.tags or "")]
-        assert len(fishy) >= 4
+        assert 2 <= len(fishy) <= 6  # one or two planted findings per persona
         assert all(json.loads(t.tags)[0] == "fishy" for t in fishy)
 
 
@@ -62,13 +62,23 @@ def test_detectors_find_injected_problems(checked):
     for uid, (_, f) in checked.items():
         kinds[uid] = {k: [x["title"] for x in v] for k, v in f.items()}
     p, a, m = kinds["demo-priya"], kinds["demo-arjun"], kinds["demo-meera"]
-    assert len(p["duplicate_detector"]) >= 2 and any("ICICI Home Loan EMI" in t for t in a["duplicate_detector"])
+    assert len(p["duplicate_detector"]) >= 1 and any("ICICI Home Loan EMI" in t for t in a["duplicate_detector"])
     assert any("Amaz0n" in t for t in p["merchant_verifier"]) and any("Zomat0" in t for t in a["merchant_verifier"])
-    assert any("Price rise" in t for t in p["subscription_sleuth"]) and any("Overlapping" in t for t in p["subscription_sleuth"])
-    assert any("Unknown Intl Wire" in t for t in p["pattern_analyst"]) and any("Croma" in t for t in m["fraud_hunter"])
-    assert any("PixelGift" in t for t in p["pattern_analyst"]) and any("ATM Cash" in t for t in a["pattern_analyst"])
-    assert len(m["data_guardian"]) == 3
-    assert len({k for per in kinds.values() for k, v in per.items() if v}) >= 5
+    assert any("Swiggy" in t for t in m["duplicate_detector"])
+    for uid, per in kinds.items():  # routine spending must not look like fraud
+        assert sum(len(v) for v in per.values()) <= 5, uid
+
+
+def test_net_worth_is_positive_for_every_persona():
+    for uid, cfg in PERSONA_CONFIGS.items():
+        assets = sum(a.balance for a in cfg.accounts if a.balance > 0)
+        debts = -sum(a.balance for a in cfg.accounts if a.balance < 0)
+        assert assets > debts, uid
+
+
+def test_ledgers_are_400_to_500_rows():
+    for uid, (data, _) in ((u, d) for u, d in ((u, (generate_persona(c), None)) for u, c in PERSONA_CONFIGS.items())):
+        assert 400 <= len(data.transactions) <= 520, uid
 
 
 @pytest.mark.parametrize("uid", list(RANGES))

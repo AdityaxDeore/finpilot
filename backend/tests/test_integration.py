@@ -132,7 +132,7 @@ def test_events_endpoint_large_transaction_shifts_forecast_or_recommendations():
         "/api/events/demo-meera",
         json={
             "kind": "transaction",
-            "amount": -20000.0,
+            "amount": -60000.0,
             "merchant": "Large One-Off Expense",
             "category": "shopping",
             "date": today,
@@ -147,7 +147,7 @@ def test_events_endpoint_large_transaction_shifts_forecast_or_recommendations():
         or diff["new_recommendations"]
         or diff["removed_recommendation_actions"]
     )
-    assert changed, f"expected a real change from a ₹20,000 hit to Meera's thin buffer, got: {diff}"
+    assert changed, f"expected a real change from a ₹60,000 hit to Meera's buffer, got: {diff}"
 
 
 def test_events_endpoint_rejects_missing_amount():

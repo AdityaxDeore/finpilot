@@ -101,6 +101,8 @@ def fraud_hunter(rows, _a) -> list[dict]:
         hit = [by_id[i] for i in fact.source_txn_ids if i in by_id and by_id[i].date >= cutoff]
         if hit:
             big = max(-r.amount for r in hit)
+            if big < 5000:  # routine variation in everyday spend is not a security finding
+                continue
             out.append(_finding("fraud_hunter", "high" if big >= 10000 else "medium", f"Unusual payment to {hit[0].merchant}", fact.text, hit))
     return out
 

@@ -229,7 +229,7 @@ export function CommandPalette() {
           id: `persona-${p.id}`,
           group: "personas",
           label: `Switch Persona: ${p.label}`,
-          sublabel: p.id === "demo-priya" ? "Bengaluru • ₹95k/mo" : p.id === "demo-arjun" ? "Mumbai • ₹160k/mo" : "Pune • ₹42k/mo",
+          sublabel: p.id === "demo-priya" ? "Bengaluru • ₹1L/mo" : p.id === "demo-arjun" ? "Mumbai • ₹180k/mo" : "Pune • ₹52k/mo",
           icon: User,
           badge: userId === p.id ? "Active" : undefined,
           onSelect: () => setUserId(p.id),

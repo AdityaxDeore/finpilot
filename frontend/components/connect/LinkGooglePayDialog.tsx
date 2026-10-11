@@ -17,9 +17,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { GooglePayMark } from "@/components/connect/GooglePayMark";
 
 const PROFILES: { id: ConnectProfile; name: string; blurb: string; color: string }[] = [
-  { id: "priya", name: "Priya", blurb: "Bengaluru · salaried · ₹95k/mo", color: "bg-leaf" },
-  { id: "arjun", name: "Arjun", blurb: "Mumbai · senior pro · ₹1.6L/mo", color: "bg-sky" },
-  { id: "meera", name: "Meera", blurb: "Pune · early career · ₹42k/mo", color: "bg-ember" },
+  { id: "priya", name: "Priya", blurb: "Bengaluru · salaried · ₹1L/mo", color: "bg-leaf" },
+  { id: "arjun", name: "Arjun", blurb: "Mumbai · senior pro · ₹1.8L/mo", color: "bg-sky" },
+  { id: "meera", name: "Meera", blurb: "Pune · freelance · ₹52k/mo", color: "bg-ember" },
 ];
 
 const STEPS = ["Consent approved", "Fetching encrypted bank data", "Decrypting and reading UPI payments", "Building your dashboard"];

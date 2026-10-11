@@ -183,11 +183,12 @@ def test_wealth_shares_add_up_to_100():
 
 
 def test_managed_member_lifecycle():
+    base = len(client.get("/api/household/demo-priya").json()["members"])
     r = client.post("/api/household/demo-priya/managed-members", json={"name": "Anaya", "relationship": "Child", "opening_balance": 500})
     assert r.status_code == 200
     kid = next(m for m in r.json()["members"] if m["is_managed"])
     assert kid["display_name"] == "Anaya" and kid["user_id"].startswith("managed-")
-    assert len(r.json()["members"]) == 3
+    assert len(r.json()["members"]) == base + 1
 
     t = client.post(f"/api/household/demo-priya/members/{kid['user_id']}/transactions",
                     json={"merchant": "School fees", "amount": -300, "category": "other"})
@@ -204,4 +205,4 @@ def test_managed_member_lifecycle():
 
     d = client.delete(f"/api/household/demo-priya/members/{kid['user_id']}")
     assert d.status_code == 200
-    assert client.get("/api/household/demo-priya").json()["members"].__len__() == 2
+    assert len(client.get("/api/household/demo-priya").json()["members"]) == base

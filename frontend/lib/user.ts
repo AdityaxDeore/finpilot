@@ -89,6 +89,8 @@ export function isDemoMode(): boolean {
 export function startDemo() {
   try {
     window.localStorage.setItem(DEMO_MODE_KEY, "1");
+    window.sessionStorage.removeItem("finpilot:benefits_session_closed:v1:demo-user");
+    window.sessionStorage.removeItem("finpilot:benefits_session_closed:v1:demo-priya");
   } catch {
     // blocked storage: the demo just won't persist across a reload
   }
@@ -98,6 +100,7 @@ export function startDemo() {
 export function endDemo() {
   try {
     window.localStorage.removeItem(DEMO_MODE_KEY);
+    window.sessionStorage.clear();
   } catch {
     // ignore
   }

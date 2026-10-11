@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import type { PayResult } from "@/lib/types";
 import { parseUpi, type UpiTarget } from "@/lib/upi";
 import { cn } from "@/lib/utils";
+import { PaymentHelp, upiRef } from "@/components/pay/PaymentHelp";
 
 // A look-alike of the familiar scan-and-pay flow, built for a demo: no real money moves and nothing talks to a bank.
 const BLUE = "#1a73e8";
@@ -184,6 +185,7 @@ function PayApp() {
   const [error, setError] = useState("");
   const [snack, setSnack] = useState("");
   const [upiText, setUpiText] = useState("");
+  const [help, setHelp] = useState(false);
 
   const found = useCallback((t: UpiTarget) => { setTarget(t); setAmount(t.amount ? String(t.amount) : ""); setNote(t.note ?? ""); setScreen("pay"); }, []);
   const toast = (m: string) => { setSnack(m); setTimeout(() => setSnack(""), 2200); };
@@ -193,6 +195,8 @@ function PayApp() {
 
   async function pay() {
     if (!target) return;
+    if (!navigator.onLine) { setError("No internet connection. The payment was not made and no money was sent."); setScreen("fail"); return; }
+    setHelp(false);
     setScreen("busy");
     try {
       const [r] = await Promise.all([api.pay(userId, { payee_name: target.name, upi_id: target.upiId, amount: amt, note: note || undefined }, code), new Promise((ok) => setTimeout(ok, 1200))]);
@@ -200,7 +204,9 @@ function PayApp() {
       setScreen("done");
       loadHistory();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Payment failed");
+      const m = e instanceof Error ? e.message : "";
+      // a thrown network error or a 5xx means the bank/server could not be reached; a 4xx message is the reason the payment was refused
+      setError(!m || m.startsWith("API ") || /fetch|network/i.test(m) ? "Could not reach the bank. The payment was not made and no money was sent." : m);
       setScreen("fail");
     }
   }
@@ -218,8 +224,6 @@ function PayApp() {
   }
 
   if (screen === "done" && result) {
-    const r = result.review;
-    const tone = r.verdict === "secure" ? "bg-[#e6f4ea] text-[#137333]" : r.verdict === "review" ? "bg-[#fef7e0] text-[#b06000]" : "bg-[#fce8e6] text-[#c5221f]";
     return (
       <div className="flex min-h-dvh flex-col bg-white px-6 pt-20 text-[#202124]">
         <div className="flex size-16 items-center justify-center rounded-full" style={{ background: BLUE }}><Check className="size-9 text-white" strokeWidth={3} /></div>
@@ -227,19 +231,14 @@ function PayApp() {
         <p className="text-sm text-[#5f6368]">{result.upi_id}</p>
         <p className="mt-2 text-5xl">{inr(result.amount)}</p>
         <p className="mt-2 text-xs text-[#5f6368]">{new Date(result.paid_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</p>
-        {(r.heavy || r.verdict !== "secure") && (
-          <div className={cn("mt-6 rounded-2xl p-4 text-sm", tone)}>
-            <p className="font-medium">{r.verdict === "secure" ? "Security check passed" : r.verdict === "review" ? "Flagged for your review" : "Security check failed"}</p>
-            <p className="mt-1">{r.headline}</p>
-            <p className="mt-2 text-xs opacity-80">Full check and impact are on your FinPilot dashboard.</p>
-          </div>
-        )}
         <div className="mt-6 rounded-2xl border border-[#dadce0] p-4 text-sm">
           <p className="text-[#5f6368]">From</p>
           <p className="font-medium">{result.account}</p>
           <p className="mt-3 text-[#5f6368]">UPI transaction ID</p>
-          <p className="font-medium">{result.id.replace(/-/g, "").slice(0, 12).toUpperCase()}</p>
+          <p className="font-medium">{upiRef(result.id)}</p>
         </div>
+        <button onClick={() => setHelp((h) => !h)} className="mt-3 text-left text-sm" style={{ color: BLUE }}>{help ? "Hide refund help" : "Need a refund or want to cancel?"}</button>
+        {help && <div className="mt-2"><PaymentHelp light payee={result.payee_name} amount={inr(result.amount)} ref={upiRef(result.id)} account={result.account} /></div>}
         <p className="mt-3 text-xs text-[#5f6368]">Added to your FinPilot dashboard automatically.</p>
         <div className="mt-auto flex gap-3 pb-8 pt-6">
           <button onClick={() => toast("Screenshot sharing is not available in this demo")} className="flex-1 rounded-full border border-[#dadce0] py-3.5 text-sm font-medium" style={{ color: BLUE }}>Share screenshot</button>
@@ -254,7 +253,7 @@ function PayApp() {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-white px-6 text-center">
         <div className="flex size-20 items-center justify-center rounded-full bg-[#d93025]"><X className="size-12 text-white" strokeWidth={3} /></div>
-        <p className="text-xl text-[#202124]">Payment failed</p>
+        <p className="text-xl text-[#202124]">{/^(Insufficient|Over your)/.test(error) ? "Payment blocked" : "Payment failed"}</p>
         <p className="text-sm text-[#5f6368]">{error}</p>
         <button onClick={() => setScreen("pay")} className="mt-4 w-full rounded-full py-3.5 text-base font-medium text-white" style={{ background: BLUE }}>Try again</button>
         <button onClick={() => setScreen("home")} className="text-sm" style={{ color: BLUE }}>Cancel</button>

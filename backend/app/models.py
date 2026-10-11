@@ -287,6 +287,16 @@ class PriceMemoryRow(SQLModel, table=True):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+class PayLimitRow(SQLModel, table=True):
+    """Largest single phone payment the user allows; larger ones are refused. One row per user."""
+
+    __tablename__ = "pay_limits"
+
+    id: str = Field(primary_key=True)  # = user_id
+    user_id: str = Field(index=True)
+    per_payment: float
+
+
 class PaymentReviewRow(SQLModel, table=True):
     """Automatic security review of a heavy or unusual UPI payment (see app.payment_check). `payload` is the review as JSON."""
 
@@ -298,7 +308,7 @@ class PaymentReviewRow(SQLModel, table=True):
     amount: float
     heavy: bool = True
     verdict: str  # secure | review | suspicious
-    status: str = "open"  # open | confirmed | reported
+    status: str = "open"  # open | confirmed | reported | blocked (the payment was refused and nothing was booked)
     payload: str = "{}"
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

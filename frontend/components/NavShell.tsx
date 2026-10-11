@@ -26,9 +26,9 @@ import { prefetchCore } from "@/lib/api";
 import { DEMO_PERSONAS, isDemoUserId, setUserId } from "@/lib/user";
 
 const PERSONA_DETAILS: Record<string, { city: string; tag: string }> = {
-  "demo-priya": { city: "Bengaluru", tag: "₹95k/mo" },
-  "demo-arjun": { city: "Mumbai", tag: "₹160k/mo" },
-  "demo-meera": { city: "Pune", tag: "₹42k/mo" },
+  "demo-priya": { city: "Bengaluru", tag: "₹1L/mo" },
+  "demo-arjun": { city: "Mumbai", tag: "₹180k/mo" },
+  "demo-meera": { city: "Pune", tag: "₹52k/mo" },
 };
 
 /** Segmented control for switching between the seeded demo personas */

@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from app.ingest.snapshot import _transactions_df
-from app.models import BudgetRow, PairRow, PaymentReviewRow
+from app.models import BudgetRow, PairRow, PayLimitRow, PaymentReviewRow
 from app.payment_check import assess
 
 from app.core import store
@@ -29,6 +29,10 @@ class PayBody(BaseModel):
     upi_id: str = Field(min_length=3, max_length=80, pattern=r"^[\w.\-]{2,}@[\w.\-]{2,}$")
     amount: float = Field(gt=0, le=100_000)  # UPI per-transaction limit
     note: str | None = Field(default=None, max_length=80)
+
+
+def _inr(v: float) -> str:
+    return f"₹{v:,.0f}"
 
 
 def _account(user_id: str) -> AccountRow:
@@ -82,8 +86,6 @@ def history(limit: int = 15, user_id: str = Depends(payer)) -> list[dict]:
 
 @router.post("/pay/{user_id}")
 def pay(body: PayBody, user_id: str = Depends(payer)) -> dict:
-    import json
-
     acc = _account(user_id)
     merchant = body.payee_name.strip()
     category = categorize(merchant, body.amount).value
@@ -98,24 +100,47 @@ def pay(body: PayBody, user_id: str = Depends(payer)) -> dict:
         txn_id=row.id, df=before, amount=body.amount, payee=merchant, upi_id=body.upi_id, category=category,
         balance_before=acc.balance, budget_limit=budget,
     )
-    acc.balance = round(acc.balance - body.amount, 2)  # demo ledger: a payment always clears
-    rows: list = [row, acc]
-    if review.heavy or review.verdict != "secure":
-        rows.append(PaymentReviewRow(
-            id=row.id, user_id=user_id, payee_name=merchant, amount=body.amount, heavy=review.heavy,
-            verdict=review.verdict, payload=review.model_dump_json(),
-        ))
-    store.put(*rows)
+    limit = store.get(PayLimitRow, user_id)
+    refusal = None
+    if body.amount > acc.balance:
+        refusal = f"Insufficient balance. Available {_inr(acc.balance)}, payment {_inr(body.amount)}."
+    elif limit is not None and body.amount > limit.per_payment:
+        refusal = f"Over your payment limit of {_inr(limit.per_payment)}. Raise it on your FinPilot dashboard to pay this."
+    if refusal:  # nothing is booked; the attempt is kept so the dashboard can show why it was stopped
+        review = review.model_copy(update={"heavy": False, "verdict": "suspicious", "headline": refusal})
+        store.put(PaymentReviewRow(id=row.id, user_id=user_id, payee_name=merchant, amount=body.amount, heavy=False,
+                                   verdict="suspicious", status="blocked", payload=review.model_dump_json()))
+        raise HTTPException(402, refusal)
+    acc.balance = round(acc.balance - body.amount, 2)
+    store.put(row, acc)  # a normal payment is simply completed: no automatic flag or warning
     return {
         "id": row.id, "status": "success", "amount": body.amount, "payee_name": merchant, "upi_id": body.upi_id,
         "category": row.category, "paid_at": datetime.now(timezone.utc).isoformat(), "balance": acc.balance, "account": acc.name,
-        "review": json.loads(review.model_dump_json()),
     }
+
+
+class LimitBody(BaseModel):
+    per_payment: float | None = Field(default=None, gt=0, le=100_000)  # None removes the limit
+
+
+@router.get("/pay/{user_id}/limit")
+def get_limit(user_id: str = Depends(payer)) -> dict:
+    row = store.get(PayLimitRow, user_id)
+    return {"per_payment": row.per_payment if row else None}
+
+
+@router.put("/pay/{user_id}/limit")
+def set_limit(body: LimitBody, user_id: str = Depends(resolve_user_id)) -> dict:
+    if body.per_payment is None:
+        store.delete(PayLimitRow, user_id)
+    else:
+        store.put(PayLimitRow(id=user_id, user_id=user_id, per_payment=body.per_payment))
+    return {"per_payment": body.per_payment}
 
 
 @router.get("/pay/{user_id}/reviews")
 def reviews(limit: int = 5, user_id: str = Depends(payer)) -> list[dict]:
-    """Newest first: heavy or unusual payments with their security check and dashboard impact."""
+    """Newest first: payments the app refused (insufficient balance or over your limit), with the reason and impact."""
     import json
 
     rows = sorted(store.query(PaymentReviewRow, user_id=user_id), key=lambda r: r.created_at, reverse=True)[: max(1, min(limit, 20))]
@@ -147,5 +172,5 @@ def set_status(review_id: str, body: StatusBody, user_id: str = Depends(resolve_
 
 @router.get("/pay/{user_id}/live")
 def live(user_id: str = Depends(payer)) -> dict:
-    """Changes whenever any data is written (single-process counter; good enough for the local demo)."""
-    return {"version": store.writes()}
+    """Changes whenever this user's data is written, on any server instance (shared marker in Firestore)."""
+    return {"version": store.live_version(user_id)}

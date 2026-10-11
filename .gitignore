@@ -62,3 +62,6 @@ backend/.model_cache/
 backend/.translation_cache.json
 
 .telemetry.jsonl
+
+finpilot-config.json
+scripts/.phone-ip

@@ -18,6 +18,7 @@ export const CATEGORY_META: Record<TxnCategory, { label: string; color: string }
   investment_sip: { label: "Investments", color: "#0e7490" },
   credit_card_payment: { label: "Card payments", color: "#a7a9b4" },
   transfer: { label: "Transfers", color: "#a7a9b4" },
+  education: { label: "Education", color: "#0ea5a4" },
   fees_interest: { label: "Fees & interest", color: "#c2410c" },
   other: { label: "Other", color: "#c9bfa8" },
 };

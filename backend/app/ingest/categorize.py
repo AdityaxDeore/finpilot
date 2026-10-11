@@ -49,9 +49,7 @@ _RULES: list[tuple[re.Pattern, TxnCategory]] = [
     (re.compile(r"neft|imps|upi transfer|self transfer|fund transfer|atm withdrawal", re.I), TxnCategory.transfer),
     # Fees / interest
     (re.compile(r"late fee|interest charged|finance charge|annual fee|penal(ty|ty charge)|overdraft fee", re.I), TxnCategory.fees_interest),
-    # School fees (recurring, treat as rent_housing-adjacent obligation -> "other" bucket has no schema slot,
-    # closest fit in TxnCategory is "other" unless clearly EMI-like; keep explicit for clarity)
-    (re.compile(r"school fees?|tuition fee|vidya", re.I), TxnCategory.other),
+    (re.compile(r"school fees?|tuition fee|vidya", re.I), TxnCategory.education),
 ]
 
 

@@ -68,7 +68,8 @@ async def lifespan(_: FastAPI):
             logging.getLogger(__name__).warning("Model warm-up skipped: %s", exc)
 
     threading.Thread(target=_prepare_demo, daemon=True).start()
-    threading.Thread(target=_warm_models, daemon=True).start()
+    if not os.getenv("VERCEL"):  # serverless instances are short-lived: warm-up would only compete with the first request
+        threading.Thread(target=_warm_models, daemon=True).start()
     yield
 
 

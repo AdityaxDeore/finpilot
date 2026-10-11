@@ -25,7 +25,7 @@ _BATCH = 500
 # into those entries, so a payment does not force a cold re-read of every transaction. The TTL also covers writes
 # made by another process. Rows that are only derived or logged never invalidate. `_writes` is the global change
 # counter the live-sync endpoint reports.
-_TTL = 0.0 if os.getenv("FINPILOT_NO_CACHE") else float(os.getenv("FINPILOT_CACHE_TTL", "300"))  # every write goes through this process (write-through), so a long TTL only bounds cross-instance staleness
+_TTL = 0.0 if os.getenv("FINPILOT_NO_CACHE") else float(os.getenv("FINPILOT_CACHE_TTL", "5" if os.getenv("VERCEL") else "300"))  # every write goes through this process (write-through), so a long TTL only bounds cross-instance staleness (serverless runs many instances, so it defaults to 5s there)
 _QUIET = {"insights_snapshots", "copilot_insights", "audit_logs", "investigations"}
 _writes = 0
 _versions: dict[str, int] = {}
@@ -35,6 +35,28 @@ _reads: dict[tuple, tuple[int, float, list]] = {}
 def writes() -> int:
     """Counter that changes whenever user data is written; use it to validate your own caches."""
     return _writes
+
+
+def _touch_live(rows) -> None:
+    """Shared change marker, so a write on one serverless instance is visible to the live-sync poll answered by another."""
+    db = _db()
+    if db is None:
+        return
+    uids = {getattr(r, "user_id", None) for r in rows if type(r).__tablename__ not in _QUIET} - {None}
+    for uid in uids:
+        try:
+            db.collection("live_versions").document(uid).set({"v": time.time_ns() // 1_000_000})
+        except Exception as exc:  # never fail a real write because the marker failed
+            logger.warning("live marker not updated: %s", exc)
+
+
+def live_version(user_id: str) -> int:
+    """Changes whenever any of this user's data is written, on any instance; falls back to the local counter without Firestore."""
+    db = _db()
+    if db is None:
+        return _writes
+    snap = db.collection("live_versions").document(user_id).get()
+    return int((snap.to_dict() or {}).get("v", 0)) if snap.exists else 0
 
 
 def _bump(tablename: str) -> None:
@@ -175,6 +197,7 @@ def put(*rows) -> None:
             batch.set(_coll(type(r)).document(r.id), r.model_dump(mode="json"))
         batch.commit()
     _write_through(rows)
+    _touch_live(rows)
 
 
 def delete(model, id: str) -> None:
