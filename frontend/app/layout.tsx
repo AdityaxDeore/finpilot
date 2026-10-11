@@ -37,6 +37,7 @@ export const viewport: Viewport = {
 };
 
 import { CurrencyProvider } from "@/lib/currency";
+import { AutoTranslate } from "@/components/AutoTranslate";
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
@@ -46,6 +47,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col bg-paper text-ink">
         <CurrencyProvider>{children}</CurrencyProvider>
+        <AutoTranslate />
       </body>
     </html>
   );

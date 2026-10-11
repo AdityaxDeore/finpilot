@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { AnswerContractView } from "@/components/AnswerContractView";
-import { setUserId, startDemo } from "@/lib/user";
+import { setUserId } from "@/lib/user";
 import type { AnswerContract } from "@/lib/types";
 import { FloatingOverlapCard } from "@/components/interactive/FloatingOverlapCard";
 import { CashFlowChips } from "@/components/interactive/CashFlowChips";
@@ -133,9 +133,9 @@ export default function Home() {
           {/* CTA Group */}
           <Reveal delay={0.15} className="w-full">
             <div className="mt-10 flex flex-col sm:flex-row flex-wrap items-center justify-center gap-3.5 w-full">
-              <Link href="/dashboard" onClick={startDemo} className="w-full sm:w-auto">
+              <Link href="/login" className="w-full sm:w-auto">
                 <Button variant="lime" size="lg" className="w-full sm:w-auto px-8 py-3.5 text-base">
-                  Explore Live Demo
+                  Sign in to get started
                   <svg className="w-4 h-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
                   </svg>
@@ -152,7 +152,7 @@ export default function Home() {
           {/* Trust Badges */}
           <Reveal delay={0.2}>
             <div className="mt-10 flex flex-wrap items-center justify-center gap-3 text-xs text-graphite font-medium">
-              {["Zero signup required", "Offline rule router fallback", "Three-lane verified insights"].map((t) => (
+              {["Sign in with Google or email", "Offline rule router fallback", "Three-lane verified insights"].map((t) => (
                 <span key={t} className="flex items-center gap-1.5 rounded-full border border-black/[0.06] bg-white/70 px-3 py-1.5 backdrop-blur">
                   <svg className="w-3.5 h-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />

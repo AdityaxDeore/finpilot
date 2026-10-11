@@ -18,6 +18,7 @@ from __future__ import annotations
 import re
 
 from fastapi import Header, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from google.auth import exceptions as google_exceptions
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
@@ -54,7 +55,19 @@ def verify_firebase_token(token: str) -> dict:
 verify_token = verify_firebase_token
 
 
+def _demo_ready(user_id: str) -> None:
+    if user_id in DEMO_USER_IDS:
+        from app.ingest.seed import ensure_demo_seeded  # lazy: seed pulls in models and analytics
+
+        ensure_demo_seeded()
+
+
 async def resolve_user_id(user_id: str, authorization: str | None = Header(default=None)) -> str:
+    _demo_ready(user_id)
+    return await _resolve_user_id(user_id, authorization)
+
+
+async def _resolve_user_id(user_id: str, authorization: str | None) -> str:
     """FastAPI dependency: the single seam every route uses to turn a raw
     path-param `user_id` into a trusted one.
 
@@ -68,12 +81,12 @@ async def resolve_user_id(user_id: str, authorization: str | None = Header(defau
         scheme, _, token = authorization.partition(" ")
         if scheme.lower() != "bearer" or not token:
             raise HTTPException(401, "Authorization header must be 'Bearer <token>'")
-        claims = verify_token(token)
+        if is_public_user(user_id):
+            return user_id  # demo personas / guest sandboxes stay browsable even while signed in; no need to verify (a blocking cert fetch)
+        claims = await run_in_threadpool(verify_token, token)  # network call: keep it off the event loop
         verified_user_id = claims.get("sub") or claims.get("user_id")
         if not verified_user_id:
             raise HTTPException(401, "Token has no subject claim")
-        if is_public_user(user_id):
-            return user_id  # demo personas / guest sandboxes stay browsable even while signed in
         if verified_user_id != user_id:
             raise HTTPException(403, "Token does not authorize access to this user_id")
         return verified_user_id

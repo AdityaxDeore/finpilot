@@ -15,6 +15,9 @@ import {
   Home,
   Image as ImageIcon,
   Laptop,
+  ExternalLink,
+  Search,
+  Tv,
   Link2,
   Palmtree,
   Plane,
@@ -33,6 +36,7 @@ import type { Account, GoalProgress } from "@/lib/types";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
+import { Badge } from "@/components/shadcn/badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { triggerConfetti } from "@/components/ui/Confetti";
@@ -55,12 +59,31 @@ const GOAL_COVERS: CoverOption[] = [
   { key: "tech_setup", label: "Pro Tech Setup", icon: Laptop, path: "/goal-covers/tech_setup.svg", category: "Equipment & Tools" },
   { key: "retirement", label: "Financial Freedom", icon: Palmtree, path: "/goal-covers/retirement.svg", category: "Long-term Wealth" },
   { key: "wedding", label: "Celebration / Wedding", icon: Heart, path: "/goal-covers/wedding.svg", category: "Life Milestones" },
+  { key: "electronics", label: "TV, Phone & Home", icon: Tv, path: "/goal-covers/electronics.svg", category: "Electronics & Home" },
   { key: "general", label: "Capital Target", icon: Target, path: "/goal-covers/general.svg", category: "General Growth" },
 ];
 
 function getCover(key?: string): CoverOption {
   const match = GOAL_COVERS.find((c) => c.key === key);
   return match || GOAL_COVERS[GOAL_COVERS.length - 1];
+}
+
+// The cover follows what the goal is for ("TV" gets a TV, not the emergency shield), however the goal was created.
+const COVER_WORDS: [string, RegExp][] = [
+  ["emergency_fund", /emergency|runway|rainy/i],
+  ["dream_car", /\b(car|ev|bike|scooter|motorcycle|suv)\b/i],
+  ["electronics", /\b(tv|television|phone|mobile|iphone|fridge|refrigerator|washing|\bac\b|air condition|oven|camera|speaker|watch|console|ps5)\b/i],
+  ["tech_setup", /laptop|macbook|computer|monitor|setup|tablet|ipad/i],
+  ["luxury_travel", /trip|travel|vacation|holiday|tour|flight|goa|japan|europe/i],
+  ["home_downpayment", /\b(home|house|flat|apartment|plot)\b|down ?payment/i],
+  ["higher_education", /college|mba|masters|education|tuition|course|degree|study/i],
+  ["wedding", /wedding|marriage|engagement/i],
+  ["retirement", /retire|freedom|pension/i],
+];
+
+function coverFor(name: string, stored?: string): CoverOption {
+  const hit = COVER_WORDS.find(([, re]) => re.test(name));
+  return getCover(hit ? hit[0] : stored);
 }
 
 const GOAL_TEMPLATES = [
@@ -84,13 +107,14 @@ export default function GoalsPage() {
   const [name, setName] = useState("");
   const [targetAmount, setTargetAmount] = useState("");
   const [targetDate, setTargetDate] = useState("");
-  const [coverKey, setCoverKey] = useState("emergency_fund");
+  const [pickedCover, setPickedCover] = useState<string | null>(null);
   const [fundingAccountId, setFundingAccountId] = useState("");
   const [autoTrack, setAutoTrack] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [showCoverPicker, setShowCoverPicker] = useState(false);
 
+  const coverKey = pickedCover ?? coverFor(name).key;
   const accounts: Account[] = accountsData ?? [];
   const goals: GoalProgress[] = goalsData ?? [];
 
@@ -121,6 +145,7 @@ export default function GoalsPage() {
     setTargetDate("");
     setFundingAccountId("");
     setAutoTrack(false);
+    setPickedCover(null);
 
     try {
       await api.createGoal(userId, {
@@ -138,7 +163,7 @@ export default function GoalsPage() {
       setName(draft.name);
       setTargetAmount(String(draft.amount));
       setTargetDate(draft.date || "");
-      setCoverKey(draft.coverKey);
+      setPickedCover(draft.coverKey);
       setFundingAccountId(draft.fundingAccountId || "");
       setAutoTrack(draft.autoTrack);
       setCreateError(err instanceof Error ? err.message : "Could not create goal");
@@ -150,7 +175,7 @@ export default function GoalsPage() {
   function handleSelectTemplate(tpl: { name: string; amount: number; cover: string }) {
     setName(tpl.name);
     setTargetAmount(String(tpl.amount));
-    setCoverKey(tpl.cover);
+    setPickedCover(tpl.cover);
     if (createError) setCreateError(null);
   }
 
@@ -280,7 +305,7 @@ export default function GoalsPage() {
                     key={cov.key}
                     type="button"
                     onClick={() => {
-                      setCoverKey(cov.key);
+                      setPickedCover(cov.key);
                       setShowCoverPicker(false);
                     }}
                     className={`flex items-center gap-2.5 p-2 rounded-chip text-left transition-all border cursor-pointer ${
@@ -419,7 +444,7 @@ export default function GoalsPage() {
 
       {/* Goals Grid */}
       {goals.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-[repeat(2,minmax(0,1fr))]">
           {goals.map((gp) => (
             <CoverGoalCard
               key={gp.goal.id}
@@ -459,7 +484,7 @@ function CoverGoalCard({
   const [showTuning, setShowTuning] = useState(false);
   const [tuningAmount, setTuningAmount] = useState(goal.target_amount);
 
-  const cover = getCover(goal.cover_key);
+  const cover = coverFor(goal.name, goal.cover_key);
   const linkedAccount = accounts.find((a) => a.id === goal.funding_account_id);
 
   async function handleContribute(customAmount?: number) {
@@ -543,7 +568,7 @@ function CoverGoalCard({
   return (
     <Card
       hoverable
-      className="rounded-card border border-black/[0.08] bg-white shadow-[0_2px_12px_rgba(15,23,42,0.03)] hover:shadow-[0_8px_24px_rgba(15,23,42,0.07)] hover:border-black/[0.14] transition-all flex flex-col justify-between overflow-hidden relative group"
+      className="min-w-0 rounded-card border border-black/[0.08] bg-white shadow-[0_2px_12px_rgba(15,23,42,0.03)] hover:shadow-[0_8px_24px_rgba(15,23,42,0.07)] hover:border-black/[0.14] transition-all flex flex-col justify-between overflow-hidden relative group"
     >
       {/* Visual Cover Photo Header */}
       <div className="relative h-32 w-full bg-slate-900 overflow-hidden shrink-0">
@@ -621,32 +646,8 @@ function CoverGoalCard({
           </div>
         )}
 
-        {/* Progress Bar Container with Milestones (25%, 50%, 75%, 100%) */}
-        <div className="flex flex-col gap-1.5">
-          <div className="relative w-full h-2.5 rounded-full bg-fog overflow-hidden border border-black/[0.04]">
-            <div className="absolute inset-0 flex justify-between pointer-events-none px-0.5 z-10">
-              <span className="h-full w-0.5 bg-black/[0.1]" style={{ left: "25%", position: "absolute" }} />
-              <span className="h-full w-0.5 bg-black/[0.1]" style={{ left: "50%", position: "absolute" }} />
-              <span className="h-full w-0.5 bg-black/[0.1]" style={{ left: "75%", position: "absolute" }} />
-            </div>
-
-            <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${pct}%` }}
-              transition={{ duration: 0.8, ease: "easeOut" }}
-              className="h-full rounded-full bg-ember relative overflow-hidden"
-            >
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent w-full animate-pulse" />
-            </motion.div>
-          </div>
-
-          <div className="flex justify-between items-center text-[10px] text-pewter font-medium px-0.5 select-none">
-            <span>0%</span>
-            <span>25%</span>
-            <span className="font-semibold text-graphite">50% Midpoint</span>
-            <span>75%</span>
-            <span className="font-bold text-ink tnum">{formatCurrency(goal.current_amount)}</span>
-          </div>
+        <div className="h-2.5 w-full overflow-hidden rounded-full bg-fog">
+          <div className="h-full rounded-full bg-ember transition-[width] duration-700 ease-out" style={{ width: `${pct}%` }} />
         </div>
 
         {/* Metrics Grid: Current, Target, Required Monthly */}
@@ -671,13 +672,7 @@ function CoverGoalCard({
           </div>
         </div>
 
-        {/* Dynamic Pace Projection Badge */}
-        <div className="flex items-center gap-2 px-3 py-2 rounded-chip bg-white border border-black/[0.06] text-xs">
-          <Sparkles className="h-3.5 w-3.5 text-ember shrink-0" />
-          <span className="text-graphite font-medium leading-relaxed truncate">
-            {paceProjectionText}
-          </span>
-        </div>
+        <GoalPlan name={goal.name} gap={remainingGap} target={goal.target_amount} monthly={monthly_contribution} targetDate={goal.target_date ?? null} paceText={paceProjectionText} shop={cover.key === "electronics" || cover.key === "tech_setup"} />
 
         {/* Interactive Tune Targets Slider Drawer */}
         {showTuning && (
@@ -770,5 +765,91 @@ function CoverGoalCard({
         </div>
       </div>
     </Card>
+  );
+}
+
+const monthsFromNow = (n: number) => {
+  const d = new Date();
+  d.setMonth(d.getMonth() + n);
+  return d.toLocaleDateString("en-IN", { month: "short", year: "numeric" });
+};
+
+/** When you can afford it at different savings paces, plus real offers from Indian stores within the budget. */
+function GoalPlan({ name, gap, target, monthly, targetDate, paceText, shop }: { name: string; gap: number; target: number; monthly: number; targetDate: string | null; paceText: string; shop: boolean }) {
+  const [deals, setDeals] = useState<Awaited<ReturnType<typeof api.goalDeals>> | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const done = gap <= 0;
+
+  async function find() {
+    setLoading(true);
+    setErr(null);
+    try {
+      setDeals(await api.goalDeals(name, target));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Could not fetch offers");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const paces = [3, 6, 12].map((m) => ({ m, perMonth: Math.ceil(gap / m / 100) * 100 }));
+  const atPace = monthly > 0 ? Math.ceil(gap / monthly) : null;
+
+  return (
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 rounded-surface border border-black/[0.06] p-3.5">
+      <div className="flex items-start gap-2 text-xs text-graphite">
+        <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ember" />
+        <span>{done ? "You have enough saved for this goal." : atPace ? `At your current ${formatCurrency(monthly)}/mo you reach it in about ${atPace} month${atPace > 1 ? "s" : ""} (${monthsFromNow(atPace)}).` : paceText}</span>
+      </div>
+
+      {!done && (
+        <div className="grid grid-cols-3 gap-2">
+          {paces.map(({ m, perMonth }) => (
+            <div key={m} className="rounded-chip bg-fog/70 px-2.5 py-2 text-center">
+              <p className="text-[10px] uppercase tracking-wide text-pewter">By {monthsFromNow(m)}</p>
+              <p className="font-display text-sm font-bold text-ink tnum">{formatCurrency(perMonth)}<span className="text-[10px] font-medium text-pewter">/mo</span></p>
+            </div>
+          ))}
+        </div>
+      )}
+      {targetDate && !done && <p className="text-[11px] text-pewter">Your target date is {formatDate(targetDate)}.</p>}
+
+      {shop && (
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-2 border-t border-black/[0.06] pt-3">
+          {!deals && (
+            <Button variant="secondary" size="sm" onClick={find} disabled={loading} className="justify-self-start text-xs">
+              <Search className="h-3.5 w-3.5" /> {loading ? "Checking Croma, Vijay Sales, Amazon..." : `Find the best deals under ${formatCurrency(target)}`}
+            </Button>
+          )}
+          {err && <p className="text-xs text-rose-700">{err}</p>}
+          {deals && (
+            <>
+              {deals.answer && <p className="break-words text-xs leading-relaxed text-graphite">{deals.answer}</p>}
+              {deals.offers.length === 0 && <p className="text-xs text-pewter">No offers found from Indian stores for this.</p>}
+              <ul className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
+                {deals.offers.slice(0, 5).map((o) => (
+                  <li key={o.url}>
+                    <a href={o.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2.5 rounded-chip border border-black/[0.06] px-2.5 py-2 text-xs transition-colors hover:bg-fog/60">
+                      {o.favicon ? <img src={o.favicon} alt="" width={16} height={16} className="size-4 shrink-0 rounded" /> : <span className="size-4 shrink-0 rounded bg-fog" />}
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-semibold text-ink">{o.store}</span>
+                        <span className="block truncate text-pewter">{o.title}</span>
+                      </span>
+                      <span className="shrink-0 text-right">
+                        {o.price != null ? <span className="block font-bold text-ink tnum">{formatCurrency(o.price)}</span> : <span className="block text-pewter">See price</span>}
+                        {o.within_budget && <Badge className="bg-leaf/15 text-[10px] text-leaf hover:bg-leaf/15">In budget</Badge>}
+                      </span>
+                      <ExternalLink className="size-3.5 shrink-0 text-pewter" />
+                    </a>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-[10px] text-pewter">Prices come from the store pages and can change. Check the final price and bank offers at checkout.</p>
+            </>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

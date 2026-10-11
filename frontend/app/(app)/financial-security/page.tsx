@@ -60,7 +60,7 @@ export default function FinancialSecurityPage() {
         </div>
         <div className="flex gap-2 print:hidden">
           <Link href="/evidence-room" className="inline-flex items-center gap-1.5 rounded-full border border-mist bg-white px-4 py-2 text-sm text-ink hover:bg-fog">
-            <ScanSearch className="size-4" /> Evidence Room
+            <ScanSearch className="size-4" /> Evidence Council
           </Link>
           <button onClick={() => window.print()} className="inline-flex items-center gap-1.5 rounded-full bg-lime px-4 py-2 text-sm font-medium text-ink hover:brightness-95">
             <Download className="size-4" /> Download PDF

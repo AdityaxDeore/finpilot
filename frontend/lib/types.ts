@@ -726,6 +726,10 @@ export interface Connector {
 export type ConnectProfile = "priya" | "arjun" | "meera";
 
 // Security suite
+export type ProfileLevel = "basic" | "standard" | "deep";
+export interface ProfileQuestion { id: string; label: string; type: "text" | "number" | "choice"; options: string[]; hint: string; when?: { id: string; equals: string } | null }
+export interface Profile { completed: boolean; level: ProfileLevel | "skipped" | null; answers: Record<string, string> }
+
 export interface FinancialSecurity {
   generated_at: string;
   score: number;
@@ -749,6 +753,13 @@ export interface FinancialSecurityBrief {
   source: "finpilot" | "rules";
 }
 
+export interface SchemeAnalysis {
+  scheme: string;
+  brief: { summary: string; eligibility: string[]; benefits: string[]; how_to_apply: string[]; deadlines: string[]; watch_out: string[] } | null;
+  answer: string | null;
+  sources: { n: number; title: string; url: string }[];
+  note?: string;
+}
 export interface SecurityFinding {
   agent: string;
   severity: "high" | "medium" | "low";
@@ -757,8 +768,11 @@ export interface SecurityFinding {
   merchant: string | null;
   amount: number;
   txn_ids: string[];
+  corroborated_by?: string[];
+  web?: { answer: string; url: string };
+  ai?: { model: string; verdict: "confirm" | "doubt"; note: string };
 }
-export interface AgentSummary { agent: string; name: string; findings: number; ms: number; score?: number; source?: string | null; error?: string | null }
+export interface AgentSummary { agent: string; name: string; findings: number; ms: number; score?: number; source?: string | null; error?: string | null; model?: string; ai?: "ok" | "error" | "off"; backup?: boolean }
 export interface SecurityReport {
   created_at: string;
   risk_score: number;
@@ -785,3 +799,215 @@ export interface SecurityGraph {
 export interface DataSource { id: string; name: string; detail: string | null; records: number; preview: unknown[]; disconnectable: boolean }
 export interface AccessEntry { when: string; event: string; method: string; path: string; detail: string; status: number }
 export interface MyData { sources: DataSource[]; access_log: AccessEntry[] }
+
+export interface OcrTxn { date: string; description: string; amount: number }
+export interface OcrPreview { transactions: OcrTxn[]; removed: Record<string, number> }
+
+export interface TaughtItem { item: string; price: number; category: string; has_photo: boolean }
+export interface PhotoSuggestion { item: string | null; price: number | null; category: string; source: string }
+export type SnapResult =
+  | { added: true; id: string; item: string; amount: number; category: string }
+  | { added: false; suggestion: PhotoSuggestion };
+
+export type CouncilVote = { agent: string; name: string; score: number; level: string; why: string; do: string; source: "model" | "rules"; round: number };
+export type CouncilVerdict = {
+  type: "verdict"; cached: boolean; score: number; level: string; counts: Record<string, number>; votes: CouncilVote[];
+  dissent: { agent: string; name: string; level: string; why: string }[]; actions: string[]; anchor: number; tokens: number; debated: boolean;
+};
+export type CouncilEvent =
+  | { type: "facts"; facts: Record<string, unknown>; approx_tokens: number }
+  | { type: "vote"; vote: CouncilVote }
+  | { type: "debate"; median: number; agents: string[] }
+  | CouncilVerdict;
+
+export interface OpsStats { name: string; calls: number; errors: number; avg_ms: number; success: number; tokens: number; last_ok?: boolean; last_ts?: string; last_error?: string | null }
+export interface OpsEvent {
+  kind: "call" | "fallback" | "cache" | "search" | "run" | "split" | "stage" | "index" | "outage" | "recovery";
+  ts: string; agent?: string; run?: string; provider?: string; key?: string; model?: string; to?: string; reason?: string;
+  ok?: boolean; ms?: number; tokens?: number; error?: string | null; op?: string; query?: string; sites?: string[]; results?: number;
+  parts?: number; detail?: string; step?: string; findings?: number; state?: string; chunks?: number;
+}
+export interface OpsRun {
+  run: string; ts: string; via: string | null; parts: number | null; calls: number; errors: number; fallbacks: number; cache_hits: number; tokens: number; ms: number;
+  stages: { agent: string; step: string; ms: number; findings: number | null }[];
+}
+export interface OpsResilience {
+  providers: { provider: string; up: boolean }[];
+  caches: { name: string; entries: number; note: string }[];
+  index_events: OpsEvent[];
+  behaviour: { layer: string; offline: string; back: string }[];
+}
+export interface OpsProbe { env: string; status: OpsKeyStatus; ms: number | null; detail: string }
+export type OpsKeyStatus = "working" | "failing" | "unused" | "not_set" | "untestable";
+export interface OpsOverview {
+  keys: { env: string; provider: string; use: string; configured: boolean; masked: string | null; stats: OpsStats | null; status: OpsKeyStatus; testable: boolean }[];
+  agents: { agent: string; task: string; model: string | null; backup: string | null; stats: OpsStats | null }[];
+  models: OpsStats[];
+  totals: { tokens: number; fallbacks: number; cache_hits: number };
+  searches: OpsEvent[];
+  runs: OpsRun[];
+  resilience: OpsResilience;
+  events: OpsEvent[];
+}
+
+// --- Forecast & Risk (probabilistic cash-flow forecast, shortfall risk, scenarios, backtest) ---
+export interface FrDataSource {
+  kind: "real" | "synthetic";
+  label: string;
+  disclosure: string;
+  months_available: number;
+  history_start: string | null;
+  history_end: string | null;
+  details: Record<string, unknown>;
+}
+export interface FrParams {
+  horizon: number;
+  sims: number;
+  seed: number;
+  reserve: number | null;
+  tolerance: number;
+  cut: number;
+  savings: number | null;
+  extra_debt: number | null;
+  goal_amount: number | null;
+  goal_month: number | null;
+}
+export interface FrPeriod {
+  period: number;
+  month: string;
+  income: PlanQuantiles;
+  expenses: PlanQuantiles;
+  net: PlanQuantiles;
+  cash: PlanQuantiles;
+  p_below_reserve: number;
+  p_negative: number;
+}
+export interface FrMonthRisk { period: number; month: string; p_below_reserve: number; p_negative: number; p_first_breach: number }
+export interface FrRiskFactor { key: string; label: string; message: string; impact: number | null }
+export interface FrRisk {
+  reserve: number;
+  tolerance: number;
+  p_below_reserve: number;
+  p_negative: number;
+  level: "low" | "moderate" | "high";
+  typical_breach_month: string | null;
+  by_month: FrMonthRisk[];
+  severity: { expected_shortfall: number; median_if_breach: number; p95_if_breach: number; p95_below_zero: number };
+  factors: FrRiskFactor[];
+}
+export interface FrScenario {
+  id: string;
+  label: string;
+  description: string;
+  available: boolean;
+  unavailable_reason: string | null;
+  monthly_cut: number;
+  monthly_savings: number;
+  monthly_extra_debt: number;
+  cash: PlanQuantiles[];
+  end_cash: PlanQuantiles | null;
+  shortfall_risk: number;
+  p_negative: number;
+  risk_delta: number;
+  total_savings: number;
+  total_extra_debt: number;
+  spending_avoided: number;
+  ending_debt: number;
+  debt_change: number;
+  interest_saved: number;
+  net_worth_change: number;
+  goal_progress: number;
+  value_built: number;
+  tradeoffs: string[];
+}
+export interface FrCalibration {
+  event: string;
+  n_forecasts: number;
+  mean_predicted: number;
+  observed_rate: number;
+  brier_model: number;
+  brier_hist_avg: number;
+  bins: { lo: number; hi: number; mean_predicted: number; observed: number; count: number }[];
+  low_sample: boolean;
+}
+export interface FrAccuracy {
+  available: boolean;
+  reason: string | null;
+  n_test_months: number;
+  timeline: PlanTimeline | null;
+  rows: BacktestRow[];
+  calibration: FrCalibration | null;
+  findings: string[];
+}
+export interface ForecastRiskReport {
+  status: "ok" | "insufficient_history";
+  message: string | null;
+  data_source: FrDataSource;
+  params: FrParams | null;
+  method: ForecastMethod | null;
+  starting_cash: number;
+  reserve: number;
+  summary: {
+    end_cash: PlanQuantiles;
+    median_income: number;
+    median_expenses: number;
+    median_net: number;
+    p_below_reserve: number;
+    p_negative: number;
+    risk_level: "low" | "moderate" | "high";
+  } | null;
+  history: { month: string; income: number; expenses: number }[];
+  periods: FrPeriod[];
+  risk: FrRisk | null;
+  scenarios: {
+    params: { cut: number; savings: number; extra_debt: number };
+    outcomes: FrScenario[];
+    recommendation: { scenario_id: string; label: string; within_tolerance: boolean; criteria: string; rationale: string } | null;
+  } | null;
+  accuracy: FrAccuracy | null;
+  assumptions: string[];
+  warnings: string[];
+}
+export interface ForecastRiskQuery {
+  source?: "real" | "synthetic";
+  profile?: "stable" | "moderate" | "volatile";
+  synth_seed?: number;
+  horizon?: number;
+  sims?: number;
+  seed?: number;
+  reserve?: number;
+  tolerance?: number;
+  cut?: number;
+  savings?: number;
+  extra_debt?: number;
+  goal_amount?: number;
+  goal_month?: number;
+}
+
+export interface PayResult {
+  id: string;
+  status: "success";
+  amount: number;
+  payee_name: string;
+  upi_id: string;
+  category: string;
+  paid_at: string;
+  balance: number;
+  account: string;
+  review: PayReview;
+}
+
+export interface PayCheck { key: string; label: string; status: "pass" | "warn" | "fail" | "info"; detail: string }
+export interface PayImpact {
+  balance_before: number; balance_after: number; pct_of_balance: number;
+  month_spend_before: number; month_spend_after: number; avg_month_spend: number; spend_vs_avg_pct: number | null;
+  category: string; category_month_after: number; category_avg: number;
+  budget_limit: number | null; budget_used_pct: number | null; runway_months: number | null;
+}
+export interface PayReview {
+  id: string; heavy: boolean; verdict: "secure" | "review" | "suspicious"; headline: string;
+  checks: PayCheck[]; impact: PayImpact; insights: string[];
+}
+export interface PayReviewItem {
+  id: string; payee_name: string; amount: number; status: "open" | "confirmed" | "reported"; created_at: string; review: PayReview;
+}

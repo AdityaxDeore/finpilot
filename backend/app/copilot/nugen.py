@@ -13,8 +13,11 @@ from typing import Optional
 
 import httpx
 
+from app import profile
 from app.copilot import schemes, tools
+from app.core import store
 from app.core.config import get_settings
+from app.models import ProfileRow
 from app.schemas import ChatMessage
 
 logger = logging.getLogger(__name__)
@@ -27,6 +30,12 @@ If the data does not cover the question, say what is missing. Be concise: at mos
 Separate what you observed from what you suggest. This is general guidance, not licensed advice."""
 
 
+def _about(user_id: str) -> str:
+    """What the user told us in the onboarding questionnaire (empty if skipped)."""
+    row = store.get(ProfileRow, user_id)
+    return profile.describe(json.loads(row.answers)) if row else ""
+
+
 def _context(user_id: str) -> dict:
     return {
         "summary": tools.get_summary(user_id),
@@ -36,6 +45,7 @@ def _context(user_id: str) -> dict:
         "invoices": tools.get_invoices(user_id),
         "investments": tools.get_investments(user_id),
         "schemes_and_deadlines": schemes.upcoming(),
+        "about_the_user": _about(user_id),
     }
 
 

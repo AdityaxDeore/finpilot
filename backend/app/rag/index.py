@@ -8,6 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
+from app import telemetry
 from app.rag import corpus, embed
 
 _CACHE = Path(__file__).resolve().parents[2] / ".cache" / "rag"
@@ -15,6 +16,7 @@ _TTL = 30  # shortcut: store edits show up within 30 s; lower it if that hurts
 _idx: dict[str, dict] = {}
 _locks: dict[str, threading.Lock] = {}
 _guard = threading.Lock()
+_offline: set[str] = set()  # users whose embedding failed: served keyword-only until the next call re-embeds
 
 
 def ensure_indexed(user_id: str) -> dict:
@@ -32,12 +34,19 @@ def ensure_indexed(user_id: str) -> dict:
             cur["checked"] = time.time()
             return cur
         matrix = _load(user_id, fp)
-        if matrix is None and chunks:
+        if matrix is not None:
+            telemetry.record(kind="index", user=user_id, state="from_disk", chunks=len(chunks))
+        elif chunks:
+            was_offline = user_id in _offline
             try:
                 matrix = embed.embed([c[2] for c in chunks], "passage")
                 _save(user_id, fp, matrix)
-            except Exception:
+                _offline.discard(user_id)
+                telemetry.record(kind="index", user=user_id, state="reindexed_after_outage" if was_offline else "built", chunks=len(chunks))
+            except Exception as exc:
                 matrix = None  # keyword-only; embedding retried on next call
+                _offline.add(user_id)
+                telemetry.record(kind="index", user=user_id, state="offline_keyword_only", chunks=len(chunks), error=type(exc).__name__)
         _idx[user_id] = cur = {"fingerprint": fp, "chunks": chunks, "matrix": matrix, "checked": time.time()}
         return cur
 

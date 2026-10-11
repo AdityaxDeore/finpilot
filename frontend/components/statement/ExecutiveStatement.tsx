@@ -1,15 +1,20 @@
 "use client";
 
 import React from "react";
-import type { DashboardSnapshot, Account } from "@/lib/types";
+import type { DashboardSnapshot, Account, Transaction } from "@/lib/types";
 import { formatCurrency, formatPercent, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { ShieldCheck, CheckCircle2, Activity } from "lucide-react";
 import { FinPilotLogo } from "@/components/FinPilotLogo";
+import { CategoryDonut, IncomeVsSpend, TopMerchants } from "@/components/dashboard/SpendCharts";
+import { ForecastChart } from "@/components/dashboard/ForecastChart";
+import { NetWorthTrend } from "@/components/dashboard/NetWorthTrend";
+import { CATEGORY_META, summarizeSpend } from "@/lib/spend";
 
 interface ExecutiveStatementProps {
   dashboard: DashboardSnapshot;
   accounts: Account[];
+  transactions: Transaction[];
   userId: string;
 }
 
@@ -51,7 +56,7 @@ const PERSONA_PROFILES: Record<
  * 3. Net Worth Delta & Capital Allocation Balance Sheet
  * 4. Delineated Three-Lane Verification Contract (Facts, Predictions, Strategic Interventions)
  */
-export function ExecutiveStatement({ dashboard, accounts, userId }: ExecutiveStatementProps) {
+export function ExecutiveStatement({ dashboard, accounts, transactions, userId }: ExecutiveStatementProps) {
   const profile = PERSONA_PROFILES[userId] || {
     fullName: userId.replace("demo-", "").toUpperCase(),
     city: "India",
@@ -89,6 +94,9 @@ export function ExecutiveStatement({ dashboard, accounts, userId }: ExecutiveSta
   const totalLiquid = liquidAccounts.reduce((sum, a) => sum + a.balance, 0);
   const totalInvestments = investmentAccounts.reduce((sum, a) => sum + a.balance, 0);
   const totalDebts = dashboard.debts.reduce((sum, d) => sum + d.principal, 0);
+
+  const spend = summarizeSpend(transactions);
+  const recent = [...transactions].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10);
 
   return (
     <article
@@ -194,8 +202,8 @@ export function ExecutiveStatement({ dashboard, accounts, userId }: ExecutiveSta
           SECTION 1: FINANCIAL HEALTH SCORE BREAKDOWN (5 PILLARS)
           ───────────────────────────────────────────────────────────── */}
       <section className="mb-10 break-inside-avoid print:mb-8">
-        <div className="flex items-center justify-between pb-2 mb-4 border-b border-neutral-200">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 pb-2 mb-4 border-b border-neutral-200">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
             <span className="text-xs font-bold uppercase tracking-wider text-ember print:text-black">
               Section 01
             </span>
@@ -241,14 +249,14 @@ export function ExecutiveStatement({ dashboard, accounts, userId }: ExecutiveSta
         </div>
 
         {/* 5-Pillar Detailed Table */}
-        <div className="overflow-hidden rounded-xl border border-neutral-200 text-xs">
-          <table className="w-full border-collapse text-left">
+        <div className="overflow-x-auto rounded-xl border border-neutral-200 text-xs">
+          <table className="w-full min-w-[560px] border-collapse text-left">
             <thead>
               <tr className="bg-neutral-100 text-neutral-700 font-semibold border-b border-neutral-200 print:bg-neutral-50">
                 <th className="py-2.5 px-3">Pillar Dimension</th>
                 <th className="py-2.5 px-3 w-20 text-center">Weight</th>
                 <th className="py-2.5 px-3 w-24 text-right">Score</th>
-                <th className="py-2.5 px-3 w-40">Progress Bar</th>
+                <th className="py-2.5 px-3 w-32">Progress</th>
                 <th className="py-2.5 px-3">Audit Findings & Telemetry</th>
               </tr>
             </thead>
@@ -297,8 +305,8 @@ export function ExecutiveStatement({ dashboard, accounts, userId }: ExecutiveSta
           SECTION 2: NET WORTH & CAPITAL ALLOCATION BALANCE SHEET
           ───────────────────────────────────────────────────────────── */}
       <section className="mb-10 break-inside-avoid print:mb-8">
-        <div className="flex items-center justify-between pb-2 mb-4 border-b border-neutral-200">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 pb-2 mb-4 border-b border-neutral-200">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
             <span className="text-xs font-bold uppercase tracking-wider text-ember print:text-black">
               Section 02
             </span>
@@ -374,12 +382,12 @@ export function ExecutiveStatement({ dashboard, accounts, userId }: ExecutiveSta
               </span>
             </div>
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-neutral-600">Liquid Cash & Reserves (Checking/Savings)</span>
+              <div className="flex items-start justify-between gap-3">
+                <span className="min-w-0 text-neutral-600">Liquid Cash & Reserves (Checking/Savings)</span>
                 <span className="font-semibold text-black tnum">{formatCurrency(totalLiquid)}</span>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-neutral-600">Invested Capital & Systematic Plans (SIP)</span>
+              <div className="flex items-start justify-between gap-3">
+                <span className="min-w-0 text-neutral-600">Invested Capital & Systematic Plans (SIP)</span>
                 <span className="font-semibold text-black tnum">
                   {formatCurrency(totalInvestments)}
                 </span>
@@ -406,8 +414,8 @@ export function ExecutiveStatement({ dashboard, accounts, userId }: ExecutiveSta
                 <p className="text-neutral-500 italic py-1">No debt obligations recorded.</p>
               ) : (
                 dashboard.debts.map((d) => (
-                  <div key={d.id} className="flex items-center justify-between">
-                    <div>
+                  <div key={d.id} className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
                       <span className="font-medium text-black capitalize">
                         {d.account_id.replace(/_/g, " ")}
                       </span>
@@ -435,14 +443,74 @@ export function ExecutiveStatement({ dashboard, accounts, userId }: ExecutiveSta
         </div>
       </section>
 
+      {/* SECTION 3: SPENDING & TRENDS (the same charts as the dashboard) */}
+      <section className="mb-10 print:mb-8">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 pb-2 mb-4 border-b border-neutral-200">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-ember print:text-black">Section 03</span>
+            <h2 className="text-base font-bold text-black uppercase tracking-tight">Spending & Trends</h2>
+          </div>
+          <span className="text-xs text-neutral-500 font-medium">Last {spend.months.length || 6} months</span>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="lg:col-span-2"><CategoryDonut summary={spend} /></div>
+          <IncomeVsSpend summary={spend} />
+          <TopMerchants summary={spend} />
+          <NetWorthTrend userId={userId} />
+        </div>
+
+        <div className="mt-4 grid gap-4 text-xs lg:grid-cols-2">
+          <div className="overflow-x-auto rounded-xl border border-neutral-200">
+            <p className="border-b border-neutral-200 bg-neutral-100 px-3 py-2 font-bold uppercase tracking-wider text-[11px] text-black print:bg-neutral-50">Recent transactions</p>
+            <table className="w-full min-w-[360px] text-left">
+              <tbody className="divide-y divide-neutral-200">
+                {recent.length === 0 ? (
+                  <tr><td className="px-3 py-3 italic text-neutral-500">No transactions yet.</td></tr>
+                ) : (
+                  recent.map((t) => (
+                    <tr key={t.id}>
+                      <td className="whitespace-nowrap px-3 py-2 text-neutral-500">{formatDate(t.date)}</td>
+                      <td className="px-3 py-2 font-medium text-black">{t.merchant}</td>
+                      <td className="px-3 py-2 text-neutral-500">{CATEGORY_META[t.category]?.label ?? t.category}</td>
+                      <td className={cn("whitespace-nowrap px-3 py-2 text-right font-semibold tnum", t.amount < 0 ? "text-black" : "text-emerald-700 print:text-black")}>
+                        {formatCurrency(t.amount)}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="overflow-x-auto rounded-xl border border-neutral-200">
+            <p className="border-b border-neutral-200 bg-neutral-100 px-3 py-2 font-bold uppercase tracking-wider text-[11px] text-black print:bg-neutral-50">Recurring obligations</p>
+            <table className="w-full min-w-[360px] text-left">
+              <tbody className="divide-y divide-neutral-200">
+                {dashboard.recurring_obligations.length === 0 ? (
+                  <tr><td className="px-3 py-3 italic text-neutral-500">None detected.</td></tr>
+                ) : (
+                  dashboard.recurring_obligations.slice(0, 10).map((r) => (
+                    <tr key={r.group_id}>
+                      <td className="px-3 py-2 font-medium text-black">{r.merchant}</td>
+                      <td className="px-3 py-2 capitalize text-neutral-500">{r.frequency}</td>
+                      <td className="whitespace-nowrap px-3 py-2 text-neutral-500">Next {formatDate(r.next_expected_date)}</td>
+                      <td className="whitespace-nowrap px-3 py-2 text-right font-semibold tnum text-black">{formatCurrency(Math.abs(r.amount))}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
       {/* ─────────────────────────────────────────────────────────────
           SECTION 3: 90-DAY CASH-FLOW TRAJECTORY (P10 / P50 / P90)
           ───────────────────────────────────────────────────────────── */}
       <section className="mb-10 break-inside-avoid print:mb-8">
-        <div className="flex items-center justify-between pb-2 mb-4 border-b border-neutral-200">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 pb-2 mb-4 border-b border-neutral-200">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
             <span className="text-xs font-bold uppercase tracking-wider text-ember print:text-black">
-              Section 03
+              Section 04
             </span>
             <h2 className="text-base font-bold text-black uppercase tracking-tight">
               90-Day Cash-Flow Trajectory (Monte Carlo Simulation)
@@ -502,6 +570,10 @@ export function ExecutiveStatement({ dashboard, accounts, userId }: ExecutiveSta
           </div>
         </div>
 
+        <div className="mb-4">
+          <ForecastChart forecast={forecast} />
+        </div>
+
         {/* Trajectory Findings & Risk Assessment */}
         <div className="p-4 rounded-xl border border-neutral-200 bg-neutral-50 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 print:bg-white print:border-neutral-300">
           <div className="space-y-1">
@@ -540,10 +612,10 @@ export function ExecutiveStatement({ dashboard, accounts, userId }: ExecutiveSta
           SECTION 4: DELINEATED THREE-LANE VERIFICATION CONTRACT
           ───────────────────────────────────────────────────────────── */}
       <section className="mb-10 break-inside-avoid print:mb-8">
-        <div className="flex items-center justify-between pb-2 mb-4 border-b border-neutral-200">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 pb-2 mb-4 border-b border-neutral-200">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
             <span className="text-xs font-bold uppercase tracking-wider text-ember print:text-black">
-              Section 04
+              Section 05
             </span>
             <h2 className="text-base font-bold text-black uppercase tracking-tight">
               Delineated Three-Lane Verification Contract
@@ -555,7 +627,7 @@ export function ExecutiveStatement({ dashboard, accounts, userId }: ExecutiveSta
         <div className="space-y-4 text-xs">
           {/* LANE 1: AUDITED FACTS */}
           <div className="p-4 rounded-xl border border-neutral-200 bg-white">
-            <div className="flex items-center justify-between pb-2 mb-2 border-b border-neutral-100">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pb-2 mb-2 border-b border-neutral-100">
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-black" />
                 <span className="font-bold text-black uppercase tracking-wider text-[11px]">
@@ -583,7 +655,7 @@ export function ExecutiveStatement({ dashboard, accounts, userId }: ExecutiveSta
 
           {/* LANE 2: STATISTICAL PREDICTIONS */}
           <div className="p-4 rounded-xl border border-neutral-200 bg-white">
-            <div className="flex items-center justify-between pb-2 mb-2 border-b border-neutral-100">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pb-2 mb-2 border-b border-neutral-100">
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-blue-600 print:bg-black" />
                 <span className="font-bold text-black uppercase tracking-wider text-[11px]">
@@ -595,8 +667,8 @@ export function ExecutiveStatement({ dashboard, accounts, userId }: ExecutiveSta
             <div className="space-y-2.5">
               {dashboard.insights.predictions.map((pred, idx) => (
                 <div key={idx} className="flex flex-col gap-1 p-2 rounded bg-neutral-50 print:bg-white print:border print:border-neutral-200">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-black">{pred.text}</span>
+                  <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-0.5">
+                    <span className="min-w-0 font-semibold text-black">{pred.text}</span>
                     <span className="text-[10px] font-bold text-blue-700 print:text-black font-mono">
                       {Math.round(pred.confidence * 100)}% Confidence
                     </span>
@@ -622,7 +694,7 @@ export function ExecutiveStatement({ dashboard, accounts, userId }: ExecutiveSta
 
           {/* LANE 3: RECOMMENDED STRATEGIC INTERVENTIONS */}
           <div className="p-4 rounded-xl border border-neutral-200 bg-white">
-            <div className="flex items-center justify-between pb-2 mb-2 border-b border-neutral-100">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pb-2 mb-2 border-b border-neutral-100">
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-ember print:bg-black" />
                 <span className="font-bold text-black uppercase tracking-wider text-[11px]">
@@ -637,8 +709,8 @@ export function ExecutiveStatement({ dashboard, accounts, userId }: ExecutiveSta
                   key={idx}
                   className="p-3 rounded-lg border border-neutral-200 bg-neutral-50/60 print:bg-white print:border-neutral-300 space-y-1.5"
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-black text-sm">{rec.text}</span>
+                  <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+                    <span className="min-w-0 font-bold text-black text-sm">{rec.text}</span>
                     <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 print:border print:border-black print:text-black">
                       +{formatCurrency(rec.impact.delta)} Net Gain
                     </span>

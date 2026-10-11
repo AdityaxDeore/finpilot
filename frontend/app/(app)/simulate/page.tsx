@@ -12,6 +12,7 @@ import { Chip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ForecastChart } from "@/components/dashboard/ForecastChart";
+import { OptOutSimulator } from "@/components/simulate/OptOutSimulator";
 import { formatCurrency, formatImpactValue } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -504,10 +505,49 @@ function SimulateSkeleton() {
   );
 }
 
+const TABS = [
+  { id: "optout", label: "Opt-out Simulator" },
+  { id: "whatif", label: "Advanced What-If" },
+] as const;
+
+function SimulateTabs() {
+  const action = useSearchParams().get("action");
+  // Copilot deep links target the what-if engine; adjust during render when the link changes.
+  const [tab, setTab] = useState<(typeof TABS)[number]["id"]>(action ? "whatif" : "optout");
+  const [lastAction, setLastAction] = useState(action);
+  if (action !== lastAction) {
+    setLastAction(action);
+    if (action) setTab("whatif");
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div className={cn("flex w-full flex-wrap gap-2.5", tab === "whatif" && "mx-auto max-w-5xl")}>
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setTab(t.id)}
+            className={cn(
+              "cursor-pointer rounded-full border px-4 py-2.5 text-xs font-semibold transition-all",
+              tab === t.id
+                ? "border-lime-dark bg-lime text-ink shadow-md"
+                : "border-black/[0.08] bg-white text-graphite hover:bg-fog hover:text-ink"
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {tab === "optout" ? <OptOutSimulator /> : <SimulateContent />}
+    </div>
+  );
+}
+
 export default function SimulatePage() {
   return (
     <Suspense fallback={<SimulateSkeleton />}>
-      <SimulateContent />
+      <SimulateTabs />
     </Suspense>
   );
 }

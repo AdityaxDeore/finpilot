@@ -53,8 +53,8 @@ export function BacktestTable({ rows, timeline }: { rows: BacktestRow[]; timelin
                 <td className="py-2 px-2 font-semibold text-ink whitespace-nowrap">{MODEL_LABEL[r.model] ?? r.model}</td>
                 <td className="py-2 px-2 whitespace-nowrap">{r.stream}</td>
                 <td className="py-2 px-2 whitespace-nowrap">{formatCurrency(r.mae)}</td>
-                <td className="py-2 px-2 whitespace-nowrap">{formatPercent(r.coverage)}</td>
-                <td className="py-2 px-2 whitespace-nowrap">{formatCurrency(r.mean_width)}</td>
+                <td className="py-2 px-2 whitespace-nowrap">{r.model === "recurring" ? "n/a" : formatPercent(r.coverage)}</td>
+                <td className="py-2 px-2 whitespace-nowrap">{r.model === "recurring" ? "n/a" : formatCurrency(r.mean_width)}</td>
               </tr>
             ))}
           </tbody>

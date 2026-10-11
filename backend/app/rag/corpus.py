@@ -9,7 +9,8 @@ from datetime import date, timedelta
 
 from app.copilot.tools import _is_spend
 from app.core import store
-from app.models import AccountRow, BudgetRow, DebtRow, DocumentRow, GoalRow, IncomeRow, TransactionRow
+from app import profile
+from app.models import AccountRow, BudgetRow, DebtRow, DocumentRow, GoalRow, IncomeRow, ProfileRow, TransactionRow
 
 Card = tuple[str, str, str, str]  # (id, kind, text, label)
 _WIN, _OVERLAP = 800, 100
@@ -127,6 +128,9 @@ def _static_cards(user_id: str, txns: list) -> list[Card]:
         cards.append((f"budget:{b.id}", "budget", f"Budget for {b.category} this month ({month}): limit {_inr(b.monthly_limit)}, spent {_inr(spent)}, {_inr(b.monthly_limit - spent)} remaining.", f"Budget: {b.category}"))
     for i in store.query(IncomeRow, user_id=user_id):
         cards.append((f"income:{i.id}", "income", f"Income source {i.source}: {_inr(i.amount)} {i.frequency}, next on {i.next_date}.", f"Income: {i.source}"))
+    me = store.get(ProfileRow, user_id)
+    if me and (told := profile.describe(json.loads(me.answers))):
+        cards.append(("profile", "profile", f"What the user told us about themselves:\n{told}", "About you"))
     for a in accts.values():
         cards.append((f"account:{a.id}", "account", f"Account {a.name} ({a.type}) balance {_inr(a.balance)}.", f"Account: {a.name}"))
     return cards

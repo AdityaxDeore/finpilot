@@ -1,11 +1,14 @@
 "use client";
 
+import { useT } from "@/lib/i18n";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   ReceiptText,
+  Camera,
+  ScanText,
   Wallet,
   Target,
   Users,
@@ -13,16 +16,18 @@ import {
   FlaskConical,
   GitCompare,
   Route,
-  Calculator,
-  History,
   FileText,
-  ShieldCheck,
   ShieldAlert,
   ScanSearch,
   Network,
   Database,
   FilePlus2,
   Link2,
+  UserRound,
+  Globe,
+  Landmark,
+  Activity,
+  ChartLine,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -61,6 +66,8 @@ export const NAV_GROUPS: { label: string; tone: string; links: NavLink[] }[] = [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/connect", label: "Connectors", icon: Link2 },
       { href: "/transactions", label: "Transactions", icon: ReceiptText },
+      { href: "/upload", label: "Upload document", icon: ScanText },
+      { href: "/photos", label: "Photo prices", icon: Camera },
       { href: "/invoices", label: "Invoices", icon: FilePlus2 },
       { href: "/budgets", label: "Budgets", icon: Wallet },
       { href: "/goals", label: "Goals", icon: Target },
@@ -74,9 +81,9 @@ export const NAV_GROUPS: { label: string; tone: string; links: NavLink[] }[] = [
       { href: "/financial-security", label: "Financial Security", icon: ShieldAlert },
       { href: "/simulate", label: "Simulate", icon: FlaskConical },
       { href: "/plan", label: "Plan", icon: Route },
-      { href: "/scenarios", label: "Compare", icon: GitCompare },
-      { href: "/tax", label: "Tax", icon: Calculator },
-      { href: "/timeline", label: "Timeline", icon: History },
+      { href: "/forecast-risk", label: "Forecast & Risk", icon: ChartLine },
+      { href: "/scenarios", label: "Compare, Tax & Timeline", icon: GitCompare },
+      { href: "/agent-ops", label: "Agent Ops", icon: Activity },
     ],
   },
   {
@@ -87,18 +94,28 @@ export const NAV_GROUPS: { label: string; tone: string; links: NavLink[] }[] = [
     ],
   },
   {
+    label: "Schemes",
+    tone: "text-[#0fb67a]",
+    links: [
+      { href: "/scheme-analyst", label: "Scheme Analyst", icon: Landmark },
+      { href: "/web-intel", label: "Web Intel", icon: Globe },
+    ],
+  },
+  {
     label: "Security",
     tone: "text-[#d6336c]",
     links: [
-      { href: "/security", label: "Security", icon: ShieldCheck },
-      { href: "/evidence-room", label: "Evidence Room", icon: ScanSearch },
+      { href: "/evidence-room", label: "Evidence Council", icon: ScanSearch },
+      { href: "/council", label: "Risk Council", icon: Users },
       { href: "/twin", label: "Twin Simulator", icon: Network },
       { href: "/my-data", label: "My Data", icon: Database },
+      { href: "/profile", label: "Profile", icon: UserRound },
     ],
   },
 ];
 
 export function AppSidebar({ footer }: { footer?: ReactNode }) {
+  const { t } = useT();
   const pathname = usePathname();
   const { setOpenMobile, state } = useSidebar();
 
@@ -123,21 +140,21 @@ export function AppSidebar({ footer }: { footer?: ReactNode }) {
       <SidebarContent>
         {NAV_GROUPS.map((group) => (
           <SidebarGroup key={group.label}>
-            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+            <SidebarGroupLabel>{t(`nav.${group.label}`, group.label)}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {group.links.map(({ href, label, icon: Icon }) => {
                   const active = !!pathname?.startsWith(href);
                   return (
                     <SidebarMenuItem key={href}>
-                      <SidebarMenuButton asChild isActive={active} tooltip={label}>
+                      <SidebarMenuButton asChild isActive={active} tooltip={t(`nav.${label}`, label)}>
                         <Link
                           href={href}
                           aria-current={active ? "page" : undefined}
                           onClick={() => setOpenMobile(false)}
                         >
                           <Icon className={active ? "text-ink" : group.tone} />
-                          <span>{label}</span>
+                          <span>{t(`nav.${label}`, label)}</span>
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>

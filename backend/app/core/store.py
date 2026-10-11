@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 from functools import lru_cache
 
 from app.core.config import get_settings
@@ -19,6 +20,48 @@ from app.core.config import get_settings
 logger = logging.getLogger(__name__)
 
 _BATCH = 500
+
+# Read cache. A write invalidates only that table's cached reads (`_versions`), and `put` writes its rows through
+# into those entries, so a payment does not force a cold re-read of every transaction. The TTL also covers writes
+# made by another process. Rows that are only derived or logged never invalidate. `_writes` is the global change
+# counter the live-sync endpoint reports.
+_TTL = 0.0 if os.getenv("FINPILOT_NO_CACHE") else float(os.getenv("FINPILOT_CACHE_TTL", "300"))  # every write goes through this process (write-through), so a long TTL only bounds cross-instance staleness
+_QUIET = {"insights_snapshots", "copilot_insights", "audit_logs", "investigations"}
+_writes = 0
+_versions: dict[str, int] = {}
+_reads: dict[tuple, tuple[int, float, list]] = {}
+
+
+def writes() -> int:
+    """Counter that changes whenever user data is written; use it to validate your own caches."""
+    return _writes
+
+
+def _bump(tablename: str) -> None:
+    global _writes
+    if tablename not in _QUIET:
+        _writes += 1
+        _versions[tablename] = _versions.get(tablename, 0) + 1
+
+
+def _write_through(rows) -> None:
+    """Bump each written table and patch its still-current cached reads with the new rows."""
+    by_table: dict[str, list] = {}
+    for r in rows:
+        by_table.setdefault(type(r).__tablename__, []).append(r)
+    for table, group in by_table.items():
+        old = _versions.get(table, 0)
+        _bump(table)
+        if table in _QUIET:
+            continue
+        ids = {r.id for r in group}
+        for key, (ver, at, cached) in list(_reads.items()):
+            if key[0] != table or ver != old:
+                continue  # already stale: the next read refetches
+            eq = dict(key[1])
+            fresh = [r for r in cached if r.id not in ids] + [r.model_copy() for r in group if all(getattr(r, k, None) == v for k, v in eq.items())]
+            _reads[key] = (_versions[table], at, fresh)
+
 
 # In-memory fallback when Firestore credentials are not configured or available.
 _memory_store: dict[str, dict[str, dict]] = {}
@@ -88,13 +131,20 @@ def get(model, id: str):
 
 
 def query(model, **eq) -> list:
-    db = _db()
-    if db is None:
-        table = model.__tablename__
-        rows = _memory_store.get(table, {}).values()
-        matches = [r for r in rows if all(r.get(k) == v for k, v in eq.items())]
-        return [model.model_validate(d) for d in matches]
-    return [model.model_validate(s.to_dict()) for s in _q(model, eq).stream()]
+    key = (model.__tablename__, tuple(sorted(eq.items())))
+    ttl = 0.0 if model.__tablename__ in _QUIET else _TTL  # logs/derived rows are read live
+    hit = _reads.get(key)
+    if hit and hit[0] == _versions.get(model.__tablename__, 0) and time.monotonic() - hit[1] < ttl:
+        return [r.model_copy() for r in hit[2]]  # copies: callers edit rows before put()
+    seen = _versions.get(model.__tablename__, 0)  # a write during the read leaves this entry already stale
+    if _db() is None:
+        rows = [model.model_validate(d) for d in _memory_store.get(model.__tablename__, {}).values() if all(d.get(k) == v for k, v in eq.items())]
+    else:
+        rows = [model.model_validate(s.to_dict()) for s in _q(model, eq).stream()]
+    if ttl:
+        _reads[key] = (seen, time.monotonic(), rows)
+        return [r.model_copy() for r in rows]
+    return rows
 
 
 def first(model, **eq):
@@ -117,20 +167,24 @@ def put(*rows) -> None:
         for r in rows:
             table = type(r).__tablename__
             _memory_store.setdefault(table, {})[r.id] = r.model_dump(mode="json")
+        _write_through(rows)
         return
     for i in range(0, len(rows), _BATCH):
         batch = db.batch()
         for r in rows[i : i + _BATCH]:
             batch.set(_coll(type(r)).document(r.id), r.model_dump(mode="json"))
         batch.commit()
+    _write_through(rows)
 
 
 def delete(model, id: str) -> None:
     db = _db()
     if db is None:
         _memory_store.get(model.__tablename__, {}).pop(id, None)
+        _bump(model.__tablename__)
         return
     _coll(model).document(id).delete()
+    _bump(model.__tablename__)
 
 
 def delete_where(model, **eq) -> None:
@@ -141,6 +195,7 @@ def delete_where(model, **eq) -> None:
         to_del = [rid for rid, r in store_table.items() if all(r.get(k) == v for k, v in eq.items())]
         for rid in to_del:
             store_table.pop(rid, None)
+        _bump(model.__tablename__)
         return
     refs = [s.reference for s in _q(model, eq).stream()]
     for i in range(0, len(refs), _BATCH):
@@ -148,3 +203,4 @@ def delete_where(model, **eq) -> None:
         for ref in refs[i : i + _BATCH]:
             batch.delete(ref)
         batch.commit()
+    _bump(model.__tablename__)

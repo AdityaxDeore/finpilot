@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  AlertTriangle, Check, Copy, FileSearch, FlaskConical, Gauge, Loader2, PenLine, Play, Radar, RotateCcw, ScanSearch, ShieldAlert, Store, Trash2, Repeat2, Database, Waves,
+  AlertTriangle, Check, Globe, Copy, FileSearch, FlaskConical, Gauge, Loader2, PenLine, Play, Radar, RotateCcw, ScanSearch, ShieldAlert, Store, Trash2, Repeat2, Database, Waves,
   type LucideIcon,
 } from "lucide-react";
 import { api } from "@/lib/api";
@@ -22,6 +23,7 @@ const AGENTS: { id: string; name: string; job: string; icon: LucideIcon }[] = [
   { id: "merchant_verifier", name: "Merchant Verifier", job: "Spots fake look-alike shop names", icon: Store },
   { id: "subscription_sleuth", name: "Subscription Sleuth", job: "Watches repeat charges and price rises", icon: Repeat2 },
   { id: "pattern_analyst", name: "Pattern Analyst", job: "Looks for rapid or unusual payment patterns", icon: Waves },
+  { id: "web_checker", name: "Web Checker", job: "Looks up risky merchants on the live web", icon: Globe },
   { id: "risk_scorer", name: "Risk Scorer", job: "Turns everything into one risk score", icon: Gauge },
   { id: "verdict_writer", name: "Verdict Writer", job: "Explains the problems and what to do (AI)", icon: PenLine },
 ];
@@ -161,6 +163,7 @@ function Stage({ state, report, running, checked }: { state: AgentState; report:
               </div>
               <span className="text-[10px] font-semibold leading-tight text-ink sm:text-xs">{a.name}</span>
               <span className="hidden text-[10px] leading-tight text-graphite sm:block">{st === "running" ? "Checking..." : st === "done" ? (found ? `${found} found` : info?.error ? "no AI text" : "All clear") : "Waiting"}</span>
+              {st === "done" && info?.model && <span className="hidden max-w-full truncate text-[9px] leading-tight text-pewter sm:block" title={`${info.model} (${info.ai})`}>{info.model.split("/").pop()}{info.backup ? " · backup" : ""}{info.ai === "error" ? " · offline" : ""}</span>}
             </div>
           </motion.div>
         );
@@ -180,6 +183,19 @@ function Finding({ f, label, i }: { f: SecurityFinding; label: string; i: number
       </div>
       <p className="mt-2 text-sm font-semibold text-ink">{f.title}</p>
       <p className="mt-0.5 text-xs text-graphite">{f.detail}</p>
+      {f.corroborated_by && <p className="mt-1.5 text-[11px] font-semibold text-rose-700">Also flagged by {f.corroborated_by.map((id) => AGENTS.find((a) => a.id === id)?.name ?? id).join(", ")}</p>}
+      {f.web?.answer && (
+        <p className="mt-1.5 rounded-lg bg-fog px-2.5 py-1.5 text-[11px] text-graphite">
+          <span className="font-semibold text-ink">Web check: </span>{f.web.answer}
+          {f.web.url && <> <a href={f.web.url} target="_blank" rel="noreferrer" className="text-pewter underline">source</a></>}
+        </p>
+      )}
+      {f.ai && (
+        <p className="mt-1.5 text-[11px] text-graphite">
+          <span className={cn("font-semibold", f.ai.verdict === "confirm" ? "text-rose-700" : "text-leaf")}>AI {f.ai.verdict === "confirm" ? "agrees" : "doubts it"}</span>
+          {f.ai.note ? `: ${f.ai.note}` : ""} <span className="text-pewter">({f.ai.model.split("/").pop()})</span>
+        </p>
+      )}
     </motion.li>
   );
 }
@@ -264,7 +280,7 @@ export default function EvidenceRoomPage() {
             <span className="flex size-8 items-center justify-center rounded-full bg-lime">
               <ShieldAlert className="size-4" />
             </span>
-            Evidence Room
+            Evidence Council
           </CardTitle>
           <CardDescription>Eight agents examine your ledger one after another. Every problem links to the payment behind it, and each report is saved.</CardDescription>
         </CardHeader>
@@ -281,6 +297,20 @@ export default function EvidenceRoomPage() {
             {report?.demo_threats_present ? <Trash2 /> : <FlaskConical />} {report?.demo_threats_present ? "Remove demo threats" : "Add demo threats"}
           </Button>
           {report && <span className="text-xs text-pewter">Last run {formatDate(report.created_at)}</span>}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Dataset under test</CardTitle>
+          <CardDescription>
+            The council examines your own ledger: every transaction and account stored for this profile{report ? `, ${report.transactions_checked} transactions in the last run` : ""}.
+            {report?.demo_threats_present ? " It currently includes clearly tagged fake suspicious transactions (demo threats) so the agents have something to catch." : ""}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          <Link href="/my-data" className="inline-flex items-center gap-1.5 rounded-full border border-mist bg-white px-4 py-2 text-sm text-ink hover:bg-fog"><Database className="size-4" /> View the dataset</Link>
+          <Button size="sm" variant="outline" onClick={() => api.exportAllData(userId).catch((e) => toast(e.message))}>Download as JSON</Button>
         </CardContent>
       </Card>
 

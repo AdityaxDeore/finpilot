@@ -8,12 +8,19 @@ import {
   multiFactor,
   getMultiFactorResolver,
   TotpMultiFactorGenerator,
+  signInWithPhoneNumber,
+  setPersistence,
+  inMemoryPersistence,
+  getAuth,
+  RecaptchaVerifier,
+  type ConfirmationResult,
   type MultiFactorError,
   type MultiFactorResolver,
   type TotpSecret,
   type User,
 } from "firebase/auth";
-import { auth } from "./config";
+import { getApps, initializeApp } from "firebase/app";
+import { auth, firebaseConfig } from "./config";
 import { endDemo, setAuthUserId } from "@/lib/user";
 
 const googleProvider = new GoogleAuthProvider();
@@ -101,6 +108,43 @@ export async function unenrollFactor(uid: string): Promise<void> {
   await multiFactor(auth.currentUser).unenroll(uid);
 }
 
+let recaptcha: RecaptchaVerifier | null = null;
+
+/**
+ * Auth instance used only to prove ownership of a phone number. It is separate from the app's
+ * main auth, so verifying never signs anyone in or changes who the app thinks the user is.
+ */
+async function phoneAuth() {
+  const app = getApps().find((a) => a.name === "phone-verify") ?? initializeApp(firebaseConfig, "phone-verify");
+  const a = getAuth(app);
+  await setPersistence(a, inMemoryPersistence);
+  return a;
+}
+
+/**
+ * Text a real OTP to an Indian mobile number. `container` hosts the invisible reCAPTCHA.
+ * Needs the Phone provider enabled in the Firebase console.
+ */
+export async function sendPhoneOtp(mobile: string, container: HTMLElement): Promise<ConfirmationResult> {
+  const a = await phoneAuth();
+  // a verifier can't be reused after a failed or completed attempt
+  recaptcha?.clear();
+  recaptcha = new RecaptchaVerifier(a, container, { size: "invisible" });
+  try {
+    return await signInWithPhoneNumber(a, `+91${mobile}`, recaptcha);
+  } catch (e) {
+    recaptcha.clear();
+    recaptcha = null;
+    throw e;
+  }
+}
+
+/** Check the 6-digit code from the SMS, then drop the throwaway session. Throws on a wrong code. */
+export async function confirmPhoneOtp(result: ConfirmationResult, code: string): Promise<void> {
+  await result.confirm(code);
+  await firebaseSignOut(await phoneAuth());
+}
+
 /**
  * Sign out of Firebase.
  */
@@ -141,7 +185,12 @@ const AUTH_ERRORS: Record<string, string> = {
   "auth/network-request-failed": "Network error. Check your connection and retry.",
   "auth/invalid-api-key": "The Firebase API key is invalid. Check NEXT_PUBLIC_FIREBASE_API_KEY.",
   "auth/api-key-not-valid.-please-pass-a-valid-api-key.": "The Firebase API key is invalid. Check NEXT_PUBLIC_FIREBASE_API_KEY.",
-  "auth/invalid-verification-code": "Invalid code. Check your authenticator app and try again.",
+  "auth/invalid-verification-code": "Invalid code. Check the code and try again.",
+  "auth/invalid-phone-number": "That mobile number is not valid.",
+  "auth/code-expired": "That code expired. Request a new one.",
+  "auth/quota-exceeded": "SMS limit reached for this project. Try again later.",
+  "auth/captcha-check-failed": "The reCAPTCHA check failed. Refresh the page and retry.",
+  "auth/billing-not-enabled": "Firebase needs the Blaze (pay-as-you-go) plan to send real SMS. Use a test number or enable billing.",
 };
 
 /** Turn a Firebase auth error into a message a person can act on. */

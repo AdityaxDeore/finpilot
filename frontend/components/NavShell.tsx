@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import { Eye, EyeOff, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/NotificationBell";
 import { CurrencySelector } from "@/components/ui/CurrencySelector";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { CommandPalette } from "@/components/ui/CommandPalette";
 import { ConfettiCanvas } from "@/components/ui/Confetti";
 import { AppSidebar, NAV_GROUPS } from "@/components/AppSidebar";
@@ -21,6 +22,7 @@ import {
   BreadcrumbPage,
 } from "@/components/shadcn/breadcrumb";
 import { useUserId } from "@/lib/hooks";
+import { prefetchCore } from "@/lib/api";
 import { DEMO_PERSONAS, isDemoUserId, setUserId } from "@/lib/user";
 
 const PERSONA_DETAILS: Record<string, { city: string; tag: string }> = {
@@ -47,6 +49,7 @@ function PersonaSwitcher() {
         return (
           <button
             key={persona.id}
+            title={details ? `${details.city} · ${details.tag}` : undefined}
             type="button"
             role="radio"
             aria-checked={active}
@@ -71,11 +74,6 @@ function PersonaSwitcher() {
                 )}
               />
               <span>{persona.label}</span>
-              {details && (
-                <span className="text-[10px] text-pewter font-normal hidden min-[1700px]:inline">
-                  {details.tag}
-                </span>
-              )}
             </span>
           </button>
         );
@@ -90,6 +88,7 @@ export function NavShell({ children }: { children: ReactNode }) {
   const isDashboard = pathname?.startsWith("/dashboard") ?? false;
   const [hidden, setHidden] = useState(false);
   const current = NAV_GROUPS.flatMap((g) => g.links).find((l) => pathname?.startsWith(l.href));
+  useEffect(() => prefetchCore(userId), [userId]);
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -117,7 +116,7 @@ export function NavShell({ children }: { children: ReactNode }) {
               <button
                 type="button"
                 onClick={() => window.dispatchEvent(new CustomEvent("finpilot:open-command-palette"))}
-                className="hidden h-9 w-64 items-center gap-2 rounded-xl bg-white px-3 text-sm text-muted-foreground shadow-sm md:flex"
+                className="hidden h-9 w-44 items-center xl:w-56 gap-2 rounded-xl bg-white px-3 text-sm text-muted-foreground shadow-sm md:flex"
                 title="Search (Ctrl+K)"
                 aria-label="Open search"
               >
@@ -137,7 +136,8 @@ export function NavShell({ children }: { children: ReactNode }) {
               >
                 {hidden ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
               </Button>
-              <div className="hidden sm:block">
+              <div className="hidden items-center gap-1.5 sm:flex">
+                <LanguageSwitcher />
                 <CurrencySelector />
               </div>
               <div className="hidden xl:block">

@@ -29,6 +29,8 @@ def generate_monthly_history(
     discretionary_base: float = 22_000.0,
     rho: float = 0.4,
     disc_cv: float = 0.30,
+    unexpected_prob: float = 0.0,
+    unexpected_amount: float = 25_000.0,
 ) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
     """Return (monthly_df, transactions_df, assumptions)."""
     rng_dev, rng_test = np.random.default_rng(seed), np.random.default_rng(test_seed)
@@ -45,6 +47,9 @@ def generate_monthly_history(
         disc_sigma = float(np.sqrt(np.log(1 + disc_cv**2)))
         zc = rho * z1 + np.sqrt(1 - rho**2) * z2
         discretionary = discretionary_base * np.exp(disc_sigma * zc - disc_sigma**2 / 2)
+        # Rare one-off cost (medical, repair). Drawn only when enabled so seeded histories stay unchanged by default.
+        if unexpected_prob > 0 and rng.random() < unexpected_prob:
+            essential += unexpected_amount * (0.5 + rng.random())
         rows.append((_label(i), float(income), float(essential), float(discretionary)))
     df = pd.DataFrame(rows, columns=["month", "income", "essential", "discretionary"])
     df.index = range(1, months + 1)
@@ -71,6 +76,11 @@ def generate_monthly_history(
         "income": f"lognormal around INR {base_income:,.0f}, CV {income_cv}, {zero_bonus_prob:.0%} chance of a 45% income drop",
         "essential": f"INR {essential_base:,.0f} +/-5% noise, 5%/yr drift",
         "discretionary": f"lognormal around INR {discretionary_base:,.0f} (CV {disc_cv}), correlation {rho} with income",
+        "unexpected_costs": (
+            f"{unexpected_prob:.0%} chance per month of a one-off essential cost of INR {0.5 * unexpected_amount:,.0f}-"
+            f"{1.5 * unexpected_amount:,.0f}" if unexpected_prob > 0 else "none"
+        ),
+        "recurring": "rent and groceries monthly, INR 600 streaming subscription, as separate transactions",
         "independence": "months are independent draws (no seasonality)",
         "currency": "INR",
     }

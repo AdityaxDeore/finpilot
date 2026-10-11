@@ -24,7 +24,14 @@ class Settings:
     # general (non-finance) conversation: a fast model, optionally on its own key
     nvidia_chat_api_key: str = os.getenv("NVIDIA_CHAT_API_KEY") or os.getenv("NVIDIA_API_KEY", "")
     nvidia_chat_model: str = os.getenv("NVIDIA_CHAT_MODEL", "nvidia/nemotron-3.5-lightning-30b-a3b")
+    nvidia_council_model: str = os.getenv("NVIDIA_COUNCIL_MODEL") or os.getenv("NVIDIA_CHAT_MODEL", "nvidia/nemotron-3.5-lightning-30b-a3b")  # cheap model for the 7-agent Risk Council
+    # NVIDIA hosted vision model (reads bills, names items in photos). Falls back to the main NVIDIA key.
+    nvidia_vision_api_key: str = os.getenv("NVIDIA_VISION_API_KEY") or os.getenv("NVIDIA_API_KEY", "")
+    nvidia_vision_model: str = os.getenv("NVIDIA_VISION_MODEL", "meta/llama-3.2-11b-vision-instruct")
+    gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")  # preferred for photo recognition when set
+    gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
     nvidia_embed_model: str = os.getenv("NVIDIA_EMBED_MODEL", "nvidia/nemotron-3-embed-1b")  # 2048-dim; verified live
+    tavily_api_key: str = os.getenv("TAVILY_API_KEY", "")  # web search / extract / crawl / map for the Web Intel page
     firecrawl_api_key: str = os.getenv("FIRECRAWL_API_KEY", "")
 
     # Nugen (second opinion in the copilot; optional)

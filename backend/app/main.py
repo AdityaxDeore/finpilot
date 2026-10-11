@@ -15,10 +15,23 @@ from app.api.goals_router import router as goals_router
 from app.api.household_router import router as household_router
 from app.api.networth_router import router as networth_router
 from app.api.notifications_router import router as notifications_router
+from app.api.profile_router import router as profile_router
+from app.api.aa_router import router as aa_router
 from app.api.plan_router import router as plan_router
+from app.api.forecast_risk_router import router as forecast_risk_router
 from app.api.routes import router
 from app.api.rules_router import router as rules_router
 from app.api.security_router import router as security_router
+from app.api.expenses_router import router as expenses_router
+from app.api.ocr_router import router as ocr_router
+from app.api.translate_router import router as translate_router
+from app.api.web_router import router as web_router
+from app.api.voice_router import router as voice_router
+from app.api.ops_router import router as ops_router
+from app.api.jobs_router import router as jobs_router
+from app.api.plaid_router import router as plaid_router
+from app.api.pay_router import router as pay_router
+from app.api.webhooks_router import router as webhooks_router
 from app.api.tax_router import router as tax_router
 from app.api.transactions_router import router as transactions_router
 from app.core.audit import log_audit_event
@@ -28,15 +41,34 @@ _MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    if os.getenv("VERCEL"):
-        # Seed the demo personas on fresh deploy / serverless startup if missing.
+    # Seed + warm the demo personas on every start (fresh deploy, serverless cold start, local emulator), without blocking boot.
+    def _prepare_demo() -> None:
         try:
-            from app.ingest.seed import seed_if_empty
+            from app.ingest.seed import ensure_demo_seeded
 
-            seed_if_empty()
+            ensure_demo_seeded()
         except Exception as exc:
             import logging
             logging.getLogger(__name__).warning("Demo persona seeding skipped: %s", exc)
+
+    import threading
+
+    def _warm_models() -> None:
+        # load OCR + CLIP now, off the request path, so the first upload/photo is not the slow one
+        import logging
+
+        try:
+            from app.ocr import warm as warm_ocr
+            from app.expenses import suggest as photo
+
+            warm_ocr()
+            photo._catalog_vectors()
+            photo.vision._image_model()
+        except Exception as exc:
+            logging.getLogger(__name__).warning("Model warm-up skipped: %s", exc)
+
+    threading.Thread(target=_prepare_demo, daemon=True).start()
+    threading.Thread(target=_warm_models, daemon=True).start()
     yield
 
 
@@ -63,6 +95,7 @@ app.include_router(router, prefix="/api")
 app.include_router(transactions_router, prefix="/api")
 app.include_router(budgets_router, prefix="/api")
 app.include_router(plan_router, prefix="/api")
+app.include_router(forecast_risk_router, prefix="/api")
 app.include_router(copilot_feed_router, prefix="/api")
 # These already embed "/api/..." in each route's own path decorator
 # (unlike routes.py/transactions_router/budgets_router, which rely on the
@@ -70,12 +103,24 @@ app.include_router(copilot_feed_router, prefix="/api")
 app.include_router(connectors_router)
 app.include_router(goals_router)
 app.include_router(documents_router)
+app.include_router(ocr_router)
+app.include_router(translate_router)
+app.include_router(web_router)
+app.include_router(voice_router)
+app.include_router(ops_router)
+app.include_router(jobs_router)
+app.include_router(plaid_router)
+app.include_router(pay_router, prefix="/api")
 app.include_router(household_router)
 app.include_router(networth_router)
 app.include_router(notifications_router)
+app.include_router(profile_router)
+app.include_router(aa_router)
 app.include_router(tax_router)
 app.include_router(rules_router)
 app.include_router(security_router)
+app.include_router(expenses_router, prefix="/api")
+app.include_router(webhooks_router, prefix="/api")
 
 
 @app.middleware("http")
@@ -99,7 +144,7 @@ async def audit_log_middleware(request: Request, call_next):
         # user_id is always the 3rd segment for these resources (even when
         # further sub-path segments follow, e.g. /api/budgets/{user_id}/status
         # or /api/transactions/{user_id}/{transaction_id}).
-        if parts[1] in {"transactions", "budgets", "goals", "tax", "rules", "household", "plan"}:
+        if parts[1] in {"transactions", "budgets", "goals", "tax", "rules", "household", "plan", "profile", "aa"}:
             return parts[2]
 
         # For these, user_id is the LAST segment (/api/dashboard/{user_id},
