@@ -264,6 +264,96 @@ PERSONA_CONFIGS: dict[str, PersonaConfig] = {
 
 
 # ---------------------------------------------------------------------------
+# Priya's household (synthetic): Rishi, Swara and Vedant. They are NOT demo personas -- they have no dashboard of
+# their own -- they exist so the Household page can show what each family member spends. Everything is generated.
+# ---------------------------------------------------------------------------
+
+# user_id -> (display name, relation to the household owner Priya)
+FAMILY_MEMBERS: dict[str, tuple[str, str]] = {
+    "demo-priya": ("Priya", "Mother"),
+    "demo-rishi": ("Rishi", "Husband"),
+    "demo-swara": ("Swara", "Daughter"),
+    "demo-vedant": ("Vedant", "Son"),
+}
+
+
+def _rishi_config() -> PersonaConfig:
+    return PersonaConfig(
+        user_id="demo-rishi", display_name="Rishi", city="Bengaluru", salary=85_000, salary_day=1, seed=411,
+        accounts=[
+            AccountSpec("checking", "Rishi Checking - SBI", "checking", balance=58_000),
+            AccountSpec("savings", "Rishi Savings - SBI", "savings", balance=220_000),
+            AccountSpec("credit_card", "Rishi Credit Card - Axis Magnus", "credit_card", balance=-14_000, credit_limit=100_000, interest_rate_apr=40.0),
+            AccountSpec("invest", "Rishi Groww Mutual Funds", "investment", balance=140_000),
+        ],
+        recurring=[
+            RecurringItem("Employer Payroll", TxnCategory.income, 85_000, 1, "checking", "Monthly salary credit"),
+            RecurringItem("Groww Index Fund SIP", TxnCategory.investment_sip, -10_000, 4, "checking"),
+            RecurringItem("LIC Life Insurance Premium", TxnCategory.other, -2_800, 12, "checking"),
+            RecurringItem("Jio Postpaid Recharge", TxnCategory.subscriptions, -799, 15, "checking"),
+            RecurringItem("Hotstar Premium", TxnCategory.subscriptions, -299, 19, "credit_card"),
+            RecurringItem("Axis Credit Card Bill Payment", TxnCategory.credit_card_payment, -9_000, 20, "checking"),
+        ],
+        debts=[],
+        daily_spend=[
+            SpendCategorySpec(TxnCategory.transport, ["Indian Oil Petrol Pump", "Uber", "FASTag Recharge", "Namma Metro"], (8, 12), (150, 1_800)),
+            SpendCategorySpec(TxnCategory.dining, ["Swiggy", "Zomato", "Domino's Pizza", "Truffles"], (6, 10), (200, 1_100), account_key="credit_card"),
+            SpendCategorySpec(TxnCategory.shopping, ["Amazon.in", "Decathlon", "Croma"], (1, 3), (500, 4_500), account_key="credit_card"),
+            SpendCategorySpec(TxnCategory.entertainment, ["BookMyShow", "PVR Cinemas"], (1, 2), (300, 1_400), account_key="credit_card"),
+            SpendCategorySpec(TxnCategory.healthcare, ["Apollo Pharmacy", "Cult.fit"], (1, 2), (300, 2_000)),
+        ],
+    )
+
+
+def _swara_config() -> PersonaConfig:
+    return PersonaConfig(
+        user_id="demo-swara", display_name="Swara", city="Bengaluru", salary=4_000, salary_day=1, seed=512,
+        accounts=[
+            AccountSpec("checking", "Swara Pocket Wallet - Paytm", "checking", balance=2_800),
+            AccountSpec("savings", "Swara Savings - SBI Kids", "savings", balance=18_000),
+        ],
+        recurring=[
+            RecurringItem("Pocket Money from Mom", TxnCategory.income, 4_000, 1, "checking", "Monthly pocket money"),
+            RecurringItem("Spotify Student", TxnCategory.subscriptions, -59, 8, "checking"),
+        ],
+        debts=[],
+        daily_spend=[
+            SpendCategorySpec(TxnCategory.dining, ["Starbucks", "Chai Point", "Domino's Pizza", "Third Wave Coffee"], (6, 10), (80, 450)),
+            SpendCategorySpec(TxnCategory.shopping, ["Myntra", "Nykaa", "Crossword Bookstore", "Amazon.in"], (2, 4), (200, 1_500)),
+            SpendCategorySpec(TxnCategory.entertainment, ["BookMyShow", "Spotify Concert Pass"], (1, 2), (150, 500)),
+            SpendCategorySpec(TxnCategory.transport, ["Rapido", "Uber"], (3, 6), (60, 250)),
+        ],
+    )
+
+
+def _vedant_config() -> PersonaConfig:
+    return PersonaConfig(
+        user_id="demo-vedant", display_name="Vedant", city="Bengaluru", salary=2_000, salary_day=1, seed=613,
+        accounts=[
+            AccountSpec("checking", "Vedant Piggy Wallet - PhonePe", "checking", balance=1_200),
+            AccountSpec("savings", "Vedant Savings - SBI Kids", "savings", balance=9_500),
+        ],
+        recurring=[
+            RecurringItem("Pocket Money from Mom", TxnCategory.income, 2_000, 1, "checking", "Monthly pocket money"),
+            RecurringItem("Google Play Pass", TxnCategory.subscriptions, -99, 10, "checking"),
+        ],
+        debts=[],
+        daily_spend=[
+            SpendCategorySpec(TxnCategory.dining, ["School Canteen", "Baskin Robbins", "Chai Point", "Burger King"], (6, 9), (40, 250)),
+            SpendCategorySpec(TxnCategory.entertainment, ["Google Play Games", "Steam Wallet", "Roblox Gift Card"], (2, 3), (79, 399)),
+            SpendCategorySpec(TxnCategory.shopping, ["Decathlon", "Crossword Bookstore", "Hamleys"], (1, 2), (120, 700)),
+        ],
+    )
+
+
+FAMILY_CONFIGS: dict[str, PersonaConfig] = {
+    "demo-rishi": _rishi_config(),
+    "demo-swara": _swara_config(),
+    "demo-vedant": _vedant_config(),
+}
+
+
+# ---------------------------------------------------------------------------
 # Generation engine
 # ---------------------------------------------------------------------------
 

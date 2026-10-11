@@ -29,6 +29,7 @@ import { api } from "@/lib/api";
 import { useAsync, useUserId } from "@/lib/hooks";
 import type { HouseholdRole, HouseholdSummary } from "@/lib/types";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
+import { FamilySpending } from "@/components/household/FamilySpending";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -77,8 +78,8 @@ export default function HouseholdPage() {
     }>
   >([
     { id: "se-1", title: "Apartment Rent & Society Maintenance", amount: 48000, paidBy: "Priya", paidByUserId: "demo-priya", splitRatio: "50/50", category: "Housing", date: "2026-10-01" },
-    { id: "se-2", title: "Monthly Organic Groceries", amount: 16400, paidBy: "Arjun", paidByUserId: "demo-arjun", splitRatio: "50/50", category: "Groceries", date: "2026-10-02" },
-    { id: "se-3", title: "High-speed Fiber & Power Utilities", amount: 4200, paidBy: "Arjun", paidByUserId: "demo-arjun", splitRatio: "50/50", category: "Utilities", date: "2026-10-03" },
+    { id: "se-2", title: "Monthly Organic Groceries", amount: 16400, paidBy: "Rishi", paidByUserId: "demo-rishi", splitRatio: "50/50", category: "Groceries", date: "2026-10-02" },
+    { id: "se-3", title: "High-speed Fiber & Power Utilities", amount: 4200, paidBy: "Rishi", paidByUserId: "demo-rishi", splitRatio: "50/50", category: "Utilities", date: "2026-10-03" },
     { id: "se-4", title: "Weekend Dining & Entertainment", amount: 6800, paidBy: "Priya", paidByUserId: "demo-priya", splitRatio: "50/50", category: "Dining", date: "2026-10-03" },
   ]);
 
@@ -132,7 +133,7 @@ export default function HouseholdPage() {
     if (!newExpTitle.trim() || !amt || amt <= 0) return;
 
     const newId = `se-${Date.now()}`;
-    const payerUserId = newExpPayer === "Arjun" ? "demo-arjun" : "demo-priya";
+    const payerUserId = newExpPayer === "Rishi" ? "demo-rishi" : "demo-priya";
 
     setSharedExpenses((prev) => [
       {
@@ -512,6 +513,9 @@ export default function HouseholdPage() {
             </div>
           </Card>
 
+          {/* Who spends what: the owner sees every member */}
+          <FamilySpending />
+
           {/* Members Table & Invite Partner Row */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Active Members Table (7 cols) */}
@@ -699,12 +703,12 @@ export default function HouseholdPage() {
             {(() => {
               const totalShared = sharedExpenses.reduce((sum, e) => sum + e.amount, 0);
               const priyaTotal = sharedExpenses.filter((e) => e.paidBy === "Priya").reduce((sum, e) => sum + e.amount, 0);
-              const arjunTotal = sharedExpenses.filter((e) => e.paidBy === "Arjun").reduce((sum, e) => sum + e.amount, 0);
+              const rishiTotal = sharedExpenses.filter((e) => e.paidBy === "Rishi").reduce((sum, e) => sum + e.amount, 0);
               const fairShare = Math.round(totalShared / Math.max(1, members.length || 2));
               const priyaDiff = priyaTotal - fairShare;
 
-              const debtor = priyaDiff > 0 ? "Arjun" : "Priya";
-              const creditor = priyaDiff > 0 ? "Priya" : "Arjun";
+              const debtor = priyaDiff > 0 ? "Rishi" : "Priya";
+              const creditor = priyaDiff > 0 ? "Priya" : "Rishi";
               const diffAmount = Math.abs(priyaDiff);
 
               return (
@@ -742,8 +746,8 @@ export default function HouseholdPage() {
                         <span className="font-bold text-emerald-700 tnum">{formatCurrency(priyaTotal)}</span>
                       </div>
                       <div className="flex items-center justify-between text-xs mt-1">
-                        <span className="font-semibold text-ink">Arjun paid:</span>
-                        <span className="font-bold text-indigo-700 tnum">{formatCurrency(arjunTotal)}</span>
+                        <span className="font-semibold text-ink">Rishi paid:</span>
+                        <span className="font-bold text-indigo-700 tnum">{formatCurrency(rishiTotal)}</span>
                       </div>
                     </div>
 
@@ -811,7 +815,7 @@ export default function HouseholdPage() {
                               className="w-full rounded-chip border border-mist bg-white px-2.5 py-1.5 text-xs text-ink focus:border-ember focus:outline-none"
                             >
                               <option value="Priya">Priya</option>
-                              <option value="Arjun">Arjun</option>
+                              <option value="Rishi">Rishi</option>
                             </select>
                           </div>
                         </div>

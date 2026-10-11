@@ -1,5 +1,7 @@
 """CLI to (re)seed the 3 demo personas into the configured database.
 
+Also seeds Priya's household (Priya, Rishi, Swara, Vedant).
+
 Usage (from backend/):
     python -m app.ingest.seed
 
@@ -28,7 +30,7 @@ from app.models import (
     IncomeRow,
     TransactionRow,
 )
-from app.ingest.personas import PERSONA_CONFIGS, generate_persona
+from app.ingest.personas import FAMILY_CONFIGS, PERSONA_CONFIGS, generate_persona
 
 
 def _hash_token(token: str) -> str:
@@ -58,39 +60,41 @@ def seed_all() -> None:
             f"{len(data.goals)} goals"
         )
 
-    # Seed shared household for Priya & Arjun
-    now = datetime.now(timezone.utc)
-    hh = HouseholdRow(
-        id="hh-priya-arjun",
-        name="Priya & Partner Family",
-        owner_user_id="demo-priya",
-        created_at=now - timedelta(days=60),
-    )
-    m1 = HouseholdMemberRow(
-        household_id="hh-priya-arjun",
-        user_id="demo-priya",
-        role="owner",
-        joined_at=now - timedelta(days=60),
-    )
-    m2 = HouseholdMemberRow(
-        household_id="hh-priya-arjun",
-        user_id="demo-arjun",
-        role="editor",
-        joined_at=now - timedelta(days=45),
-    )
+    seed_family()
 
-    inv1 = HouseholdInviteRow(
-        household_id="hh-priya-arjun",
-        invited_email="rohan.sharma@example.com",
-        role="editor",
-        token_hash=_hash_token("demo-partner-token-rohan"),
-        status="pending",
-        invited_by_user_id="demo-priya",
-        created_at=now - timedelta(days=2),
-        expires_at=now + timedelta(days=5),
+
+FAMILY_HOUSEHOLD_ID = "hh-priya-family"
+
+
+def seed_family() -> None:
+    """Priya's household: Priya (owner), Rishi (editor), Swara and Vedant (viewers), each with their own accounts and
+    synthetic spending so the Household page can show what everyone spends. Replaces any older demo household."""
+    for uid, config in FAMILY_CONFIGS.items():
+        for model in (TransactionRow, AccountRow, IncomeRow):
+            store.delete_where(model, user_id=uid)
+        store.delete_where(HouseholdMemberRow, user_id=uid)
+        data = generate_persona(config)
+        # accounts + spending only: no budgets, goals or rules for the family members
+        store.put(*data.accounts, *data.transactions, *data.incomes)
+        print(f"Seeded family member {uid}: {len(data.accounts)} accounts, {len(data.transactions)} transactions")
+
+    # drop whatever demo household Priya owned before (e.g. the old "Priya & Partner Family") and its members/invites
+    for old in store.query(HouseholdRow, owner_user_id="demo-priya"):
+        store.delete_where(HouseholdMemberRow, household_id=old.id)
+        store.delete_where(HouseholdInviteRow, household_id=old.id)
+        store.delete(HouseholdRow, old.id)
+    store.delete_where(HouseholdMemberRow, user_id="demo-priya")
+    store.delete_where(HouseholdMemberRow, user_id="demo-arjun")
+
+    now = datetime.now(timezone.utc)
+    store.put(
+        HouseholdRow(id=FAMILY_HOUSEHOLD_ID, name="Priya's Family", owner_user_id="demo-priya", created_at=now - timedelta(days=90)),
+        HouseholdMemberRow(household_id=FAMILY_HOUSEHOLD_ID, user_id="demo-priya", role="owner", joined_at=now - timedelta(days=90)),
+        HouseholdMemberRow(household_id=FAMILY_HOUSEHOLD_ID, user_id="demo-rishi", role="editor", joined_at=now - timedelta(days=88)),
+        HouseholdMemberRow(household_id=FAMILY_HOUSEHOLD_ID, user_id="demo-swara", role="viewer", joined_at=now - timedelta(days=80)),
+        HouseholdMemberRow(household_id=FAMILY_HOUSEHOLD_ID, user_id="demo-vedant", role="viewer", joined_at=now - timedelta(days=80)),
     )
-    store.put(hh, m1, m2, inv1)
-    print("Seeded demo household: 'Priya & Partner Family' (Members: Priya, Arjun; Pending: Rohan)")
+    print("Seeded demo household: 'Priya's Family' (Priya, Rishi, Swara, Vedant)")
 
 
 _ensure_lock = threading.RLock()  # re-entrant: ensure_demo_seeded calls seed_if_empty
@@ -100,6 +104,11 @@ _RECHECK_SECONDS = 30.0
 
 def _demo_missing() -> bool:
     return any(store.first(AccountRow, user_id=uid) is None for uid in PERSONA_CONFIGS)
+
+
+def _family_missing() -> bool:
+    return store.get(HouseholdRow, FAMILY_HOUSEHOLD_ID) is None or any(
+        store.first(TransactionRow, user_id=uid) is None for uid in FAMILY_CONFIGS)
 
 
 def warm_demo_caches() -> None:
@@ -120,6 +129,8 @@ def seed_if_empty() -> None:
         if _demo_missing():
             seed_all()
             warm_demo_caches()
+        elif _family_missing():  # an existing database from before Priya's family was added
+            seed_family()
 
 
 def ensure_demo_seeded() -> None:

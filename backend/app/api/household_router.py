@@ -8,12 +8,15 @@ from __future__ import annotations
 
 import hashlib
 import secrets
-from datetime import datetime, timedelta, timezone
+from collections import defaultdict
+from datetime import date, datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 
 from app.core.auth import resolve_user_id
 from app.core import store
-from app.models import AccountRow, HouseholdInviteRow, HouseholdMemberRow, HouseholdRow
+from app.ingest.personas import FAMILY_MEMBERS
+from app.models import AccountRow, HouseholdInviteRow, HouseholdMemberRow, HouseholdRow, TransactionRow
 from app.schemas import (
     AcceptInviteRequest,
     CreateHouseholdRequest,
@@ -34,6 +37,9 @@ _PERSONA_NAMES = {
     "demo-priya": "Priya",
     "demo-arjun": "Arjun",
     "demo-meera": "Meera",
+    "demo-rishi": "Rishi",
+    "demo-swara": "Swara",
+    "demo-vedant": "Vedant",
 }
 
 
@@ -126,10 +132,12 @@ def _build_household_summary(
 
     total_net_worth = total_assets - total_liabilities
 
-    # Compute percentage contribution
+    # Share of the household's wealth. Someone with a negative net worth (e.g. a car loan) contributes 0%, and the
+    # others split the rest -- dividing by the household total instead made the shares add up to more than 100%.
+    positive_total = sum(max(0.0, mb.net_worth) for mb in members_breakdown)
     for mb in members_breakdown:
-        if total_net_worth > 0:
-            mb.pct_of_household = round(max(0.0, (mb.net_worth / total_net_worth) * 100), 1)
+        if positive_total > 0:
+            mb.pct_of_household = round(max(0.0, mb.net_worth) / positive_total * 100, 1)
         else:
             mb.pct_of_household = round(100.0 / max(1, len(members_breakdown)), 1)
 
@@ -340,3 +348,131 @@ def get_household_networth(user_id: str = Depends(resolve_user_id)) -> Household
     household, _ = membership
     summary = _build_household_summary(household, user_id)
     return summary.net_worth_summary
+
+
+# --- Who spends what ---------------------------------------------------------------------------------------------
+
+# Not new spending: card-bill payments and transfers repeat what was already counted; SIPs are saving.
+_NOT_SPEND = {"transfer", "credit_card_payment", "income", "investment_sip"}
+
+
+class SpendTxn(BaseModel):
+    id: str
+    date: date
+    merchant: str
+    category: str
+    amount: float  # positive rupees spent
+
+
+class CategorySpend(BaseModel):
+    category: str
+    amount: float
+
+
+class MerchantSpend(BaseModel):
+    merchant: str
+    amount: float
+
+
+class MonthSpend(BaseModel):
+    month: str  # YYYY-MM
+    amount: float
+
+
+class MemberSpending(BaseModel):
+    user_id: str
+    display_name: str
+    avatar_letter: str
+    relation: str | None = None
+    role: str
+    total_spend: float
+    previous_spend: float
+    change_pct: float | None  # vs the previous period of the same length; None when there was nothing before
+    share_pct: float  # of the household's total spend in the period
+    txn_count: int
+    monthly_income: float
+    by_category: list[CategorySpend]
+    top_merchants: list[MerchantSpend]
+    recent: list[SpendTxn]
+    monthly_trend: list[MonthSpend]
+
+
+class HouseholdSpending(BaseModel):
+    household_id: str
+    household_name: str
+    days: int
+    viewer_user_id: str
+    viewer_role: str
+    can_view_all: bool
+    total_spend: float
+    members: list[MemberSpending]
+
+
+def _is_spend(t: TransactionRow) -> bool:
+    # The planted demo-threat rows (tagged "fishy") belong to the Evidence Room; they are not everyday family spending.
+    return t.amount < 0 and t.category not in _NOT_SPEND and "fishy" not in (t.tags or "")
+
+
+def _member_spending(m: HouseholdMemberRow, days: int, today: date) -> MemberSpending:
+    rows = store.query(TransactionRow, user_id=m.user_id)
+    start, prev_start = today - timedelta(days=days), today - timedelta(days=2 * days)
+    cur = [t for t in rows if _is_spend(t) and start < t.date <= today]
+    prev_total = sum(-t.amount for t in rows if _is_spend(t) and prev_start < t.date <= start)
+    total = sum(-t.amount for t in cur)
+
+    by_cat: dict[str, float] = defaultdict(float)
+    by_merchant: dict[str, float] = defaultdict(float)
+    for t in cur:
+        by_cat[t.category] += -t.amount
+        by_merchant[t.merchant or "Unknown"] += -t.amount
+
+    months = [(today.replace(day=1) - timedelta(days=31 * i)).strftime("%Y-%m") for i in range(5, -1, -1)]
+    by_month: dict[str, float] = defaultdict(float)
+    for t in rows:
+        if _is_spend(t):
+            by_month[t.date.strftime("%Y-%m")] += -t.amount
+
+    income = sum(t.amount for t in rows if t.amount > 0 and t.category == "income" and start < t.date <= today)
+    name = _PERSONA_NAMES.get(m.user_id) or FAMILY_MEMBERS.get(m.user_id, (m.user_id,))[0].replace("demo-", "").capitalize()
+    return MemberSpending(
+        user_id=m.user_id,
+        display_name=name,
+        avatar_letter=name[:1].upper(),
+        relation=FAMILY_MEMBERS.get(m.user_id, (None, None))[1],
+        role=m.role,
+        total_spend=round(total, 2),
+        previous_spend=round(prev_total, 2),
+        change_pct=round((total - prev_total) / prev_total * 100, 1) if prev_total > 0 else None,
+        share_pct=0.0,
+        txn_count=len(cur),
+        monthly_income=round(income * 30 / days, 2),
+        by_category=[CategorySpend(category=c, amount=round(a, 2)) for c, a in sorted(by_cat.items(), key=lambda kv: -kv[1])],
+        top_merchants=[MerchantSpend(merchant=k, amount=round(a, 2)) for k, a in sorted(by_merchant.items(), key=lambda kv: -kv[1])[:5]],
+        recent=[SpendTxn(id=t.id, date=t.date, merchant=t.merchant or "Unknown", category=t.category, amount=round(-t.amount, 2))
+                for t in sorted(cur, key=lambda t: (t.date, t.id), reverse=True)[:12]],
+        monthly_trend=[MonthSpend(month=mo, amount=round(by_month.get(mo, 0.0), 2)) for mo in months],
+    )
+
+
+@router.get("/api/household/{user_id}/spending", response_model=HouseholdSpending)
+def get_household_spending(days: int = Query(30, ge=7, le=365), user_id: str = Depends(resolve_user_id)) -> HouseholdSpending:
+    """What each household member has spent. The owner and editors see everyone; a viewer sees only their own spending."""
+    membership = _get_user_membership(user_id)
+    if not membership:
+        raise HTTPException(404, "User does not belong to any household")
+    household, me = membership
+    can_view_all = me.role in ("owner", "editor")
+    members = store.query(HouseholdMemberRow, household_id=household.id)
+    if not can_view_all:
+        members = [m for m in members if m.user_id == user_id]
+    order = {"owner": 0, "editor": 1, "viewer": 2}
+    members.sort(key=lambda m: (order.get(m.role, 3), m.joined_at))
+    today = date.today()
+    out = [_member_spending(m, days, today) for m in members]
+    total = sum(x.total_spend for x in out)
+    for x in out:
+        x.share_pct = round(x.total_spend / total * 100, 1) if total > 0 else 0.0
+    return HouseholdSpending(
+        household_id=household.id, household_name=household.name, days=days, viewer_user_id=user_id,
+        viewer_role=me.role, can_view_all=can_view_all, total_spend=round(total, 2), members=out,
+    )

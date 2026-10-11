@@ -68,6 +68,7 @@ import type {
   SecurityGraph,
   SecurityReport,
   MyData,
+  HouseholdSpending,
 } from "./types";
 import { publishCopilotInsights } from "./copilotBus";
 import { DATA_CHANGED_EVENT } from "./hooks";
@@ -456,6 +457,8 @@ export const api = {
 
   // Household & Collaboration (Pillar 5D)
   household: (userId: string) => apiFetch<HouseholdSummary>(`/api/household/${userId}`),
+  householdSpending: (userId: string, days = 30) =>
+    apiFetch<HouseholdSpending>(`/api/household/${userId}/spending?days=${days}`),
   createHousehold: (userId: string, req: CreateHouseholdRequest) =>
     apiFetch<HouseholdSummary>(`/api/household/${userId}`, { method: "POST", body: JSON.stringify(req) }),
   createInvite: (userId: string, req: CreateInviteRequest) =>

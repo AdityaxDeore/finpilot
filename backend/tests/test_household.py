@@ -21,26 +21,19 @@ def test_get_household_demo_priya():
     assert resp.status_code == 200
     data = resp.json()
 
-    assert data["household"]["name"] == "Priya & Partner Family"
+    assert data["household"]["name"] == "Priya's Family"
     assert data["user_role"] == "owner"
-    assert len(data["members"]) == 2
+    assert len(data["members"]) == 4
 
-    # Check member names
-    member_names = [m["display_name"] for m in data["members"]]
-    assert "Priya" in member_names
-    assert "Arjun" in member_names
+    roles = {m["display_name"]: m["role"] for m in data["members"]}
+    assert roles == {"Priya": "owner", "Rishi": "editor", "Swara": "viewer", "Vedant": "viewer"}
 
     # Check combined net worth
     nw_summary = data["net_worth_summary"]
     assert "total_net_worth" in nw_summary
     assert "total_assets" in nw_summary
     assert "total_liabilities" in nw_summary
-    assert len(nw_summary["members_breakdown"]) == 2
-
-    # Check pending invites
-    assert len(data["invites"]) >= 1
-    assert data["invites"][0]["invited_email"] == "rohan.sharma@example.com"
-    assert data["invites"][0]["status"] == "pending"
+    assert len(nw_summary["members_breakdown"]) == 4
 
 
 def test_get_household_unassigned_user():
@@ -85,7 +78,7 @@ def test_create_and_accept_invite():
     )
     assert accept_resp.status_code == 200
     accepted_data = accept_resp.json()
-    assert len(accepted_data["members"]) == 3
+    assert len(accepted_data["members"]) == 5
     meera_member = next(m for m in accepted_data["members"] if m["user_id"] == "demo-meera")
     assert meera_member["role"] == "editor"
 
@@ -105,14 +98,73 @@ def test_revoke_invite():
 
 
 def test_remove_member_permission():
-    # Arjun (editor) cannot remove Priya (owner)
-    del_resp = client.delete("/api/household/demo-arjun/members/demo-priya")
-    assert del_resp.status_code == 403
+    # Meera joins as an editor, and an editor cannot remove the owner
+    token = client.post("/api/household/demo-priya/invites", json={"email": "meera@example.com", "role": "editor"}).json()["token"]
+    assert client.post("/api/household/demo-meera/invites/accept", json={"token": token}).status_code == 200
+    assert client.delete("/api/household/demo-meera/members/demo-priya").status_code == 403
 
-    # Priya (owner) can remove Arjun
-    owner_del_resp = client.delete("/api/household/demo-priya/members/demo-arjun")
+    # Priya (owner) can remove a member
+    owner_del_resp = client.delete("/api/household/demo-priya/members/demo-meera")
     assert owner_del_resp.status_code == 200
     assert owner_del_resp.json()["removed"] is True
+
+
+def test_priya_sees_every_family_members_spending():
+    resp = client.get("/api/household/demo-priya/spending")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["can_view_all"] is True and data["viewer_role"] == "owner" and data["days"] == 30
+    by_name = {m["display_name"]: m for m in data["members"]}
+    assert list(by_name) == ["Priya", "Rishi", "Swara", "Vedant"]  # owner first, then by role
+    assert {n: m["relation"] for n, m in by_name.items()} == {"Priya": "Mother", "Rishi": "Husband", "Swara": "Daughter", "Vedant": "Son"}
+    for m in by_name.values():
+        assert m["total_spend"] > 0 and m["by_category"] and m["recent"] and len(m["monthly_trend"]) == 6
+        assert all(t["amount"] > 0 for t in m["recent"])
+    assert abs(sum(m["share_pct"] for m in by_name.values()) - 100) < 0.5
+    assert abs(sum(m["total_spend"] for m in by_name.values()) - data["total_spend"]) < 0.05
+    # the kids spend pocket-money amounts, the parents far more
+    assert by_name["Vedant"]["total_spend"] < by_name["Swara"]["total_spend"] < by_name["Rishi"]["total_spend"] < by_name["Priya"]["total_spend"]
+
+
+def test_spending_excludes_card_bill_payments_sips_and_planted_threats():
+    data = client.get("/api/household/demo-priya/spending?days=90").json()
+    cats = {c["category"] for m in data["members"] for c in m["by_category"]}
+    assert not cats & {"credit_card_payment", "transfer", "income", "investment_sip"}
+    merchants = {t["merchant"] for m in data["members"] for t in m["recent"]}
+    assert "Unknown Intl Wire" not in merchants  # an Evidence Room demo threat
+
+
+def test_viewer_only_sees_their_own_spending(monkeypatch):
+    # Swara is a viewer: the endpoint must hide everyone else even if she were able to call it
+    from app.api import household_router as hr
+
+    monkeypatch.setattr(hr, "resolve_user_id", hr.resolve_user_id)  # keep import used
+    from app.core.auth import resolve_user_id as _r
+
+    app.dependency_overrides[_r] = lambda: "demo-swara"
+    try:
+        data = client.get("/api/household/demo-swara/spending").json()
+    finally:
+        app.dependency_overrides.pop(_r, None)
+    assert data["can_view_all"] is False and data["viewer_role"] == "viewer"
+    assert [m["display_name"] for m in data["members"]] == ["Swara"]
+    assert data["members"][0]["share_pct"] == 100.0
+
+
+def test_spending_requires_a_household():
+    assert client.get("/api/household/demo-meera/spending").status_code == 404
+
+
+def test_seed_family_replaces_an_older_demo_household():
+    from app.core import store
+    from app.ingest.seed import seed_family
+    from app.models import HouseholdRow
+
+    store.put(HouseholdRow(id="hh-priya-arjun", name="Priya & Partner Family", owner_user_id="demo-priya"))
+    seed_family()
+    assert store.get(HouseholdRow, "hh-priya-arjun") is None
+    names = [h.name for h in store.query(HouseholdRow, owner_user_id="demo-priya")]
+    assert names == ["Priya's Family"]
 
 
 def test_household_networth_endpoint():
@@ -121,3 +173,11 @@ def test_household_networth_endpoint():
     data = resp.json()
     assert "total_net_worth" in data
     assert "members_breakdown" in data
+
+
+def test_wealth_shares_add_up_to_100_when_a_member_has_negative_net_worth():
+    data = client.get("/api/household/demo-priya").json()
+    shares = {m["display_name"]: m["pct_of_household"] for m in data["net_worth_summary"]["members_breakdown"]}
+    assert shares["Priya"] == 0.0  # her car loan outweighs her assets
+    assert abs(sum(shares.values()) - 100) < 0.2
+    assert all(0 <= v <= 100 for v in shares.values())

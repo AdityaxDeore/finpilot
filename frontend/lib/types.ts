@@ -572,6 +572,35 @@ export interface HouseholdNetWorthSummary {
   members_breakdown: MemberWealthContribution[];
 }
 
+export interface SpendTxn { id: string; date: string; merchant: string; category: string; amount: number }
+export interface MemberSpending {
+  user_id: string;
+  display_name: string;
+  avatar_letter: string;
+  relation: string | null;
+  role: HouseholdRole;
+  total_spend: number;
+  previous_spend: number;
+  change_pct: number | null;
+  share_pct: number;
+  txn_count: number;
+  monthly_income: number;
+  by_category: { category: string; amount: number }[];
+  top_merchants: { merchant: string; amount: number }[];
+  recent: SpendTxn[];
+  monthly_trend: { month: string; amount: number }[];
+}
+export interface HouseholdSpending {
+  household_id: string;
+  household_name: string;
+  days: number;
+  viewer_user_id: string;
+  viewer_role: HouseholdRole;
+  can_view_all: boolean;
+  total_spend: number;
+  members: MemberSpending[];
+}
+
 export interface HouseholdSummary {
   household: Household;
   members: HouseholdMember[];
