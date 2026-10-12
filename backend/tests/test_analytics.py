@@ -189,6 +189,68 @@ def test_anomaly_detector_no_false_positives_on_uniform_spend():
     assert facts == []
 
 
+def test_anomaly_detector_duplicate_debits():
+    base = date(2025, 2, 1)
+    rows = [
+        {"date": base, "amount": -1250.0, "merchant": "Swiggy", "category": TxnCategory.dining.value, "id": "swiggy-1"},
+        {"date": base, "amount": -1250.0, "merchant": "Swiggy", "category": TxnCategory.dining.value, "id": "swiggy-2"},
+    ]
+    df = _txn_df(rows)
+    facts = detect_anomalies(df)
+
+    assert len(facts) == 1
+    f = facts[0]
+    assert "duplicate debit" in f.text.lower()
+    assert "swiggy-1" in f.source_txn_ids
+    assert "swiggy-2" in f.source_txn_ids
+    assert f.value == 1250.0
+
+
+def test_anomaly_detector_subscription_creep():
+    base = date(2025, 1, 1)
+    rows = [
+        {"date": base, "amount": -649.0, "merchant": "Netflix India", "category": TxnCategory.subscriptions.value, "id": "nf-1"},
+        {"date": base + timedelta(days=30), "amount": -649.0, "merchant": "Netflix India", "category": TxnCategory.subscriptions.value, "id": "nf-2"},
+        {"date": base + timedelta(days=60), "amount": -649.0, "merchant": "Netflix India", "category": TxnCategory.subscriptions.value, "id": "nf-3"},
+        # 4th month price hiked by +23% to 799
+        {"date": base + timedelta(days=90), "amount": -799.0, "merchant": "Netflix India", "category": TxnCategory.subscriptions.value, "id": "nf-4"},
+    ]
+    df = _txn_df(rows)
+    facts = detect_anomalies(df)
+
+    creep_facts = [f for f in facts if "subscription price increase" in f.text.lower()]
+    assert len(creep_facts) == 1
+    cf = creep_facts[0]
+    assert "nf-4" in cf.source_txn_ids
+    assert cf.value == 150.0
+    assert "+23%" in cf.text
+
+
+def test_anomaly_detector_velocity_surge():
+    base = date(2025, 3, 10)
+    rows = [
+        # Normal history over previous days
+        {"date": base + timedelta(days=i), "amount": -300.0, "merchant": "Subway", "category": TxnCategory.dining.value, "id": f"sub-{i}"}
+        for i in range(5)
+    ]
+    # On day 6, 4 rapid dining transactions in a single day
+    day6 = base + timedelta(days=6)
+    rows.extend([
+        {"date": day6, "amount": -450.0, "merchant": "Cafe Day", "category": TxnCategory.dining.value, "id": "v-1"},
+        {"date": day6, "amount": -600.0, "merchant": "Pizza Hut", "category": TxnCategory.dining.value, "id": "v-2"},
+        {"date": day6, "amount": -850.0, "merchant": "Barbeque Nation", "category": TxnCategory.dining.value, "id": "v-3"},
+        {"date": day6, "amount": -500.0, "merchant": "Baskin Robbins", "category": TxnCategory.dining.value, "id": "v-4"},
+    ])
+    df = _txn_df(rows)
+    facts = detect_anomalies(df)
+
+    velocity_facts = [f for f in facts if "high spending velocity" in f.text.lower()]
+    assert len(velocity_facts) == 1
+    vf = velocity_facts[0]
+    assert vf.value == 2400.0
+    assert {"v-1", "v-2", "v-3", "v-4"}.issubset(set(vf.source_txn_ids))
+
+
 # ---------------------------------------------------------------------------
 # Goal projection
 # ---------------------------------------------------------------------------
